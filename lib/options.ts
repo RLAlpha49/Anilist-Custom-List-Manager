@@ -29,12 +29,11 @@ export const formatItemsManga: string[] = [
 	"Manga (Japan)",
 	"Manga (South Korean)",
 	"Manga (Chinese)",
-	"manga",
-	"manwha",
-	"manhua",
 	"One shot",
 	"Novel",
 ];
+
+export const hiddenFormatItemsManga: string[] = ["manga", "manwha", "manhua"];
 
 export const tagCategories: string[] = [
 	"Cast",

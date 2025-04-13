@@ -39,6 +39,7 @@ import {
 	miscItemsManga,
 	formatItemsAnime,
 	formatItemsManga,
+	hiddenFormatItemsManga,
 	tagCategories,
 	tags,
 } from "@/lib/options";
@@ -225,6 +226,7 @@ function PageData() {
 			...miscItemsManga,
 			...formatItemsAnime,
 			...formatItemsManga,
+			...hiddenFormatItemsManga,
 			...tagCategories,
 			...tags,
 		];
@@ -241,8 +243,12 @@ function PageData() {
 					return `Score set to ${item}`;
 				} else if (miscItemsAnime.concat(miscItemsManga).includes(item)) {
 					return item.charAt(0).toUpperCase() + item.slice(1);
-				} else if (formatItemsAnime.includes(item) || formatItemsManga.includes(item)) {
-					if (["manga", "manwha", "manhua"].includes(item.toLowerCase())) {
+				} else if (
+					formatItemsAnime.includes(item) ||
+					formatItemsManga.includes(item) ||
+					hiddenFormatItemsManga.includes(item)
+				) {
+					if (hiddenFormatItemsManga.includes(item.toLowerCase())) {
 						const countryMap: Record<string, string> = {
 							manga: "Manga (Japan)",
 							manwha: "Manga (South Korean)",
