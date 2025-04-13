@@ -258,14 +258,20 @@ function PageData() {
 						}
 
 						if (list.selectedOption.includes("Score set to")) {
-							if (
-								list.selectedOption.includes("below 5") &&
-								entry.score > 0 &&
-								entry.score < 5 &&
-								!entry.customLists[list.name]
-							) {
-								entry.lists[list.name] = true;
-							} else if (!list.selectedOption.includes("below 5")) {
+							if (list.selectedOption.includes("below 5")) {
+								if (
+									entry.score > 0 &&
+									entry.score < 5 &&
+									entry.customLists[list.name] !== true
+								) {
+									entry.lists[list.name] = true;
+								} else if (
+									(entry.score >= 5 || entry.score === 0) &&
+									entry.customLists[list.name] !== false
+								) {
+									entry.lists[list.name] = false;
+								}
+							} else {
 								const scoreCondition = parseInt(
 									list.selectedOption.split(" ").slice(-1)[0],
 									10
