@@ -336,7 +336,7 @@ function PageData({ summary }: CompletedPageProps): JSX.Element {
                     />
                     Check Out My Other Projects
                   </h2>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
+                  <div className="flex flex-wrap justify-center gap-3">
                     <ProjectLink
                       href="https://github.com/RLAlpha49/AniCards"
                       name="AniCards"
@@ -399,16 +399,16 @@ const ProjectLink = ({
       rel="noopener noreferrer"
       whileHover={{ scale: 1.05 }}
       whileTap={{ scale: 0.97 }}
-      className={className}
+      className={cn("h-12", className)}
       aria-label={`View ${name} project on GitHub`}
     >
       <div
         className={cn(
-          "flex items-center justify-center rounded-lg bg-gradient-to-r p-[1px]",
+          "flex h-full items-center justify-center rounded-lg bg-gradient-to-r p-[1px]",
           color,
         )}
       >
-        <div className="flex w-full items-center justify-center rounded-lg bg-white p-2 px-3 text-sm font-medium dark:bg-gray-800">
+        <div className="flex h-full w-full items-center justify-center rounded-lg bg-white/50 p-2 px-3 text-sm font-medium text-black dark:bg-gray-800/50 dark:text-gray-300">
           <FaGithub className="mr-2 h-4 w-4" aria-hidden="true" />
           <span className="text-center">{name}</span>
         </div>
