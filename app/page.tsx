@@ -1,162 +1,305 @@
 "use client";
 
+import React from "react";
 import Layout from "@/components/layout";
-import ToastContainer from "@/components/ui/toast-container";
 import { Button } from "@/components/ui/button";
-import { CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import Link from "next/link";
-import { FaArrowsAlt, FaSort, FaSyncAlt } from "react-icons/fa";
+import { FaGithub } from "react-icons/fa";
+import { HiOutlineSparkles } from "react-icons/hi";
 import Breadcrumbs from "@/components/breadcrumbs";
-import { useToast } from "@/hooks/use-toast";
-import { Trans } from "@lingui/react";
+import { toast } from "sonner";
 import LoadingIndicator from "@/components/loading-indicator";
 import { Suspense } from "react";
+import { motion } from "framer-motion";
+import { Separator } from "@/components/ui/separator";
+
+// Animation variants
+const fadeIn = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { duration: 0.6 } },
+};
+
+const fadeInUp = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.6 } },
+};
+
+const staggerContainer = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.2,
+    },
+  },
+};
 
 function PageData() {
-	const { toast } = useToast();
+  const clearCache = () => {
+    localStorage.clear();
+    toast.success("Cache cleared!", {
+      description: "Your cache has been cleared.",
+    });
+  };
 
-	const clearCache = () => {
-		localStorage.clear();
-		toast({
-			title: <Trans id="title.cache_cleared" message="Cache cleared!" />,
-			description: (
-				<Trans
-					id="description.cache_cleared_description"
-					message="Your cache has been cleared."
-				/>
-			),
-			variant: "success",
-		});
-	};
+  const breadcrumbs = [{ name: "Home", href: "/" }];
 
-	const breadcrumbs = [{ name: "Home", href: "/" }];
+  return (
+    <Layout>
+      <Breadcrumbs breadcrumbs={breadcrumbs} />
+      <div className="flex flex-col items-center justify-center px-4 text-gray-900 dark:text-gray-100">
+        {/* Hero Section */}
+        <motion.div
+          initial="hidden"
+          animate="visible"
+          variants={fadeIn}
+          className="relative mb-16 w-full max-w-5xl overflow-hidden rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-100 p-8 shadow-xl transition-all duration-300 dark:from-gray-800 dark:to-gray-900"
+        >
+          <motion.div
+            animate={{
+              scale: [1, 1.2, 1],
+              opacity: [0.2, 0.3, 0.2],
+            }}
+            transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+            className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-blue-400 opacity-20 blur-3xl filter dark:bg-blue-600"
+          ></motion.div>
+          <motion.div
+            animate={{
+              scale: [1, 1.3, 1],
+              opacity: [0.2, 0.3, 0.2],
+            }}
+            transition={{
+              duration: 10,
+              repeat: Infinity,
+              ease: "easeInOut",
+              delay: 1,
+            }}
+            className="pointer-events-none absolute -bottom-20 -left-20 h-64 w-64 rounded-full bg-indigo-400 opacity-20 blur-3xl filter dark:bg-indigo-600"
+          ></motion.div>
 
-	return (
-		<Layout>
-			<Breadcrumbs breadcrumbs={breadcrumbs} />
-			<div className="flex flex-col items-center justify-center bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 px-4">
-				{/* Hero Section */}
-				<div className="w-full max-w-4xl bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 mb-12 transition-colors duration-300">
-					<CardHeader>
-						<CardTitle className="text-4xl font-bold text-gray-900 dark:text-white">
-							<Trans
-								id="title.anilist_custom_list_manager"
-								message="Anilist Custom List Manager"
-							/>
-						</CardTitle>
-						<CardDescription className="text-gray-600 dark:text-gray-300 mt-2">
-							<Trans
-								id="description.manage_lists"
-								message="Manage your anime and manga lists with ease"
-							/>
-						</CardDescription>
-					</CardHeader>
-					<CardContent>
-						<p className="mb-6 text-gray-700 dark:text-gray-200">
-							<Trans
-								id="description.hero_paragraph"
-								message="Take full control of your Anilist experience by organizing your entries into customized lists. Whether you're tracking anime, manga, or both, our tool offers advanced features to suit your needs."
-							/>
-						</p>
-						<div className="flex space-x-4">
-							<Button
-								asChild
-								className="bg-blue-600 hover:bg-blue-700 text-white dark:bg-blue-500 dark:hover:bg-blue-600"
-								aria-label="Get Started with Anilist"
-							>
-								<Link href="/anilist-login">
-									<Trans id="button.get_started" message="Get Started" />
-								</Link>
-							</Button>
-							<Button
-								variant="outline"
-								asChild
-								className="bg-gray-700 dark:bg-white text-white dark:text-black hover:text-white hover:bg-gray-600 dark:hover:text-gray-800 dark:hover:bg-gray-200 transition-colors flex items-center"
-								aria-label="Frequently Asked Questions about Anilist Custom List Manager"
-							>
-								<Link href="/faq">
-									<Trans id="button.faq" message="FAQ" />
-								</Link>
-							</Button>
-						</div>
-					</CardContent>
-				</div>
+          <CardHeader className="p-0 pb-6">
+            <motion.div variants={fadeInUp}>
+              <CardTitle className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text pb-2 text-5xl font-bold text-transparent dark:from-blue-400 dark:to-indigo-400">
+                Anilist Custom List Manager
+              </CardTitle>
+            </motion.div>
+            <motion.div variants={fadeInUp}>
+              <CardDescription className="mt-4 text-xl text-gray-600 dark:text-gray-300">
+                Manage your anime and manga lists with ease
+              </CardDescription>
+            </motion.div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <motion.div variants={fadeInUp}>
+              <p className="mb-8 max-w-3xl text-lg text-gray-700 dark:text-gray-200">
+                Take full control of your Anilist experience by organizing your
+                entries into customized lists. Whether you&apos;re tracking
+                anime, manga, or both, our tool offers advanced features to suit
+                your needs.
+              </p>
+            </motion.div>
+            <motion.div
+              variants={staggerContainer}
+              initial="hidden"
+              animate="visible"
+              className="flex flex-wrap gap-4"
+            >
+              <motion.div
+                variants={fadeInUp}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <Button
+                  asChild
+                  size="lg"
+                  className="bg-gradient-to-r from-blue-600 to-indigo-600 text-lg font-medium text-white transition-all duration-300 hover:from-blue-700 hover:to-indigo-700 hover:shadow-lg dark:from-blue-500 dark:to-indigo-500 dark:hover:from-blue-600 dark:hover:to-indigo-600"
+                  aria-label="Get Started with Anilist"
+                >
+                  <Link href="/anilist-login">
+                    <HiOutlineSparkles className="mr-2 h-5 w-5" />
+                    Get Started
+                  </Link>
+                </Button>
+              </motion.div>
+              <motion.div
+                variants={fadeInUp}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <Button
+                  variant="outline"
+                  asChild
+                  size="lg"
+                  className="border-gray-300 bg-white/80 text-lg font-medium text-gray-700 backdrop-blur-sm transition-all duration-300 hover:bg-gray-100 hover:text-gray-900 dark:border-gray-700 dark:bg-gray-800/80 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white"
+                  aria-label="Frequently Asked Questions about Anilist Custom List Manager"
+                >
+                  <Link href="/faq">FAQ</Link>
+                </Button>
+              </motion.div>
+              <motion.div
+                variants={fadeInUp}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <Button
+                  variant="outline"
+                  asChild
+                  size="lg"
+                  className="border-gray-300 bg-white/80 text-lg font-medium text-gray-700 backdrop-blur-sm transition-all duration-300 hover:bg-gray-100 hover:text-gray-900 dark:border-gray-700 dark:bg-gray-800/80 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white"
+                  aria-label="View on GitHub"
+                >
+                  <Link
+                    href="https://github.com/RLAlpha49/Anilist-Custom-List-Manager"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <FaGithub className="mr-2 h-5 w-5" />
+                    GitHub
+                  </Link>
+                </Button>
+              </motion.div>
+            </motion.div>
+          </CardContent>
+        </motion.div>
 
-				{/* Features Section */}
-				<div className="w-full max-w-6xl grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
-					<div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md text-center transition-colors duration-300">
-						<div className="mb-4">
-							<FaArrowsAlt
-								className="w-12 h-12 mx-auto text-blue-400"
-								aria-hidden="true"
-							/>
-						</div>
-						<h3 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">
-							<Trans id="feature.move_entries" message="Move Your Entries" />
-						</h3>
-						<p className="text-gray-700 dark:text-gray-300">
-							<Trans
-								id="feature.move_entries_description"
-								message="Effortlessly move your entries to specific custom lists, keeping your Anilist organized according to your preferences."
-							/>
-						</p>
-					</div>
-					<div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md text-center transition-colors duration-300">
-						<div className="mb-4">
-							<FaSort
-								className="w-12 h-12 mx-auto text-blue-400"
-								aria-hidden="true"
-							/>
-						</div>
-						<h3 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">
-							<Trans id="feature.sort_entries" message="Sort Entries" />
-						</h3>
-						<p className="text-gray-700 dark:text-gray-300">
-							<Trans
-								id="feature.sort_entries_description"
-								message="Sort your entries based on status, score, rereads, genres, tags, and type to quickly find what you're looking for."
-							/>
-						</p>
-					</div>
-					<div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md text-center transition-colors duration-300">
-						<div className="mb-4">
-							<FaSyncAlt
-								className="w-12 h-12 mx-auto text-blue-400"
-								aria-hidden="true"
-							/>
-						</div>
-						<h3 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">
-							<Trans id="feature.update_entries" message="Update Entries" />
-						</h3>
-						<p className="text-gray-700 dark:text-gray-300">
-							<Trans
-								id="feature.update_entries_description"
-								message="Automatically update entries based on the conditions you set, ensuring your lists are always up-to-date."
-							/>
-						</p>
-					</div>
-				</div>
+        {/* Features Carousel */}
 
-				{/* Clear Cache Button */}
-				<div className="mb-12">
-					<Button
-						onClick={clearCache}
-						className="bg-red-600 hover:bg-red-700 text-white dark:bg-red-500 dark:hover:bg-red-600"
-						aria-label="Clear Cache"
-					>
-						<Trans id="button.clear_cache" message="Clear Cache" />
-					</Button>
-				</div>
-			</div>
-			<ToastContainer />
-		</Layout>
-	);
+        {/* How It Works */}
+        <motion.div
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, amount: 0.3 }}
+          variants={fadeInUp}
+          className="mb-16 w-full max-w-5xl"
+        >
+          <div className="mb-8 text-center">
+            <motion.h2
+              variants={fadeInUp}
+              className="mb-2 text-3xl font-bold text-gray-900 dark:text-white"
+            >
+              How It Works
+            </motion.h2>
+            <motion.p
+              variants={fadeInUp}
+              className="mx-auto max-w-2xl text-gray-600 dark:text-gray-300"
+            >
+              Get started with Anilist Custom List Manager in three simple steps
+            </motion.p>
+            <motion.div variants={fadeInUp}>
+              <Separator className="mx-auto mt-6 w-24 bg-blue-200 dark:bg-blue-800" />
+            </motion.div>
+          </div>
+
+          <motion.div
+            variants={staggerContainer}
+            className="grid gap-8 md:grid-cols-3"
+          >
+            <motion.div
+              whileHover={{
+                y: -5,
+                boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1)",
+              }}
+              transition={{ duration: 0.3 }}
+              className="relative rounded-xl bg-white p-6 text-center shadow-md transition-all duration-300 dark:bg-gray-800"
+            >
+              <div className="absolute -top-4 left-0 right-0 mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-xl font-bold text-white dark:bg-blue-500">
+                1
+              </div>
+              <h3 className="mt-6 text-xl font-semibold text-gray-900 dark:text-white">
+                Connect with Anilist
+              </h3>
+              <p className="mt-3 text-gray-700 dark:text-gray-300">
+                Log in with your Anilist account to grant access to your lists
+                and entries.
+              </p>
+            </motion.div>
+
+            <motion.div
+              whileHover={{
+                y: -5,
+                boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1)",
+              }}
+              transition={{ duration: 0.3 }}
+              className="relative rounded-xl bg-white p-6 text-center shadow-md transition-all duration-300 hover:shadow-lg dark:bg-gray-800"
+            >
+              <div className="absolute -top-4 left-0 right-0 mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-indigo-600 text-xl font-bold text-white dark:bg-indigo-500">
+                2
+              </div>
+              <h3 className="mt-6 text-xl font-semibold text-gray-900 dark:text-white">
+                Customize Your View
+              </h3>
+              <p className="mt-3 text-gray-700 dark:text-gray-300">
+                Apply filters, sort options, and criteria to view entries
+                exactly how you want.
+              </p>
+            </motion.div>
+
+            <motion.div
+              whileHover={{
+                y: -5,
+                boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1)",
+              }}
+              transition={{ duration: 0.3 }}
+              className="relative rounded-xl bg-white p-6 text-center shadow-md transition-all duration-300 hover:shadow-lg dark:bg-gray-800"
+            >
+              <div className="absolute -top-4 left-0 right-0 mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-purple-600 text-xl font-bold text-white dark:bg-purple-500">
+                3
+              </div>
+              <h3 className="mt-6 text-xl font-semibold text-gray-900 dark:text-white">
+                Organize with Ease
+              </h3>
+              <p className="mt-3 text-gray-700 dark:text-gray-300">
+                Move entries between lists, update them in bulk, and keep
+                everything perfectly organized.
+              </p>
+            </motion.div>
+          </motion.div>
+        </motion.div>
+
+        {/* Clear Cache Button */}
+        <motion.div
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, amount: 0.3 }}
+          variants={fadeInUp}
+          className="mb-12 w-full max-w-5xl rounded-xl bg-white p-6 shadow-md dark:bg-gray-800"
+        >
+          <div className="flex flex-col items-center justify-between space-y-4 sm:flex-row sm:space-y-0">
+            <div>
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+                Cache Management
+              </h3>
+              <p className="text-gray-600 dark:text-gray-300">
+                Clear your local storage to refresh data and fix potential
+                issues.
+              </p>
+            </div>
+            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+              <Button
+                onClick={clearCache}
+                className="bg-red-500 text-white transition-all duration-300 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700"
+                aria-label="Clear Cache"
+              >
+                Clear Cache
+              </Button>
+            </motion.div>
+          </div>
+        </motion.div>
+      </div>
+    </Layout>
+  );
 }
 
 export default function Page() {
-	return (
-		<Suspense fallback={<LoadingIndicator />}>
-			<PageData />
-		</Suspense>
-	);
+  return (
+    <Suspense fallback={<LoadingIndicator />}>
+      <PageData />
+    </Suspense>
+  );
 }

@@ -1,14 +1,27 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'export',
+  output: "standalone",
   eslint: {
-    //ignoreDuringBuilds: true,
+    ignoreDuringBuilds: false,
   },
   typescript: {
     // Set this to true to ignore type errors during build
-    //ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
-  images: { unoptimized: true },
+  reactStrictMode: true,
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "s4.anilist.co",
+      },
+    ],
+  },
+  logging: {
+    fetches: {
+      fullUrl: true,
+    },
+  },
 };
 
-module.exports = nextConfig;
+export default nextConfig;
