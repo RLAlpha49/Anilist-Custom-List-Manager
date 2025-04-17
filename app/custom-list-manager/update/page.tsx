@@ -29,8 +29,13 @@ import {
 } from "@/lib/types";
 import Image from "next/image";
 
+// Extend MediaEntry locally to include _originalCustomLists
+type MediaEntryWithOriginal = MediaEntry & {
+  _originalCustomLists?: Record<string, boolean>;
+};
+
 function PageData() {
-  const [mediaList, setMediaList] = useState<MediaEntry[]>([]);
+  const [mediaList, setMediaList] = useState<MediaEntryWithOriginal[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [updating, setUpdating] = useState<boolean>(false);
   const [currentEntry, setCurrentEntry] = useState<MediaEntry | null>(null);
@@ -60,6 +65,16 @@ function PageData() {
   const [listNameToCondition, setListNameToCondition] = useState<
     Record<string, string>
   >({});
+  const [listsToRemoveFromAllEntries, setListsToRemoveFromAllEntries] =
+    useState<string[]>(() => {
+      try {
+        return JSON.parse(
+          getItemWithExpiry("listsToRemoveFromAllEntries") || "[]",
+        );
+      } catch {
+        return [];
+      }
+    });
 
   useEffect(() => {
     setUserId(getItemWithExpiry("userId"));
@@ -82,6 +97,13 @@ function PageData() {
       JSON.parse(getItemWithExpiry("hideDefaultStatusLists") || "true"),
     );
     setToken(getItemWithExpiry("anilistToken"));
+    try {
+      setListsToRemoveFromAllEntries(
+        JSON.parse(getItemWithExpiry("listsToRemoveFromAllEntries") || "[]"),
+      );
+    } catch {
+      setListsToRemoveFromAllEntries([]);
+    }
   }, []);
 
   useEffect(() => {
@@ -211,11 +233,27 @@ function PageData() {
           if (!entry.lists) {
             entry.lists = {};
           }
+          // Store original customLists snapshot for UI diff
+          (entry as MediaEntryWithOriginal)._originalCustomLists = {
+            ...(entry.customLists || {}),
+          };
           entry.tagCategories =
             entry.media.tags?.map((tag) => tag.category) || [];
           entry.tags = entry.media.tags?.map((tag) => tag.name) || [];
           entry.genres = entry.media.genres || [];
           entry.isAdult = entry.media.isAdult || false;
+
+          // Remove lists marked for removal from all entries
+          if (listsToRemoveFromAllEntries.length > 0) {
+            listsToRemoveFromAllEntries.forEach((removeListName) => {
+              if (entry.customLists && entry.customLists[removeListName]) {
+                entry.customLists[removeListName] = false;
+              }
+              if (entry.lists && entry.lists[removeListName]) {
+                entry.lists[removeListName] = false;
+              }
+            });
+          }
 
           Object.entries(listNameToCondition).forEach(
             ([listName, selectedOption]) => {
@@ -446,6 +484,7 @@ function PageData() {
     toast,
     token,
     listNameToCondition,
+    listsToRemoveFromAllEntries,
   ]);
 
   const updateMediaListQuery = `
@@ -938,18 +977,47 @@ function PageData() {
                               status={entry.status}
                               score={entry.score}
                               repeatCount={entry.repeat}
-                              customListChanges={Object.entries(entry.lists!)
-                                .filter(
-                                  ([list, value]) =>
-                                    value !== undefined &&
-                                    value !== entry.customLists[list],
-                                )
-                                .map(
-                                  ([list, value]) =>
-                                    `${list}: ${
-                                      value ? "Add to list" : "Remove from list"
-                                    }`,
-                                )}
+                              customListChanges={[
+                                // Show removals for listsToRemoveFromAllEntries based on original state
+                                ...listsToRemoveFromAllEntries
+                                  .filter(
+                                    (listName) =>
+                                      (entry as MediaEntryWithOriginal)
+                                        ._originalCustomLists &&
+                                      (entry as MediaEntryWithOriginal)
+                                        ._originalCustomLists![listName],
+                                  )
+                                  .map(
+                                    (listName) =>
+                                      `${listName}: Remove from list`,
+                                  ),
+                                // Show other changes as before
+                                ...Object.entries(entry.lists!)
+                                  .filter(
+                                    ([list, value]) =>
+                                      value !== undefined &&
+                                      value !==
+                                        (entry as MediaEntryWithOriginal)
+                                          ._originalCustomLists?.[list] &&
+                                      // Don't duplicate the removal if already shown above
+                                      !(
+                                        listsToRemoveFromAllEntries.includes(
+                                          list,
+                                        ) &&
+                                        value === false &&
+                                        (entry as MediaEntryWithOriginal)
+                                          ._originalCustomLists?.[list]
+                                      ),
+                                  )
+                                  .map(
+                                    ([list, value]) =>
+                                      `${list}: ${
+                                        value
+                                          ? "Add to list"
+                                          : "Remove from list"
+                                      }`,
+                                  ),
+                              ]}
                               anilistLink={getMediaUrl(entry)}
                               isUpdated={updatedEntries.has(entry.media.id)}
                               onAnimationEnd={() =>

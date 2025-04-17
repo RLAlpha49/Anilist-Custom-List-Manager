@@ -152,6 +152,20 @@ function PageData() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [newListName, setNewListName] = useState("");
   const [addListError, setAddListError] = useState("");
+  // Remove from all entries modal state
+  const [showRemoveAllModal, setShowRemoveAllModal] = useState(false);
+  const [pendingRemoveAllList, setPendingRemoveAllList] =
+    useState<CustomList | null>(null);
+  const [listsToRemoveFromAllEntries, setListsToRemoveFromAllEntries] =
+    useState<string[]>(() => {
+      try {
+        return JSON.parse(
+          getItemWithExpiry("listsToRemoveFromAllEntries") || "[]",
+        );
+      } catch {
+        return [];
+      }
+    });
 
   // Ref Hooks
   const updateSectionOrderRef =
@@ -590,7 +604,6 @@ function PageData() {
 
   const proceedToNextStep = (): void => {
     setShowPopup(false);
-    // Save all lists with their name and selectedOption
     setItemWithExpiry(
       "lists",
       JSON.stringify(
@@ -599,6 +612,11 @@ function PageData() {
           selectedOption: list.selectedOption,
         })),
       ),
+      60 * 60 * 24 * 1000,
+    );
+    setItemWithExpiry(
+      "listsToRemoveFromAllEntries",
+      JSON.stringify(listsToRemoveFromAllEntries),
       60 * 60 * 24 * 1000,
     );
     setItemWithExpiry("listType", listType, 60 * 60 * 24 * 1000);
@@ -751,6 +769,37 @@ function PageData() {
       console.error("Error adding new list:", apiError.message);
       setAddListError(apiError.message || "Failed to add new list.");
     }
+  };
+
+  // Remove from all entries logic
+  const handleRemoveAllClick = (list: CustomList) => {
+    setPendingRemoveAllList(list);
+    setShowRemoveAllModal(true);
+  };
+
+  // Undo remove from all entries
+  const handleUndoRemoveAll = (listName: string) => {
+    setListsToRemoveFromAllEntries((prev) =>
+      prev.filter((name) => name !== listName),
+    );
+  };
+
+  const handleRemoveAllConfirm = () => {
+    if (pendingRemoveAllList) {
+      setListsToRemoveFromAllEntries((prev) => {
+        if (!prev.includes(pendingRemoveAllList.name)) {
+          return [...prev, pendingRemoveAllList.name];
+        }
+        return prev;
+      });
+      setShowRemoveAllModal(false);
+      setPendingRemoveAllList(null);
+    }
+  };
+
+  const handleRemoveAllCancel = () => {
+    setShowRemoveAllModal(false);
+    setPendingRemoveAllList(null);
   };
 
   const breadcrumbs = [
@@ -1129,77 +1178,118 @@ function PageData() {
                               <span className="font-medium text-gray-900 dark:text-gray-100">
                                 {list.name}
                               </span>
-                              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() =>
-                                          handleClearCondition(index)
-                                        }
-                                        className="h-8 w-8 rounded-full p-0 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white"
-                                      >
-                                        <FaTimesCircle className="h-4 w-4" />
-                                      </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                      <p>Clear condition</p>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-
-                                <div className="w-full min-w-48 sm:w-auto">
-                                  <DynamicSelect
-                                    value={list.selectedOption || ""}
-                                    onValueChange={(value: string) =>
-                                      handleValueChange(index, value)
+                              {listsToRemoveFromAllEntries.includes(
+                                list.name,
+                              ) ? (
+                                <span className="ml-2 flex items-center gap-2 rounded bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                                  Will be removed from all entries
+                                  <button
+                                    type="button"
+                                    className="ml-1 rounded-full p-0.5 text-blue-700 hover:bg-blue-200 hover:text-blue-900 dark:text-blue-300 dark:hover:bg-blue-800/30"
+                                    aria-label="Undo remove from all entries"
+                                    tabIndex={0}
+                                    onClick={() =>
+                                      handleUndoRemoveAll(list.name)
                                     }
-                                    options={getOptions(listType)}
-                                    placeholder="Select a condition"
-                                    className="min-w-[240px] shadow-sm"
-                                  />
+                                  >
+                                    <FaTimesCircle className="h-3 w-3" />
+                                  </button>
+                                </span>
+                              ) : (
+                                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() =>
+                                            handleClearCondition(index)
+                                          }
+                                          className="h-8 w-8 rounded-full p-0 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white"
+                                        >
+                                          <FaTimesCircle className="h-4 w-4" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>Clear condition</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+
+                                  <div className="w-full min-w-48 sm:w-auto">
+                                    <DynamicSelect
+                                      value={list.selectedOption || ""}
+                                      onValueChange={(value: string) =>
+                                        handleValueChange(index, value)
+                                      }
+                                      options={getOptions(listType)}
+                                      placeholder="Select a condition"
+                                      className="min-w-[240px] shadow-sm"
+                                    />
+                                  </div>
+
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => openRenameModal(list)}
+                                          className="h-8 w-8 rounded-full p-0 text-yellow-500 hover:bg-yellow-50 hover:text-yellow-600 dark:text-yellow-400 dark:hover:bg-yellow-900/30 dark:hover:text-yellow-300"
+                                        >
+                                          <FaEdit className="h-4 w-4" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>Rename list</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() =>
+                                            handleDeleteList(list.name)
+                                          }
+                                          className="h-8 w-8 rounded-full p-0 text-red-500 hover:bg-red-50 hover:text-red-600 dark:text-red-400 dark:hover:bg-red-900/30 dark:hover:text-red-300"
+                                        >
+                                          <FaTrash className="h-4 w-4" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>Delete list</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+
+                                  {/* Remove from All Entries Button */}
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() =>
+                                            handleRemoveAllClick(list)
+                                          }
+                                          className={`h-8 w-8 rounded-full p-0 text-blue-500 hover:bg-blue-50 hover:text-blue-600 dark:text-blue-400 dark:hover:bg-blue-900/30 dark:hover:text-blue-300 ${listsToRemoveFromAllEntries.includes(list.name) ? "ring-2 ring-blue-400" : ""}`}
+                                          aria-label="Remove from all entries"
+                                        >
+                                          <FaTimesCircle className="h-4 w-4" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>Remove from all entries</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
                                 </div>
-
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => openRenameModal(list)}
-                                        className="h-8 w-8 rounded-full p-0 text-yellow-500 hover:bg-yellow-50 hover:text-yellow-600 dark:text-yellow-400 dark:hover:bg-yellow-900/30 dark:hover:text-yellow-300"
-                                      >
-                                        <FaEdit className="h-4 w-4" />
-                                      </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                      <p>Rename list</p>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() =>
-                                          handleDeleteList(list.name)
-                                        }
-                                        className="h-8 w-8 rounded-full p-0 text-red-500 hover:bg-red-50 hover:text-red-600 dark:text-red-400 dark:hover:bg-red-900/30 dark:hover:text-red-300"
-                                      >
-                                        <FaTrash className="h-4 w-4" />
-                                      </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                      <p>Delete list</p>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-                              </div>
+                              )}
                             </SortableItem>
                           ))}
                         </div>
@@ -1271,6 +1361,35 @@ function PageData() {
             </p>
           </div>
 
+          {/* Lists to be removed from all entries (even if not selected for update) */}
+          {listsToRemoveFromAllEntries.length > 0 && (
+            <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-900/40 dark:bg-blue-900/10">
+              <p className="mb-2 text-sm font-semibold text-blue-700 dark:text-blue-200">
+                The following lists will be removed from all entries:
+              </p>
+              <ul className="ml-4 list-disc space-y-1">
+                {listsToRemoveFromAllEntries.map((name) => {
+                  const selected = lists.find(
+                    (l) => l.name === name && l.selectedOption,
+                  );
+                  return (
+                    <li
+                      key={name}
+                      className="text-sm text-blue-800 dark:text-blue-300"
+                    >
+                      <span className="font-bold">{name}</span>
+                      {!selected && (
+                        <span className="ml-2 italic text-gray-600 dark:text-gray-400">
+                          All entries will be removed from this list.
+                        </span>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+
           <div className="overflow-visible">
             <div className="pr-6">
               <motion.ul
@@ -1301,6 +1420,11 @@ function PageData() {
                       <div className="flex flex-col space-y-1">
                         <span className="font-medium text-gray-900 dark:text-gray-100">
                           {list.name}
+                          {listsToRemoveFromAllEntries.includes(list.name) && (
+                            <span className="ml-2 rounded bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                              Will be removed from all entries
+                            </span>
+                          )}
                         </span>
                         <span className="text-sm text-gray-600 dark:text-gray-400">
                           {list.selectedOption}
@@ -1395,6 +1519,27 @@ function PageData() {
               {addListError}
             </div>
           )}
+        </div>
+      </Modal>
+
+      {/* Remove from All Entries Modal */}
+      <Modal
+        isOpen={showRemoveAllModal}
+        onClose={handleRemoveAllCancel}
+        onConfirm={handleRemoveAllConfirm}
+        title="Remove List from All Entries?"
+        confirmButtonText="Remove"
+      >
+        <div className="space-y-4">
+          <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 dark:border-blue-900 dark:bg-blue-900/20">
+            <p className="text-sm text-blue-800 dark:text-blue-300">
+              Are you sure you want to remove the list{" "}
+              <span className="font-bold">{pendingRemoveAllList?.name}</span>{" "}
+              from all entries? This will not delete the list itself, but will
+              remove it from every entry that currently has it during the next
+              update.
+            </p>
+          </div>
         </div>
       </Modal>
     </Layout>
