@@ -843,6 +843,7 @@ function PageData() {
                 <motion.div whileHover={{ x: 3 }} whileTap={{ scale: 0.95 }}>
                   <Button
                     onClick={handleFinish}
+                    disabled={updating && !isPaused && !done}
                     className="flex items-center gap-2 bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-md hover:from-purple-600 hover:to-indigo-700"
                     aria-label="Finish updating"
                   >
