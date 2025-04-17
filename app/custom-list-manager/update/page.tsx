@@ -57,11 +57,27 @@ function PageData() {
   const [isRateLimited, setIsRateLimited] = useState<boolean>(false);
   const itemsPerPage = 10;
   const finishTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [listNameToCondition, setListNameToCondition] = useState<
+    Record<string, string>
+  >({});
 
   useEffect(() => {
     setUserId(getItemWithExpiry("userId"));
     setListType(getItemWithExpiry("listType") === "MANGA" ? "MANGA" : "ANIME");
-    setLists(JSON.parse(getItemWithExpiry("lists") || "[]"));
+    const loadedLists = JSON.parse(getItemWithExpiry("lists") || "[]");
+    setLists(loadedLists);
+    setListNameToCondition(
+      loadedLists.reduce(
+        (
+          acc: Record<string, string>,
+          list: { name: string; selectedOption: string },
+        ) => {
+          acc[list.name] = list.selectedOption;
+          return acc;
+        },
+        {},
+      ),
+    );
     setHideDefaultStatusLists(
       JSON.parse(getItemWithExpiry("hideDefaultStatusLists") || "true"),
     );
@@ -201,197 +217,195 @@ function PageData() {
           entry.genres = entry.media.genres || [];
           entry.isAdult = entry.media.isAdult || false;
 
-          lists.forEach((list) => {
-            if (!list.selectedOption) return;
-
-            if (list.selectedOption.includes("Status set to")) {
-              let status = list.selectedOption
-                .split(" ")
-                .slice(-1)[0]
-                .toUpperCase();
-              if (status === "WATCHING" || status === "READING") {
-                status = "CURRENT";
-              }
-              if (
-                entry.status === status &&
-                entry.customLists[list.name] !== true
-              ) {
-                entry.lists![list.name] = true;
-              } else if (
-                entry.status !== status &&
-                entry.customLists[list.name] !== false
-              ) {
-                entry.lists![list.name] = false;
-              }
-            }
-
-            if (list.selectedOption.includes("Score set to")) {
-              if (list.selectedOption.includes("below 5")) {
+          Object.entries(listNameToCondition).forEach(
+            ([listName, selectedOption]) => {
+              if (!selectedOption) return;
+              const list = { name: listName, selectedOption };
+              if (list.selectedOption.includes("Status set to")) {
+                let status = list.selectedOption
+                  .split(" ")
+                  .slice(-1)[0]
+                  .toUpperCase();
+                if (status === "WATCHING" || status === "READING") {
+                  status = "CURRENT";
+                }
                 if (
-                  entry.score > 0 &&
-                  entry.score < 5 &&
+                  entry.status === status &&
                   entry.customLists[list.name] !== true
                 ) {
                   entry.lists![list.name] = true;
                 } else if (
-                  (entry.score >= 5 || entry.score === 0) &&
+                  entry.status !== status &&
                   entry.customLists[list.name] !== false
                 ) {
                   entry.lists![list.name] = false;
                 }
-              } else {
-                const scoreCondition = parseInt(
-                  list.selectedOption.split(" ").slice(-1)[0],
-                  10,
+              }
+              if (list.selectedOption.includes("Score set to")) {
+                if (list.selectedOption.includes("below 5")) {
+                  if (
+                    entry.score > 0 &&
+                    entry.score < 5 &&
+                    entry.customLists[list.name] !== true
+                  ) {
+                    entry.lists![list.name] = true;
+                  } else if (
+                    (entry.score >= 5 || entry.score === 0) &&
+                    entry.customLists[list.name] !== false
+                  ) {
+                    entry.lists![list.name] = false;
+                  }
+                } else {
+                  const scoreCondition = parseInt(
+                    list.selectedOption.split(" ").slice(-1)[0],
+                    10,
+                  );
+                  if (
+                    entry.score === scoreCondition &&
+                    entry.customLists[list.name] !== true
+                  ) {
+                    entry.lists![list.name] = true;
+                  } else if (
+                    entry.score !== scoreCondition &&
+                    entry.customLists[list.name] !== false
+                  ) {
+                    entry.lists![list.name] = false;
+                  }
+                }
+              }
+              if (list.selectedOption.includes("Format set to")) {
+                let format = list.selectedOption
+                  .replace("Format set to ", "")
+                  .toUpperCase();
+                if (
+                  listType === "MANGA" &&
+                  [
+                    "MANGA",
+                    "MANWHA",
+                    "MANHUA",
+                    "MANGA (JAPAN)",
+                    "MANGA (SOUTH KOREAN)",
+                    "MANGA (CHINESE)",
+                  ].includes(format)
+                ) {
+                  const countryMap: Record<string, string> = {
+                    MANGA: "Manga (Japan)",
+                    MANWHA: "Manga (South Korean)",
+                    MANHUA: "Manga (Chinese)",
+                  };
+                  const country = entry.media.countryOfOrigin;
+                  if (["MANGA", "MANWHA", "MANHUA"].includes(format)) {
+                    format = countryMap[format as keyof typeof countryMap];
+                  } else {
+                    format = capitalizeWords(format);
+                  }
+                  if (
+                    (country === "JP" && format === "Manga (Japan)") ||
+                    (country === "KR" && format === "Manga (South Korean)") ||
+                    (country === "CN" && format === "Manga (Chinese)")
+                  ) {
+                    if (entry.customLists[list.name] === false) {
+                      entry.lists![list.name] = true;
+                    }
+                  } else if (entry.customLists[list.name] !== false) {
+                    entry.lists![list.name] = false;
+                  }
+                } else if (
+                  entry.media.format === format &&
+                  entry.customLists[list.name] === false
+                ) {
+                  entry.lists![list.name] = true;
+                } else if (
+                  entry.media.format !== format &&
+                  entry.customLists[list.name] !== false
+                ) {
+                  entry.lists![list.name] = false;
+                }
+              }
+              if (list.selectedOption.includes("Genres contain")) {
+                const genre = list.selectedOption.replace(
+                  "Genres contain ",
+                  "",
                 );
                 if (
-                  entry.score === scoreCondition &&
+                  entry.genres &&
+                  entry.genres.includes(genre) &&
                   entry.customLists[list.name] !== true
                 ) {
                   entry.lists![list.name] = true;
                 } else if (
-                  entry.score !== scoreCondition &&
+                  entry.genres &&
+                  !entry.genres.includes(genre) &&
                   entry.customLists[list.name] !== false
                 ) {
                   entry.lists![list.name] = false;
                 }
               }
-            }
-
-            if (list.selectedOption.includes("Format set to")) {
-              let format = list.selectedOption
-                .replace("Format set to ", "")
-                .toUpperCase();
-              if (
-                listType === "MANGA" &&
-                [
-                  "MANGA",
-                  "MANWHA",
-                  "MANHUA",
-                  "MANGA (JAPAN)",
-                  "MANGA (SOUTH KOREAN)",
-                  "MANGA (CHINESE)",
-                ].includes(format)
-              ) {
-                const countryMap: Record<string, string> = {
-                  MANGA: "Manga (Japan)",
-                  MANWHA: "Manga (South Korean)",
-                  MANHUA: "Manga (Chinese)",
-                };
-                const country = entry.media.countryOfOrigin;
-                if (["MANGA", "MANWHA", "MANHUA"].includes(format)) {
-                  format = countryMap[format as keyof typeof countryMap];
-                } else {
-                  format = capitalizeWords(format);
-                }
+              if (list.selectedOption.includes("Tag Categories contain")) {
+                const tagCategory = list.selectedOption.replace(
+                  "Tag Categories contain ",
+                  "",
+                );
                 if (
-                  (country === "JP" && format === "Manga (Japan)") ||
-                  (country === "KR" && format === "Manga (South Korean)") ||
-                  (country === "CN" && format === "Manga (Chinese)")
+                  entry.tagCategories &&
+                  entry.tagCategories.includes(tagCategory) &&
+                  entry.customLists[list.name] !== true
                 ) {
-                  if (entry.customLists[list.name] === false) {
-                    entry.lists![list.name] = true;
-                  }
-                } else if (entry.customLists[list.name] !== false) {
+                  entry.lists![list.name] = true;
+                } else if (
+                  entry.tagCategories &&
+                  !entry.tagCategories.includes(tagCategory) &&
+                  entry.customLists[list.name] !== false
+                ) {
                   entry.lists![list.name] = false;
                 }
-              } else if (
-                entry.media.format === format &&
-                entry.customLists[list.name] === false
+              }
+              if (list.selectedOption.includes("Tags contain")) {
+                const tag = list.selectedOption.replace("Tags contain ", "");
+                if (
+                  entry.tags &&
+                  entry.tags.includes(tag) &&
+                  entry.customLists[list.name] !== true
+                ) {
+                  entry.lists![list.name] = true;
+                } else if (
+                  entry.tags &&
+                  !entry.tags.includes(tag) &&
+                  entry.customLists[list.name] !== false
+                ) {
+                  entry.lists![list.name] = false;
+                }
+              }
+              if (
+                (list.selectedOption === "Reread" ||
+                  list.selectedOption === "Rewatched") &&
+                entry.repeat > 0 &&
+                !entry.customLists[list.name]
               ) {
                 entry.lists![list.name] = true;
               } else if (
-                entry.media.format !== format &&
-                entry.customLists[list.name] !== false
+                (list.selectedOption === "Reread" ||
+                  list.selectedOption === "Rewatched") &&
+                entry.repeat <= 0 &&
+                entry.customLists[list.name]
               ) {
                 entry.lists![list.name] = false;
               }
-            }
-
-            if (list.selectedOption.includes("Genres contain")) {
-              const genre = list.selectedOption.replace("Genres contain ", "");
               if (
-                entry.genres &&
-                entry.genres.includes(genre) &&
+                list.selectedOption === "Adult (18+)" &&
+                entry.isAdult === true &&
                 entry.customLists[list.name] !== true
               ) {
                 entry.lists![list.name] = true;
               } else if (
-                entry.genres &&
-                !entry.genres.includes(genre) &&
+                list.selectedOption === "Adult (18+)" &&
+                entry.isAdult === false &&
                 entry.customLists[list.name] !== false
               ) {
                 entry.lists![list.name] = false;
               }
-            }
-
-            if (list.selectedOption.includes("Tag Categories contain")) {
-              const tagCategory = list.selectedOption.replace(
-                "Tag Categories contain ",
-                "",
-              );
-              if (
-                entry.tagCategories &&
-                entry.tagCategories.includes(tagCategory) &&
-                entry.customLists[list.name] !== true
-              ) {
-                entry.lists![list.name] = true;
-              } else if (
-                entry.tagCategories &&
-                !entry.tagCategories.includes(tagCategory) &&
-                entry.customLists[list.name] !== false
-              ) {
-                entry.lists![list.name] = false;
-              }
-            }
-
-            if (list.selectedOption.includes("Tags contain")) {
-              const tag = list.selectedOption.replace("Tags contain ", "");
-              if (
-                entry.tags &&
-                entry.tags.includes(tag) &&
-                entry.customLists[list.name] !== true
-              ) {
-                entry.lists![list.name] = true;
-              } else if (
-                entry.tags &&
-                !entry.tags.includes(tag) &&
-                entry.customLists[list.name] !== false
-              ) {
-                entry.lists![list.name] = false;
-              }
-            }
-
-            if (
-              (list.selectedOption === "Reread" ||
-                list.selectedOption === "Rewatched") &&
-              entry.repeat > 0 &&
-              !entry.customLists[list.name]
-            ) {
-              entry.lists![list.name] = true;
-            } else if (
-              (list.selectedOption === "Reread" ||
-                list.selectedOption === "Rewatched") &&
-              entry.repeat <= 0 &&
-              entry.customLists[list.name]
-            ) {
-              entry.lists![list.name] = false;
-            }
-
-            if (
-              list.selectedOption === "Adult (18+)" &&
-              entry.isAdult === true &&
-              entry.customLists[list.name] !== true
-            ) {
-              entry.lists![list.name] = true;
-            } else if (
-              list.selectedOption === "Adult (18+)" &&
-              entry.isAdult === false &&
-              entry.customLists[list.name] !== false
-            ) {
-              entry.lists![list.name] = false;
-            }
-          });
+            },
+          );
 
           if (entry.hiddenFromStatusLists !== hideDefaultStatusLists) {
             entry.lists!["hiddenFromStatusLists"] = hideDefaultStatusLists;
@@ -431,6 +445,7 @@ function PageData() {
     capitalizeWords,
     toast,
     token,
+    listNameToCondition,
   ]);
 
   const updateMediaListQuery = `

@@ -143,6 +143,15 @@ function PageData() {
   );
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [activeTab, setActiveTab] = useState<"ANIME" | "MANGA">("ANIME");
+  // Delete confirmation modal state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [pendingDeleteList, setPendingDeleteList] = useState<CustomList | null>(
+    null,
+  );
+  // Add list modal state
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newListName, setNewListName] = useState("");
+  const [addListError, setAddListError] = useState("");
 
   // Ref Hooks
   const updateSectionOrderRef =
@@ -170,31 +179,35 @@ function PageData() {
   }, []);
 
   const handleDelete = async (listName: string): Promise<void> => {
+    // Remove the list from lists
     const updatedLists = lists.filter((list) => list.name !== listName);
-    setLists(updatedLists);
-
-    const updatedSectionOrder = originalSectionOrder.filter(
-      (name) => name !== listName,
+    // Build the new customLists array
+    const updatedCustomLists = updatedLists.map((list) => list.name);
+    // Filter sectionOrder to only include names present in customLists
+    const filteredSectionOrder = originalSectionOrder.filter((name) =>
+      updatedCustomLists.includes(name),
     );
-    setOriginalSectionOrder(updatedSectionOrder);
+
+    setLists(updatedLists);
+    setOriginalSectionOrder(filteredSectionOrder);
 
     const query = `
-			mutation ($${listType.toLowerCase()}ListOptions: MediaListOptionsInput) {
-				UpdateUser(${listType.toLowerCase()}ListOptions: $${listType.toLowerCase()}ListOptions) {
-					mediaListOptions {
-						${listType.toLowerCase()}List {
-							customLists
-							sectionOrder
-						}
-					}
-				}
-			}
-		`;
+      mutation ($${listType.toLowerCase()}ListOptions: MediaListOptionsInput) {
+        UpdateUser(${listType.toLowerCase()}ListOptions: $${listType.toLowerCase()}ListOptions) {
+          mediaListOptions {
+            ${listType.toLowerCase()}List {
+              customLists
+              sectionOrder
+            }
+          }
+        }
+      }
+    `;
 
     const variables = {
       [`${listType.toLowerCase()}ListOptions`]: {
-        customLists: updatedLists.map((list) => list.name),
-        sectionOrder: updatedSectionOrder,
+        customLists: updatedCustomLists,
+        sectionOrder: filteredSectionOrder,
       },
     };
 
@@ -577,9 +590,15 @@ function PageData() {
 
   const proceedToNextStep = (): void => {
     setShowPopup(false);
+    // Save all lists with their name and selectedOption
     setItemWithExpiry(
       "lists",
-      JSON.stringify(lists.filter((list) => list.selectedOption)),
+      JSON.stringify(
+        lists.map((list) => ({
+          name: list.name,
+          selectedOption: list.selectedOption,
+        })),
+      ),
       60 * 60 * 24 * 1000,
     );
     setItemWithExpiry("listType", listType, 60 * 60 * 24 * 1000);
@@ -599,9 +618,11 @@ function PageData() {
 
   const handleDeleteList = useCallback(
     (name: string) => {
-      handleDelete(name);
+      const list = lists.find((l) => l.name === name) || null;
+      setPendingDeleteList(list);
+      setShowDeleteModal(true);
     },
-    [handleDelete],
+    [lists],
   );
 
   // Async function to handle the actual rename logic
@@ -669,63 +690,66 @@ function PageData() {
     [lists, listType, fetchAniListData, toast, originalSectionOrder],
   );
 
-  const addNewList = async (): Promise<void> => {
-    const newListName = prompt("Enter the name of the new custom list:");
-    if (newListName && newListName.trim() !== "") {
-      const duplicate = lists.some(
-        (list) => list.name.toLowerCase() === newListName.trim().toLowerCase(),
-      );
-      if (duplicate) {
-        toast.error("Error", {
-          description: "A list with this name already exists.",
-        });
-        return;
+  const addNewList = () => {
+    setNewListName("");
+    setAddListError("");
+    setShowAddModal(true);
+  };
+
+  const handleAddListConfirm = async () => {
+    const trimmedName = newListName.trim();
+    if (!trimmedName) {
+      setAddListError("List name cannot be empty.");
+      return;
+    }
+    const duplicate = lists.some(
+      (list) => list.name.toLowerCase() === trimmedName.toLowerCase(),
+    );
+    if (duplicate) {
+      setAddListError("A list with this name already exists.");
+      return;
+    }
+
+    const updatedLists = [
+      ...lists,
+      {
+        name: trimmedName,
+        isCustomList: true,
+        selectedOption: "",
+      },
+    ];
+    setLists(updatedLists);
+
+    const query = `
+      mutation ($${listType.toLowerCase()}ListOptions: MediaListOptionsInput) {
+        UpdateUser(${listType.toLowerCase()}ListOptions: $${listType.toLowerCase()}ListOptions) {
+          mediaListOptions {
+            ${listType.toLowerCase()}List {
+              customLists
+            }
+          }
+        }
       }
+    `;
 
-      const updatedLists = [
-        ...lists,
-        {
-          name: newListName.trim(),
-          isCustomList: true,
-          selectedOption: "",
-        },
-      ];
-      setLists(updatedLists);
+    const variables = {
+      [`${listType.toLowerCase()}ListOptions`]: {
+        customLists: updatedLists.map((list) => list.name),
+      },
+    };
 
-      const query = `
-				mutation ($${listType.toLowerCase()}ListOptions: MediaListOptionsInput) {
-					UpdateUser(${listType.toLowerCase()}ListOptions: $${listType.toLowerCase()}ListOptions) {
-						mediaListOptions {
-							${listType.toLowerCase()}List {
-								customLists
-							}
-						}
-					}
-				}
-			`;
-
-      const variables = {
-        [`${listType.toLowerCase()}ListOptions`]: {
-          customLists: updatedLists.map((list) => list.name),
-        },
-      };
-
-      try {
-        await fetchAniListData(query, variables);
-        toast.success("Success", {
-          description: `New list "${newListName}" added successfully.`,
-        });
-      } catch (error) {
-        const apiError = error as ApiError;
-        console.error("Error adding new list:", apiError.message);
-        toast.error("Error", {
-          description: apiError.message || "Failed to add new list.",
-        });
-      }
-    } else {
-      toast.error("Error", {
-        description: "List name cannot be empty.",
+    try {
+      await fetchAniListData(query, variables);
+      toast.success("Success", {
+        description: `New list "${trimmedName}" added successfully.`,
       });
+      setShowAddModal(false);
+      setNewListName("");
+      setAddListError("");
+    } catch (error) {
+      const apiError = error as ApiError;
+      console.error("Error adding new list:", apiError.message);
+      setAddListError(apiError.message || "Failed to add new list.");
     }
   };
 
@@ -1311,6 +1335,68 @@ function PageData() {
           }
         }}
       />
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onConfirm={async () => {
+          if (pendingDeleteList) {
+            await handleDelete(pendingDeleteList.name);
+            setPendingDeleteList(null);
+            setShowDeleteModal(false);
+          }
+        }}
+        title="Delete Custom List?"
+        confirmButtonText="Delete"
+      >
+        <div className="space-y-4">
+          <div className="rounded-lg border border-red-100 bg-red-50 p-3 dark:border-red-900 dark:bg-red-900/20">
+            <p className="text-sm font-medium text-red-800 dark:text-red-300">
+              Are you sure you want to delete the custom list
+              <span className="font-bold"> {pendingDeleteList?.name}</span>?
+            </p>
+          </div>
+          <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 dark:border-blue-900 dark:bg-blue-900/20">
+            <p className="text-sm text-blue-800 dark:text-blue-300">
+              Note: Deleting a custom list only removes it from your list
+              structure. Any entries previously associated with this list will
+              still retain the association. If you add a new list with the same
+              name, those entries will reappear in the list.
+            </p>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Add List Modal */}
+      <Modal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onConfirm={handleAddListConfirm}
+        title="Add New Custom List"
+        confirmButtonText="Add"
+      >
+        <div className="space-y-4">
+          <input
+            type="text"
+            className="w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+            placeholder="Enter new list name"
+            value={newListName}
+            onChange={(e) => {
+              setNewListName(e.target.value);
+              setAddListError("");
+            }}
+            autoFocus
+            maxLength={50}
+            aria-label="New list name"
+          />
+          {addListError && (
+            <div className="rounded bg-red-100 px-3 py-2 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300">
+              {addListError}
+            </div>
+          )}
+        </div>
+      </Modal>
     </Layout>
   );
 }
