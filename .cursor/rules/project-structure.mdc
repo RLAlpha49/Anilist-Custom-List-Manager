@@ -1,0 +1,21 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Project Structure Guide
+The project is organized as follows:
+
+- [app/](mdc:app): Next.js App Router routes and layouts.
+- [components/](mdc:components): Reusable React UI components (`.tsx`).
+- [context/](mdc:context): React Context providers and hooks for global state.
+- [lib/](mdc:lib): Shared utility functions and modules.
+- [public/](mdc:public): Static assets served at root.
+- [tailwind.config.ts](mdc:tailwind.config.ts): Tailwind CSS configuration.
+- [postcss.config.js](mdc:postcss.config.js): PostCSS plugins configuration.
+- [eslint.config.mjs](mdc:eslint.config.mjs): ESLint linting rules.
+- [.prettierrc](mdc:.prettierrc): Prettier formatting rules.
+- [next.config.js](mdc:next.config.js): Next.js custom configuration.
+- [tsconfig.json](mdc:tsconfig.json): TypeScript compiler options.
+- [README.md](mdc:README.md): Project overview and setup instructions.
+- [.cursor/rules/](mdc:.cursor/rules): Cursor AI navigation rules (ongoing).
