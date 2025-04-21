@@ -3,6 +3,8 @@
 import React, { ReactNode } from "react";
 import DarkModeToggle from "@/components/dark-mode-toggle";
 import { Toaster } from "@/components/ui/sonner";
+import Link from "next/link";
+import Image from "next/image";
 
 interface LayoutProps {
   children: ReactNode;
@@ -15,9 +17,26 @@ export default function Layout({ children }: LayoutProps) {
         className="flex items-center justify-between bg-white px-4 py-6 transition-colors duration-300 dark:bg-gray-800"
         role="banner"
       >
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-          Anilist Custom List Manager
-        </h1>
+        <Link
+          href="/"
+          aria-label="Go to homepage"
+          className="flex items-center space-x-3 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+          tabIndex={0}
+        >
+          <span aria-hidden="true" className="inline-block">
+            <Image
+              src="/images/logo.png"
+              alt="AniList Custom List Manager Logo"
+              width={64}
+              height={64}
+              priority
+              className="h-12 w-12 object-contain"
+            />
+          </span>
+          <span className="select-none text-2xl font-bold text-gray-900 dark:text-gray-100">
+            Anilist Custom List Manager
+          </span>
+        </Link>
         <div className="flex items-center space-x-4">
           <DarkModeToggle />
         </div>
