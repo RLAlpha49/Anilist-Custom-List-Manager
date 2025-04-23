@@ -582,6 +582,7 @@ function PageData() {
     shouldPauseRef.current = false;
 
     const updateLoop = async () => {
+      let updatedCount = 0;
       for (const entry of mediaList) {
         while (isPausedRef.current) {
           await delay(1000);
@@ -593,9 +594,10 @@ function PageData() {
         try {
           await updateEntry(entry);
           setUpdatedEntries((prev) => new Set(prev).add(entry.media.id));
+          updatedCount += 1;
           await delay(1000);
 
-          if (updatedEntries.size + 1 === totalEntries) {
+          if (updatedCount === totalEntries) {
             setDone(true);
             setUpdating(false);
             toast.success("All entries have been updated successfully!");
@@ -610,7 +612,7 @@ function PageData() {
     };
 
     updateProcessRef.current = updateLoop();
-  }, [mediaList, updateEntry, updatedEntries.size, totalEntries, toast]);
+  }, [mediaList, updateEntry, totalEntries, toast]);
 
   const toggleUpdate = useCallback(() => {
     if (updating) {
