@@ -198,8 +198,7 @@ function PageData() {
           mediaListQuery,
           variables,
           token!,
-          (retryCount) => {
-            console.log(`Retry attempt ${retryCount} for media list fetch`);
+          () => {
             setRetryCountdown(60);
             isPausedRef.current = true;
             setIsPaused(true);
@@ -452,8 +451,32 @@ function PageData() {
           return entry;
         });
 
-        entries = entries.filter((entry) =>
-          Object.values(entry.lists!).some((value) => value !== undefined),
+        // Utility to check if customLists and _originalCustomLists differ
+        const hasCustomListChanged = (
+          entry: MediaEntryWithOriginal,
+        ): boolean => {
+          if (!entry._originalCustomLists) return false;
+          const allKeys = Array.from(
+            new Set([
+              ...Object.keys(entry.customLists || {}),
+              ...Object.keys(entry._originalCustomLists || {}),
+            ]),
+          );
+          for (const key of allKeys) {
+            if (
+              (entry.customLists?.[key] ?? false) !==
+              (entry._originalCustomLists?.[key] ?? false)
+            ) {
+              return true;
+            }
+          }
+          return false;
+        };
+
+        entries = entries.filter(
+          (entry) =>
+            Object.values(entry.lists!).some((value) => value !== undefined) ||
+            hasCustomListChanged(entry),
         );
         entries.sort((a, b) =>
           a.media.title.romaji.localeCompare(b.media.title.romaji),
@@ -518,8 +541,7 @@ function PageData() {
           mutation,
           variables,
           token!,
-          (retryCount) => {
-            console.log(`Retry attempt ${retryCount} for entry update`);
+          () => {
             setRetryCountdown(60);
             setIsRateLimited(true);
             isPausedRef.current = true;
@@ -841,6 +863,7 @@ function PageData() {
                         src={currentEntry.media.coverImage.extraLarge || ""}
                         alt={currentEntry.media.title.romaji}
                         fill
+                        sizes="48px"
                         className="object-cover"
                       />
                     </div>

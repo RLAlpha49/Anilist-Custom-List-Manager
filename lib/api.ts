@@ -21,9 +21,7 @@ export const handleRateLimit = async (
   onFailure?: (error: ApiError) => void,
 ): Promise<ApiResponse> => {
   try {
-    console.log("apiCall");
     const response = await apiCall();
-    console.log("response", response);
     return response;
   } catch (error) {
     const apiError = error as ApiError;
