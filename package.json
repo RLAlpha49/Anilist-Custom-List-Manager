@@ -29,13 +29,13 @@
     "@radix-ui/react-tooltip": "^1.2.8",
     "@vercel/analytics": "^1.5.0",
     "anilist-custom-list-manager": "file:",
-    "autoprefixer": "10.4.21",
+    "autoprefixer": "10.4.22",
     "class-variance-authority": "^0.7.1",
     "cmdk": "^1.1.1",
-    "eslint-config-next": "16.0.1",
+    "eslint-config-next": "16.0.3",
     "framer-motion": "^12.23.24",
     "lucide-react": "^0.553.0",
-    "next": "^16.0.1",
+    "next": "^16.0.3",
     "next-themes": "^0.4.6",
     "postcss": "^8.5.6",
     "react": "19.2.0",
@@ -48,12 +48,12 @@
     "tailwindcss-animate": "^1.0.7"
   },
   "devDependencies": {
-    "@eslint/compat": "^1.4.1",
+    "@eslint/compat": "^2.0.0",
     "@eslint/js": "^9.39.1",
-    "@next/eslint-plugin-next": "^16.0.1",
-    "@types/node": "^24.10.0",
-    "@types/react": "^19.2.2",
-    "@types/react-dom": "^19.2.2",
+    "@next/eslint-plugin-next": "^16.0.3",
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.5",
+    "@types/react-dom": "^19.2.3",
     "eslint": "^9.39.1",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.4",
@@ -62,6 +62,6 @@
     "prettier": "^3.6.2",
     "prettier-plugin-tailwindcss": "^0.7.1",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.46.3"
+    "typescript-eslint": "^8.46.4"
   }
 }
