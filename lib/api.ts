@@ -113,7 +113,11 @@ export const fetchAniList = async (
     () =>
       fetch(url, options).then(async (response) => {
         if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+          const apiError = new Error(
+            `HTTP error! status: ${response.status}`,
+          ) as ApiError;
+          apiError.response = { status: response.status };
+          throw apiError;
         }
         const data = (await response.json()) as AniListResponse;
         if (data.errors) {
