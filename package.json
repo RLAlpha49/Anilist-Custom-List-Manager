@@ -16,7 +16,8 @@
     "update": "npm-check-updates -u",
     "update:check": "npm-check-updates",
     "update:check:json": "npm-check-updates --jsonUpgraded",
-    "prepare": "husky"
+    "prepare": "husky",
+    "validate:ci": "bun run lint && bun run typecheck && bun run build"
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx,mjs,mts}": [
