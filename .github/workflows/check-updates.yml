@@ -289,8 +289,6 @@ jobs:
           {
             printf '%s\n' '## 📦 Dependency Updates'
             printf '%s\n' ''
-            printf '%s\n' 'This branch was regenerated only after the read-only dependency refresh job completed successfully and produced validated package changes.'
-            printf '%s\n' ''
             printf '%s\n' "Refresh mode: \`$RUN_MODE\`."
             printf '%s\n' "Change kind: \`$CHANGE_KIND\`."
             printf '%s\n' ''
@@ -353,8 +351,6 @@ jobs:
             echo "::error::PULL_REQUEST_TOKEN is required for dependency update branch and PR automation because GITHUB_TOKEN-originated pushes can suppress downstream CI and security workflows."
             exit 1
           fi
-
-          printf '%s\n' 'Dependency publisher will use PULL_REQUEST_TOKEN so downstream push and pull_request workflows can run normally.' >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/checkout@v6
         with:
