@@ -1,0 +1,19 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.jsonc",
+  "entry": [
+    "app/**/page.tsx",
+    "app/**/layout.tsx",
+    "app/globals.css",
+    ".husky/pre-commit",
+    ".husky/pre-push"
+  ],
+  "project": ["**/*.ts", "**/*.tsx"],
+  "ignoreDependencies": [
+    "lint-staged",
+    "postcss-load-config"
+  ],
+  "ignoreBinaries": ["ncu"],
+  "ignoreIssues": {
+    "components/ui/*.tsx": ["exports", "types"]
+  }
+}

@@ -13,7 +13,7 @@ import { ApiError, ApiResponse } from "./types";
  * @param onFailure - Optional callback to execute on ultimate failure.
  * @returns The API response or throws an error after exceeding retries.
  */
-export const handleRateLimit = async (
+const handleRateLimit = async (
   apiCall: () => Promise<ApiResponse>,
   retryCount = 0,
   retryAfter = 60,

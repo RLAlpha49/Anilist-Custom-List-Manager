@@ -5,12 +5,7 @@ export interface ApiError extends Error {
   };
 }
 
-export interface Tag {
-  name: string;
-  category: string;
-}
-
-export interface Media {
+interface Media {
   id: number;
   title: {
     romaji: string;
@@ -84,7 +79,7 @@ export interface MediaEntry {
   media: Media;
 }
 
-export interface MediaList {
+interface MediaList {
   isCustom: boolean;
   entries: MediaEntry[];
   name: string;
