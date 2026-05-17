@@ -36,6 +36,7 @@ type MediaEntryWithOriginal = MediaEntry & {
 
 function PageData() {
   const [mediaList, setMediaList] = useState<MediaEntryWithOriginal[]>([]);
+  const mediaListRef = useRef<MediaEntryWithOriginal[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [updating, setUpdating] = useState<boolean>(false);
   const [currentEntry, setCurrentEntry] = useState<MediaEntry | null>(null);
@@ -105,6 +106,11 @@ function PageData() {
       setListsToRemoveFromAllEntries([]);
     }
   }, []);
+
+  // Keep mediaListRef in sync with mediaList for the update loop
+  useEffect(() => {
+    mediaListRef.current = mediaList;
+  }, [mediaList]);
 
   useEffect(() => {
     const updateIsPausedState = () => {
@@ -594,7 +600,6 @@ function PageData() {
   const handleAnimationEnd = useCallback(
     (id: number): void => {
       removeEntryById(id);
-      setUpdatedEntries((prev) => new Set(prev).add(id));
     },
     [removeEntryById],
   );
@@ -604,22 +609,23 @@ function PageData() {
     shouldPauseRef.current = false;
 
     const updateLoop = async () => {
-      let updatedCount = 0;
-      for (const entry of mediaList) {
+      const list = mediaListRef.current;
+      const total = list.length;
+      for (let i = 0; i < total; i++) {
         while (isPausedRef.current) {
           await delay(1000);
         }
 
         if (shouldPauseRef.current) break;
 
+        const entry = list[i];
         setCurrentEntry(entry);
         try {
           await updateEntry(entry);
           setUpdatedEntries((prev) => new Set(prev).add(entry.media.id));
-          updatedCount += 1;
           await delay(1000);
 
-          if (updatedCount === totalEntries) {
+          if (i === total - 1) {
             setDone(true);
             setUpdating(false);
             toast.success("All entries have been updated successfully!");
@@ -634,7 +640,7 @@ function PageData() {
     };
 
     updateProcessRef.current = updateLoop();
-  }, [mediaList, updateEntry, totalEntries, toast]);
+  }, [updateEntry, toast]);
 
   const toggleUpdate = useCallback(() => {
     if (updating) {
