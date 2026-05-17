@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import React from "react";
-import { JSX,Suspense, useEffect, useRef, useState } from "react";
+import { JSX, Suspense, useEffect, useRef, useState } from "react";
 import {
   FaCheckCircle,
   FaGithub,

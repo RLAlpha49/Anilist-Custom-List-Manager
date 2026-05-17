@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import React, { useEffect,useState } from "react";
+import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import Modal from "@/components/ui/modal";

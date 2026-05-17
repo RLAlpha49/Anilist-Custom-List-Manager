@@ -1,7 +1,7 @@
 "use client";
 
-import { AnimatePresence,motion } from "framer-motion";
-import { Check, Minus,Plus } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Check, Minus, Plus } from "lucide-react";
 import React from "react";
 import { useEffect } from "react";
 import { FaExternalLinkAlt } from "react-icons/fa";

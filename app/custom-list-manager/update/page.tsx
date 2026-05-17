@@ -1,11 +1,11 @@
 "use client";
 
-import { AnimatePresence,motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import React from "react";
-import { Suspense,useCallback, useEffect, useRef, useState } from "react";
-import { FaCheckCircle,FaPause, FaPlay } from "react-icons/fa";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { FaCheckCircle, FaPause, FaPlay } from "react-icons/fa";
 import { toast } from "sonner";
 
 import Breadcrumbs from "@/components/breadcrumbs";

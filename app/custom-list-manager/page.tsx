@@ -15,7 +15,7 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { AnimatePresence,motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import React from "react";
 // External Imports
@@ -82,7 +82,7 @@ import {
 } from "@/components/ui/tooltip";
 import { useAuth } from "@/context/auth-context";
 import { fetchAniList } from "@/lib/api";
-import { getItemWithExpiry,setItemWithExpiry } from "@/lib/local-storage";
+import { getItemWithExpiry, setItemWithExpiry } from "@/lib/local-storage";
 import {
   formatItemsAnime,
   formatItemsManga,
@@ -1116,11 +1116,14 @@ function PageData() {
                           flex items-center gap-2 bg-linear-to-r from-blue-600 to-indigo-600
                           text-white shadow-md transition-all
                           hover:from-blue-700 hover:to-indigo-700 hover:shadow-lg
-                          ${!dataLoaded ? `
-                            ring-2 ring-blue-300 ring-offset-2 ring-offset-white
-                            dark:ring-blue-500 dark:ring-offset-gray-800
-                          ` : ""}
-                        `}
+                          ${
+                          !dataLoaded
+                            ? `
+                              ring-2 ring-blue-300 ring-offset-2 ring-offset-white
+                              dark:ring-blue-500 dark:ring-offset-gray-800
+                            `
+                            : ""
+                        }`}
                       >
                         <FaArrowDown className="size-4" />
                         {!dataLoaded ? "Click to Fetch Lists" : "Fetch Lists"}
@@ -1392,10 +1395,13 @@ function PageData() {
                                             hover:bg-blue-50 hover:text-blue-600
                                             dark:text-blue-400
                                             dark:hover:bg-blue-900/30 dark:hover:text-blue-300
-                                            ${listsToRemoveFromAllEntries.includes(list.name) ? `
-                                              ring-2 ring-blue-400
-                                            ` : ""}
-                                          `}
+                                            ${
+                                            listsToRemoveFromAllEntries.includes(
+                                              list.name,
+                                            )
+                                              ? `ring-2 ring-blue-400`
+                                              : ""
+                                          }`}
                                           aria-label="Remove from all entries"
                                         >
                                           <FaTimesCircle className="size-4" />

@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import Link from "next/link";
 import React from "react";
-import { Suspense, useEffect,useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import {
   FaHome,
   FaListAlt,

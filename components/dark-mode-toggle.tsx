@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { FaMoon,FaSun } from "react-icons/fa";
+import { FaMoon, FaSun } from "react-icons/fa";
 
 const DarkModeToggle: React.FC = () => {
   const [isDark, setIsDark] = useState<boolean>(false);

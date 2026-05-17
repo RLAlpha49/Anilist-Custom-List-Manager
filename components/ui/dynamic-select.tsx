@@ -1,6 +1,6 @@
 "use client";
 
-import React, { forwardRef, useEffect, useRef,useState } from "react";
+import React, { forwardRef, useEffect, useRef, useState } from "react";
 import { FaSearch } from "react-icons/fa";
 
 import { Input } from "@/components/ui/input";

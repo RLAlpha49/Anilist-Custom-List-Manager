@@ -1,10 +1,10 @@
 "use client";
 
-import { AnimatePresence,motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import React from "react";
 import { Suspense, useEffect, useState } from "react";
-import { FaCheckCircle, FaExclamationTriangle,FaKey } from "react-icons/fa";
+import { FaCheckCircle, FaExclamationTriangle, FaKey } from "react-icons/fa";
 
 import Layout from "@/components/layout";
 import LoadingIndicator from "@/components/loading-indicator";
