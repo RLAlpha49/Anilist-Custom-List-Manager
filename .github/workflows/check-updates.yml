@@ -112,10 +112,6 @@ jobs:
             printf '%s\n' "has_manifest_updates=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Load synthetic production env fixture
-        if: ${{ steps.automation-mode.outputs.should_apply == 'true' }}
-        uses: ./.github/actions/production-env-fixture
-
       - name: Report lockfile convergence hotspots
         id: convergence-report
         run: |
