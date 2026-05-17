@@ -1,30 +1,30 @@
 "use client";
 
-import React from "react";
-import Layout from "@/components/layout";
-import { Suspense, useState, useEffect } from "react";
-import {
-  FaQuestionCircle,
-  FaSearch,
-  FaHome,
-  FaListAlt,
-  FaUserCog,
-  FaLock,
-  FaTools,
-  FaRocket,
-} from "react-icons/fa";
-import Breadcrumbs from "@/components/breadcrumbs";
 import { motion } from "framer-motion";
 import Link from "next/link";
+import React from "react";
+import { Suspense, useEffect,useState } from "react";
+import {
+  FaHome,
+  FaListAlt,
+  FaLock,
+  FaQuestionCircle,
+  FaRocket,
+  FaSearch,
+  FaTools,
+  FaUserCog,
+} from "react-icons/fa";
+
+import Breadcrumbs from "@/components/breadcrumbs";
+import Layout from "@/components/layout";
 import LoadingIndicator from "@/components/loading-indicator";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -32,6 +32,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface FAQItem {
@@ -45,17 +46,17 @@ interface FAQItem {
 const getCategoryIcon = (categoryId: string) => {
   switch (categoryId) {
     case "category.getting_started":
-      return <FaRocket className="h-5 w-5" />;
+      return <FaRocket className="size-5" />;
     case "category.account":
-      return <FaUserCog className="h-5 w-5" />;
+      return <FaUserCog className="size-5" />;
     case "category.managing_lists":
-      return <FaListAlt className="h-5 w-5" />;
+      return <FaListAlt className="size-5" />;
     case "category.technical":
-      return <FaTools className="h-5 w-5" />;
+      return <FaTools className="size-5" />;
     case "category.security":
-      return <FaLock className="h-5 w-5" />;
+      return <FaLock className="size-5" />;
     default:
-      return <FaQuestionCircle className="h-5 w-5" />;
+      return <FaQuestionCircle className="size-5" />;
   }
 };
 
@@ -193,7 +194,11 @@ function PageData() {
           { name: "FAQ", href: "/faq" },
         ]}
       />
-      <div className="flex min-h-screen flex-col items-center justify-start bg-gradient-to-b from-gray-50 to-white px-4 py-12 text-gray-900 dark:from-gray-900 dark:to-gray-800 dark:text-gray-100">
+      <div className="
+        flex min-h-screen flex-col items-center justify-start bg-linear-to-b from-gray-50 to-white
+        px-4 py-12 text-gray-900
+        dark:from-gray-900 dark:to-gray-800 dark:text-gray-100
+      ">
         <motion.div
           className="w-full max-w-4xl"
           initial="hidden"
@@ -202,11 +207,18 @@ function PageData() {
         >
           {/* Header Section */}
           <motion.div className="mb-12 text-center" variants={fadeInUp}>
-            <div className="mb-6 inline-flex h-24 w-24 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/30">
-              <FaQuestionCircle className="h-12 w-12 text-blue-600 dark:text-blue-400" />
+            <div className="
+              mb-6 inline-flex size-24 items-center justify-center rounded-full bg-blue-100
+              dark:bg-blue-900/30
+            ">
+              <FaQuestionCircle className="size-12 text-blue-600 dark:text-blue-400" />
             </div>
             <motion.h1
-              className="mb-4 bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-4xl font-bold text-transparent dark:from-blue-400 dark:to-indigo-400"
+              className="
+                mb-4 bg-linear-to-r from-blue-600 to-indigo-600 bg-clip-text text-4xl font-bold
+                text-transparent
+                dark:from-blue-400 dark:to-indigo-400
+              "
               variants={fadeInUp}
             >
               Frequently Asked Questions
@@ -223,13 +235,21 @@ function PageData() {
           {/* Search Bar */}
           <motion.div className="relative mb-8" variants={fadeInUp}>
             <div className="relative">
-              <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-400" />
+              <FaSearch className="
+                absolute top-1/2 left-3 -translate-y-1/2 text-gray-400
+                dark:text-gray-400
+              " />
               <Input
                 type="text"
                 placeholder="Search FAQs..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="h-12 border-gray-200 bg-white pl-10 focus-visible:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:focus-visible:ring-blue-400"
+                className="
+                  h-12 border-gray-200 bg-white pl-10
+                  focus-visible:ring-blue-500
+                  dark:border-gray-700 dark:bg-gray-800
+                  dark:focus-visible:ring-blue-400
+                "
               />
             </div>
           </motion.div>
@@ -241,19 +261,30 @@ function PageData() {
               value={activeTab}
               onValueChange={setActiveTab}
             >
-              <TabsList className="mb-6 flex w-full flex-nowrap overflow-x-auto bg-gray-100 p-1 dark:bg-gray-800">
+              <TabsList className="
+                mb-6 flex w-full flex-nowrap overflow-x-auto bg-gray-100 p-1
+                dark:bg-gray-800
+              ">
                 <TabsTrigger
                   value="all"
-                  className="flex-shrink-0 data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700"
+                  className="
+                    shrink-0
+                    data-[state=active]:bg-white
+                    dark:data-[state=active]:bg-gray-700
+                  "
                 >
-                  <FaQuestionCircle className="mr-2 h-4 w-4" />
+                  <FaQuestionCircle className="mr-2 size-4" />
                   All Categories
                 </TabsTrigger>
                 {uniqueCategories.map((categoryId) => (
                   <TabsTrigger
                     key={categoryId}
                     value={categoryId}
-                    className="flex-shrink-0 data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700"
+                    className="
+                      shrink-0
+                      data-[state=active]:bg-white
+                      dark:data-[state=active]:bg-gray-700
+                    "
                   >
                     {getCategoryIcon(categoryId)}
                     <span className="ml-2">
@@ -282,26 +313,35 @@ function PageData() {
                   className="space-y-4"
                 >
                   <Card className="overflow-hidden border-0 bg-white shadow-md dark:bg-gray-800">
-                    <CardHeader className="dark:to-gray-750 bg-gradient-to-r from-blue-50 to-indigo-50 pb-2 dark:from-gray-800">
+                    <CardHeader className="
+                      bg-linear-to-r from-blue-50 to-indigo-50 pb-2
+                      dark:from-gray-800 dark:to-gray-800
+                    ">
                       <div className="flex items-center">
                         <span className="text-blue-500 dark:text-blue-400">
                           {getCategoryIcon(categoryId)}
                         </span>
-                        <CardTitle className="ml-2 text-xl font-semibold text-gray-900 dark:text-white">
+                        <CardTitle className="
+                          ml-2 text-xl font-semibold text-gray-900
+                          dark:text-white
+                        ">
                           {items[0].category}
                         </CardTitle>
                       </div>
                       <CardDescription>
                         <Badge
                           variant="outline"
-                          className="border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-400"
+                          className="
+                            border-blue-200 bg-blue-50 text-blue-700
+                            dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-400
+                          "
                         >
                           {items.length}{" "}
                           {items.length === 1 ? "question" : "questions"}
                         </Badge>
                       </CardDescription>
                     </CardHeader>
-                    <CardContent className="pb-2 pt-4">
+                    <CardContent className="pt-4 pb-2">
                       <Accordion type="single" collapsible className="w-full">
                         {items.map((item, itemIndex) => (
                           <AccordionItem
@@ -309,15 +349,23 @@ function PageData() {
                             value={`item-${categoryId}-${itemIndex}`}
                             className="border-b border-gray-200 last:border-0 dark:border-gray-700"
                           >
-                            <AccordionTrigger className="py-4 text-left font-medium text-gray-900 hover:text-blue-600 hover:no-underline dark:text-white dark:hover:text-blue-400">
+                            <AccordionTrigger className="
+                              py-4 text-left font-medium text-gray-900
+                              hover:text-blue-600 hover:no-underline
+                              dark:text-white
+                              dark:hover:text-blue-400
+                            ">
                               {item.question}
                             </AccordionTrigger>
-                            <AccordionContent className="max-w-full break-words pb-4 text-gray-700 dark:text-gray-300">
+                            <AccordionContent className="
+                              max-w-full pb-4 wrap-break-word text-gray-700
+                              dark:text-gray-300
+                            ">
                               <motion.div
                                 initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
                                 transition={{ duration: 0.3 }}
-                                className="prose dark:prose-invert max-w-none"
+                                className="max-w-none"
                               >
                                 {item.answer}
                               </motion.div>
@@ -332,8 +380,11 @@ function PageData() {
             </motion.div>
           ) : (
             <motion.div variants={fadeInUp} className="py-12 text-center">
-              <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800">
-                <FaSearch className="h-8 w-8 text-gray-400" />
+              <div className="
+                mb-4 inline-flex size-16 items-center justify-center rounded-full bg-gray-100
+                dark:bg-gray-800
+              ">
+                <FaSearch className="size-8 text-gray-400" />
               </div>
               <h3 className="text-xl font-medium text-gray-900 dark:text-white">
                 No matching questions found
@@ -348,9 +399,15 @@ function PageData() {
           <motion.div variants={fadeInUp} className="mt-12 text-center">
             <Link
               href="/"
-              className="inline-flex items-center rounded-full bg-blue-100 px-6 py-3 text-blue-700 transition-colors hover:bg-blue-200 dark:bg-blue-800/40 dark:text-blue-300 dark:hover:bg-blue-700/50"
+              className="
+                inline-flex items-center rounded-full bg-blue-100 px-6 py-3 text-blue-700
+                transition-colors
+                hover:bg-blue-200
+                dark:bg-blue-800/40 dark:text-blue-300
+                dark:hover:bg-blue-700/50
+              "
             >
-              <FaHome className="mr-2 h-4 w-4" />
+              <FaHome className="mr-2 size-4" />
               Back to Home
             </Link>
           </motion.div>

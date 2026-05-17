@@ -1,19 +1,20 @@
 "use client";
 
-import React, { forwardRef, useState, useEffect, useRef } from "react";
+import React, { forwardRef, useEffect, useRef,useState } from "react";
+import { FaSearch } from "react-icons/fa";
+
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
   SelectGroup,
   SelectItem,
   SelectLabel,
+  SelectScrollDownButton,
+  SelectScrollUpButton,
   SelectTrigger,
   SelectValue,
-  SelectScrollUpButton,
-  SelectScrollDownButton,
 } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { FaSearch } from "react-icons/fa";
 
 interface SelectOption {
   label: string;
@@ -91,14 +92,22 @@ export const DynamicSelect = forwardRef<HTMLButtonElement, DynamicSelectProps>(
       >
         <SelectTrigger
           ref={ref}
-          className={`min-w-[160px] max-w-full truncate bg-white text-gray-900 dark:bg-gray-700 dark:text-gray-200 ${className} transition-colors duration-300`}
+          className={`
+            max-w-full min-w-[160px] truncate bg-white text-gray-900
+            dark:bg-gray-700 dark:text-gray-200
+            ${className}
+            transition-colors duration-300
+          `}
           aria-haspopup="listbox"
           aria-expanded={isOpen}
         >
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
         <SelectContent
-          className="rounded-md bg-white text-gray-900 shadow-lg dark:bg-gray-700 dark:text-gray-200"
+          className="
+            rounded-md bg-white text-gray-900 shadow-lg
+            dark:bg-gray-700 dark:text-gray-200
+          "
           role="listbox"
         >
           <div className="px-4 py-3">
@@ -109,7 +118,11 @@ export const DynamicSelect = forwardRef<HTMLButtonElement, DynamicSelectProps>(
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search..."
-                className="border-none bg-gray-100 text-gray-900 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-600 dark:text-gray-200"
+                className="
+                  border-none bg-gray-100 text-gray-900 transition-colors duration-300
+                  focus:ring-2 focus:ring-blue-500 focus:outline-none
+                  dark:bg-gray-600 dark:text-gray-200
+                "
                 aria-label="Search options"
                 onMouseDown={(e) => e.stopPropagation()}
                 onClick={(e) => e.stopPropagation()}
@@ -128,7 +141,12 @@ export const DynamicSelect = forwardRef<HTMLButtonElement, DynamicSelectProps>(
                     <SelectItem
                       key={item.value}
                       value={item.value}
-                      className="text-gray-900 hover:bg-blue-100 dark:text-gray-200 dark:hover:bg-blue-600"
+                      className="
+                        text-gray-900
+                        hover:bg-blue-100
+                        dark:text-gray-200
+                        dark:hover:bg-blue-600
+                      "
                       role="option"
                     >
                       {item.label}
@@ -142,8 +160,14 @@ export const DynamicSelect = forwardRef<HTMLButtonElement, DynamicSelectProps>(
               </div>
             )}
           </div>
-          <SelectScrollUpButton className="bg-white text-gray-500 dark:bg-gray-700 dark:text-gray-300" />
-          <SelectScrollDownButton className="bg-white text-gray-500 dark:bg-gray-700 dark:text-gray-300" />
+          <SelectScrollUpButton className="
+            bg-white text-gray-500
+            dark:bg-gray-700 dark:text-gray-300
+          " />
+          <SelectScrollDownButton className="
+            bg-white text-gray-500
+            dark:bg-gray-700 dark:text-gray-300
+          " />
         </SelectContent>
       </Select>
     );

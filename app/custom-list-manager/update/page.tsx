@@ -1,33 +1,33 @@
 "use client";
 
-import React from "react";
-import Layout from "@/components/layout";
-import { useState, useEffect, useCallback, useRef, Suspense } from "react";
+import { AnimatePresence,motion } from "framer-motion";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import React from "react";
+import { Suspense,useCallback, useEffect, useRef, useState } from "react";
+import { FaCheckCircle,FaPause, FaPlay } from "react-icons/fa";
+import { toast } from "sonner";
+
+import Breadcrumbs from "@/components/breadcrumbs";
+import Layout from "@/components/layout";
+import LoadingIndicator from "@/components/loading-indicator";
+import { MediaCard } from "@/components/media-card";
 import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
-  CardDescription,
 } from "@/components/ui/card";
-import Link from "next/link";
-import { toast } from "sonner";
-import { MediaCard } from "@/components/media-card";
-import LoadingIndicator from "@/components/loading-indicator";
 import { fetchAniList } from "@/lib/api";
 import { getItemWithExpiry, setItemWithExpiry } from "@/lib/local-storage";
-import { FaPlay, FaPause, FaCheckCircle } from "react-icons/fa";
-import { motion, AnimatePresence } from "framer-motion";
-import Breadcrumbs from "@/components/breadcrumbs";
 import {
   ApiError,
   MediaEntry,
   MediaListResponse,
   MutationResponse,
 } from "@/lib/types";
-import Image from "next/image";
 
 // Extend MediaEntry locally to include _originalCustomLists
 type MediaEntryWithOriginal = MediaEntry & {
@@ -727,17 +727,26 @@ function PageData() {
         animate={{ opacity: 1 }}
         transition={{ duration: 0.5 }}
       >
-        <Card className="mx-auto w-full max-w-4xl overflow-hidden rounded-xl bg-white shadow-xl dark:bg-gray-800/95 dark:shadow-2xl dark:shadow-blue-900/10">
-          <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 pb-8 dark:from-blue-900/40 dark:to-indigo-900/40">
+        <Card className="
+          mx-auto w-full max-w-4xl overflow-hidden rounded-xl bg-white shadow-xl
+          dark:bg-gray-800/95 dark:shadow-2xl dark:shadow-blue-900/10
+        ">
+          <CardHeader className="
+            bg-linear-to-r from-blue-50 to-indigo-50 pb-8
+            dark:from-blue-900/40 dark:to-indigo-900/40
+          ">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <motion.div
                   initial={{ rotate: -90, opacity: 0 }}
                   animate={{ rotate: 0, opacity: 1 }}
                   transition={{ duration: 0.5 }}
-                  className="rounded-full bg-blue-100 p-3 text-blue-600 shadow-md dark:bg-blue-800 dark:text-blue-300"
+                  className="
+                    rounded-full bg-blue-100 p-3 text-blue-600 shadow-md
+                    dark:bg-blue-800 dark:text-blue-300
+                  "
                 >
-                  <FaPlay className="h-5 w-5" aria-hidden="true" />
+                  <FaPlay className="size-5" aria-hidden="true" />
                 </motion.div>
                 <div>
                   <CardTitle className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -752,7 +761,7 @@ function PageData() {
             </div>
           </CardHeader>
 
-          <CardContent className="ml-4 mr-4 p-6">
+          <CardContent className="mx-4 p-6">
             {/* Controls Section */}
             <motion.div
               className="flex flex-col items-center space-y-6"
@@ -768,16 +777,28 @@ function PageData() {
                 <Button
                   onClick={toggleUpdate}
                   disabled={done || isRateLimited}
-                  className={`flex items-center space-x-3 rounded-full px-8 py-3 text-base font-medium text-white shadow-lg transition-all ${
+                  className={`
+                    flex items-center space-x-3 rounded-full px-8 py-3 text-base font-medium
+                    text-white shadow-lg transition-all
+                    ${
                     isRateLimited
                       ? "bg-yellow-500 dark:bg-yellow-600"
                       : !updating && !isPaused && !done
-                        ? "bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700"
+                        ? `
+                          bg-linear-to-r from-blue-500 to-indigo-600
+                          hover:from-blue-600 hover:to-indigo-700
+                        `
                         : !done
                           ? isPaused
-                            ? "bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
-                            : "bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700"
-                          : "bg-gradient-to-r from-green-500 to-emerald-600"
+                            ? `
+                              bg-linear-to-r from-green-500 to-emerald-600
+                              hover:from-green-600 hover:to-emerald-700
+                            `
+                            : `
+                              bg-linear-to-r from-orange-500 to-amber-600
+                              hover:from-orange-600 hover:to-amber-700
+                            `
+                          : "bg-linear-to-r from-green-500 to-emerald-600"
                   }`}
                   aria-label={
                     done
@@ -793,28 +814,28 @@ function PageData() {
                 >
                   {done ? (
                     <>
-                      <FaCheckCircle className="h-5 w-5" aria-hidden="true" />
+                      <FaCheckCircle className="size-5" aria-hidden="true" />
                       <span>Update Complete</span>
                     </>
                   ) : isRateLimited ? (
                     <>
-                      <FaPause className="h-5 w-5" aria-hidden="true" />
+                      <FaPause className="size-5" aria-hidden="true" />
                       <span>Rate Limited ({retryCountdown}s)</span>
                     </>
                   ) : !updating && !isPaused ? (
                     <>
-                      <FaPlay className="h-5 w-5" aria-hidden="true" />
+                      <FaPlay className="size-5" aria-hidden="true" />
                       <span>Start Update</span>
                     </>
                   ) : !done ? (
                     isPaused ? (
                       <>
-                        <FaPlay className="h-5 w-5" aria-hidden="true" />
+                        <FaPlay className="size-5" aria-hidden="true" />
                         <span>Resume Update</span>
                       </>
                     ) : (
                       <>
-                        <FaPause className="h-5 w-5" aria-hidden="true" />
+                        <FaPause className="size-5" aria-hidden="true" />
                         <span>Pause Update</span>
                       </>
                     )
@@ -823,7 +844,10 @@ function PageData() {
               </motion.div>
 
               <div className="w-full px-4">
-                <div className="relative h-5 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+                <div className="
+                  relative h-5 w-full overflow-hidden rounded-full bg-gray-200
+                  dark:bg-gray-700
+                ">
                   <motion.div
                     initial={{ width: 0 }}
                     animate={{
@@ -833,7 +857,10 @@ function PageData() {
                           : (updatedEntries.size / totalEntries) * 100 + "%",
                     }}
                     transition={{ duration: 0.5 }}
-                    className="absolute left-0 top-0 h-full rounded-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 shadow-[0_0_10px_rgba(79,70,229,0.3)]"
+                    className="
+                      absolute top-0 left-0 h-full rounded-full bg-linear-to-r from-blue-500
+                      via-indigo-500 to-purple-500 shadow-[0_0_10px_rgba(79,70,229,0.3)]
+                    "
                   />
                 </div>
                 <div className="mt-3 flex items-center justify-between text-sm">
@@ -855,16 +882,17 @@ function PageData() {
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
-                  className="w-full rounded-lg border border-blue-100 bg-blue-50 p-4 shadow-inner dark:border-blue-900/30 dark:bg-blue-900/20"
+                  className="
+                    w-full rounded-lg border border-blue-100 bg-blue-50 p-4 shadow-inner
+                    dark:border-blue-900/30 dark:bg-blue-900/20
+                  "
                 >
                   <div className="flex items-center gap-3">
-                    <div className="relative h-12 w-12 overflow-hidden rounded-md">
-                      <Image
+                    <div className="relative size-12 overflow-hidden rounded-md">
+                      <img
                         src={currentEntry.media.coverImage.extraLarge || ""}
                         alt={currentEntry.media.title.romaji}
-                        fill
-                        sizes="48px"
-                        className="object-cover"
+                        className="absolute inset-0 size-full object-cover"
                       />
                     </div>
                     <div>
@@ -886,7 +914,11 @@ function PageData() {
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: "auto" }}
                     exit={{ opacity: 0, height: 0 }}
-                    className="mt-6 flex items-center justify-between overflow-hidden rounded-lg bg-blue-50 px-4 py-3 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300"
+                    className="
+                      mt-6 flex items-center justify-between overflow-hidden rounded-lg bg-blue-50
+                      px-4 py-3 text-blue-800
+                      dark:bg-blue-900/20 dark:text-blue-300
+                    "
                   >
                     <span>
                       Note: Media entries with{" "}
@@ -896,7 +928,12 @@ function PageData() {
                     </span>
                     <button
                       onClick={() => setShowNotice(false)}
-                      className="ml-3 flex-shrink-0 rounded-full p-1 text-blue-600 hover:bg-blue-200 hover:text-blue-800 dark:text-blue-400 dark:hover:bg-blue-800/30"
+                      className="
+                        ml-3 shrink-0 rounded-full p-1 text-blue-600
+                        hover:bg-blue-200 hover:text-blue-800
+                        dark:text-blue-400
+                        dark:hover:bg-blue-800/30
+                      "
                       aria-label="Dismiss notice"
                     >
                       &times;
@@ -910,7 +947,12 @@ function PageData() {
                   <Button
                     variant="outline"
                     asChild
-                    className="flex items-center border-gray-300 bg-white text-gray-700 shadow-sm hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700/70 dark:text-gray-300 dark:hover:bg-gray-600"
+                    className="
+                      flex items-center border-gray-300 bg-white text-gray-700 shadow-sm
+                      hover:bg-gray-50
+                      dark:border-gray-600 dark:bg-gray-700/70 dark:text-gray-300
+                      dark:hover:bg-gray-600
+                    "
                     aria-label="Back to Custom List Manager"
                   >
                     <Link href="/custom-list-manager">
@@ -923,7 +965,11 @@ function PageData() {
                   <Button
                     onClick={handleFinish}
                     disabled={updating && !isPaused && !done}
-                    className="flex items-center gap-2 bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-md hover:from-purple-600 hover:to-indigo-700"
+                    className="
+                      flex items-center gap-2 bg-linear-to-r from-purple-500 to-indigo-600
+                      text-white shadow-md
+                      hover:from-purple-600 hover:to-indigo-700
+                    "
                     aria-label="Finish updating"
                   >
                     <span>Finish</span>
@@ -936,10 +982,13 @@ function PageData() {
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="mt-6 flex items-center gap-3 rounded-lg bg-yellow-100 px-4 py-3 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300"
+                className="
+                  mt-6 flex items-center gap-3 rounded-lg bg-yellow-100 px-4 py-3 text-yellow-800
+                  dark:bg-yellow-900/30 dark:text-yellow-300
+                "
               >
                 <div className="animate-pulse rounded-full bg-yellow-200 p-1 dark:bg-yellow-700">
-                  <div className="h-2 w-2 rounded-full bg-yellow-500 dark:bg-yellow-300"></div>
+                  <div className="size-2 rounded-full bg-yellow-500 dark:bg-yellow-300"></div>
                 </div>
                 <span>
                   Rate limit exceeded. Retrying in {retryCountdown - 1}{" "}
@@ -952,7 +1001,11 @@ function PageData() {
               <div className="mt-8 space-y-6">
                 {loading ? (
                   <motion.div
-                    className="flex h-60 flex-col items-center justify-center gap-4 rounded-lg border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/50"
+                    className="
+                      flex h-60 flex-col items-center justify-center gap-4 rounded-lg border
+                      border-gray-200 bg-gray-50
+                      dark:border-gray-700 dark:bg-gray-800/50
+                    "
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                   >
@@ -1067,7 +1120,7 @@ function PageData() {
                 <div className="rounded-full bg-gray-100 p-4 dark:bg-gray-700">
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
-                    className="h-10 w-10 text-gray-400 dark:text-gray-500"
+                    className="size-10 text-gray-400 dark:text-gray-500"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"

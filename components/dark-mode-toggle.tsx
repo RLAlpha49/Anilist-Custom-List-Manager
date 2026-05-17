@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { FaSun, FaMoon } from "react-icons/fa";
+import { FaMoon,FaSun } from "react-icons/fa";
 
 const DarkModeToggle: React.FC = () => {
   const [isDark, setIsDark] = useState<boolean>(false);
@@ -39,7 +39,13 @@ const DarkModeToggle: React.FC = () => {
   return (
     <button
       onClick={toggleDarkMode}
-      className="rounded-full bg-gray-200 p-2 text-gray-800 transition-colors duration-300 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
+      className="
+        rounded-full bg-gray-200 p-2 text-gray-800 transition-colors duration-300
+        hover:bg-gray-300
+        focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none
+        dark:bg-gray-700 dark:text-gray-200
+        dark:hover:bg-gray-600
+      "
       aria-label={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
     >
       {isDark ? <FaSun size={20} /> : <FaMoon size={20} />}

@@ -1,15 +1,16 @@
 "use client";
 
-import React from "react";
-import Layout from "@/components/layout";
-import { Suspense, useEffect, useState } from "react";
+import { AnimatePresence,motion } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { Card, CardContent } from "@/components/ui/card";
-import { setItemWithExpiry } from "@/lib/local-storage";
+import React from "react";
+import { Suspense, useEffect, useState } from "react";
+import { FaCheckCircle, FaExclamationTriangle,FaKey } from "react-icons/fa";
+
+import Layout from "@/components/layout";
 import LoadingIndicator from "@/components/loading-indicator";
+import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { motion, AnimatePresence } from "framer-motion";
-import { FaKey, FaCheckCircle, FaExclamationTriangle } from "react-icons/fa";
+import { setItemWithExpiry } from "@/lib/local-storage";
 
 function PageData() {
   const router = useRouter();
@@ -82,11 +83,11 @@ function PageData() {
   const getStatusIcon = () => {
     switch (status) {
       case "success":
-        return <FaCheckCircle className="h-16 w-16 text-green-500" />;
+        return <FaCheckCircle className="size-16 text-green-500" />;
       case "error":
-        return <FaExclamationTriangle className="h-16 w-16 text-red-500" />;
+        return <FaExclamationTriangle className="size-16 text-red-500" />;
       default:
-        return <FaKey className="h-16 w-16 animate-pulse text-blue-500" />;
+        return <FaKey className="size-16 animate-pulse text-blue-500" />;
     }
   };
 
@@ -123,7 +124,10 @@ function PageData() {
             transition={{ duration: 0.5 }}
             className="w-full max-w-md"
           >
-            <Card className="overflow-hidden border-0 bg-white shadow-xl transition-all duration-300 dark:bg-gray-800">
+            <Card className="
+              overflow-hidden border-0 bg-white shadow-xl transition-all duration-300
+              dark:bg-gray-800
+            ">
               <motion.div
                 className={`h-2 ${getProgressColor()} transition-all duration-300`}
                 initial={{ width: "0%" }}
@@ -132,7 +136,9 @@ function PageData() {
               />
               <CardContent className="p-0">
                 <div
-                  className={`flex flex-col items-center justify-center p-8 ${getStatusBackground()} transition-colors duration-300`}
+                  className={`flex flex-col items-center justify-center p-8 ${getStatusBackground()}
+                    transition-colors duration-300
+                  `}
                 >
                   <motion.div
                     initial={{ scale: 0.8, opacity: 0 }}
@@ -160,7 +166,7 @@ function PageData() {
                           ? "Authentication Successful"
                           : "Authentication Failed"}
                     </h3>
-                    <p className="text-md text-gray-600 dark:text-gray-300">
+                    <p className="text-base text-gray-600 dark:text-gray-300">
                       {message}
                     </p>
                   </motion.div>
@@ -197,7 +203,7 @@ function PageData() {
                             times: [0, 0.5, 1],
                             delay: 0,
                           }}
-                          className="h-2 w-2 rounded-full bg-blue-500"
+                          className="size-2 rounded-full bg-blue-500"
                         />
                         <motion.div
                           animate={{
@@ -211,7 +217,7 @@ function PageData() {
                             times: [0, 0.5, 1],
                             delay: 0.2,
                           }}
-                          className="h-2 w-2 rounded-full bg-blue-500"
+                          className="size-2 rounded-full bg-blue-500"
                         />
                         <motion.div
                           animate={{
@@ -225,7 +231,7 @@ function PageData() {
                             times: [0, 0.5, 1],
                             delay: 0.4,
                           }}
-                          className="h-2 w-2 rounded-full bg-blue-500"
+                          className="size-2 rounded-full bg-blue-500"
                         />
                       </div>
                     </div>

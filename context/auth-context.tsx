@@ -1,17 +1,18 @@
 "use client";
 
+import React, {
+  createContext,
+  ReactNode,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
+
 import {
   getItemWithExpiry,
   removeItemWithExpiry,
   setItemWithExpiry,
 } from "@/lib/local-storage";
-import React, {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  ReactNode,
-} from "react";
 
 interface AuthContextType {
   isLoggedIn: boolean;

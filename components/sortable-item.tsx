@@ -1,10 +1,10 @@
 "use client";
 
-import React from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { FaSort } from "react-icons/fa";
 import { motion } from "framer-motion";
+import React from "react";
+import { FaSort } from "react-icons/fa";
 
 interface SortableItemProps {
   id: string;
@@ -54,15 +54,27 @@ function SortableItemComponent({ id, children }: SortableItemProps) {
         animate="visible"
         exit="exit"
         whileHover="hover"
-        className="flex flex-col justify-between gap-3 rounded-lg border border-gray-100 bg-white p-5 shadow-md transition-all duration-300 hover:border-blue-200 hover:shadow-lg dark:border-gray-700 dark:bg-gray-800 dark:hover:border-blue-800 sm:flex-row sm:items-center"
+        className="
+          flex flex-col justify-between gap-3 rounded-lg border border-gray-100 bg-white p-5
+          shadow-md transition-all duration-300
+          hover:border-blue-200 hover:shadow-lg
+          sm:flex-row sm:items-center
+          dark:border-gray-700 dark:bg-gray-800
+          dark:hover:border-blue-800
+        "
       >
         <div className="flex items-center space-x-3">
           <div
-            className="flex h-10 w-10 cursor-grab items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 shadow-md active:cursor-grabbing dark:from-blue-700 dark:to-indigo-900"
+            className="
+              flex size-10 cursor-grab items-center justify-center rounded-full bg-linear-to-br
+              from-blue-500 to-indigo-600 shadow-md
+              active:cursor-grabbing
+              dark:from-blue-700 dark:to-indigo-900
+            "
             {...attributes}
             {...listeners}
           >
-            <FaSort className="h-5 w-5 text-white" />
+            <FaSort className="size-5 text-white" />
           </div>
           {nameElement}
         </div>

@@ -1,10 +1,12 @@
-import React from "react";
 import "./globals.css";
-import { Inter } from "next/font/google";
-import { AuthProvider } from "@/context/auth-context";
-import Script from "next/script";
+
 import { Analytics } from "@vercel/analytics/next";
+import { Inter } from "next/font/google";
+import Script from "next/script";
 import { ThemeProvider } from "next-themes";
+import React from "react";
+
+import { AuthProvider } from "@/context/auth-context";
 
 const inter = Inter({ subsets: ["latin"] });
 

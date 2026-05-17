@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from "react";
-import Modal from "@/components/ui/modal";
-import { toast } from "sonner";
 import { motion } from "framer-motion";
+import React, { useEffect,useState } from "react";
+import { toast } from "sonner";
+
+import Modal from "@/components/ui/modal";
 
 interface RenameModalProps {
   isOpen: boolean;
@@ -54,7 +55,13 @@ const RenameModal = React.memo(
               id="newListName"
               value={newListName}
               onChange={(e) => setNewListName(e.target.value)}
-              className="w-full rounded-md border border-gray-300 bg-white px-4 py-3 text-gray-900 shadow-sm transition-colors duration-200 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-400/50"
+              className="
+                w-full rounded-md border border-gray-300 bg-white px-4 py-3 text-gray-900 shadow-sm
+                transition-colors duration-200
+                focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50 focus:outline-none
+                dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100
+                dark:focus:border-blue-400 dark:focus:ring-blue-400/50
+              "
               placeholder="Enter new list name"
               aria-label="New list name"
               autoFocus

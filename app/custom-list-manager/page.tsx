@@ -1,26 +1,13 @@
 "use client";
 
-import React from "react";
-import Layout from "@/components/layout";
-import { toast } from "sonner";
-
-// External Imports
 import {
-  useState,
-  useEffect,
-  useCallback,
-  useRef,
-  useMemo,
-  Suspense,
-} from "react";
-import {
-  DndContext,
   closestCenter,
+  DndContext,
+  DragEndEvent,
   KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
-  DragEndEvent,
 } from "@dnd-kit/core";
 import {
   arrayMove,
@@ -28,65 +15,45 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence,motion } from "framer-motion";
+import { useRouter } from "next/navigation";
+import React from "react";
+// External Imports
 import {
-  FaSort,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
   FaArrowDown,
-  FaPlus,
-  FaTrash,
   FaEdit,
   FaExclamationTriangle,
   FaInfoCircle,
+  FaPlus,
+  FaSort,
   FaTimesCircle,
+  FaTrash,
 } from "react-icons/fa";
+import { toast } from "sonner";
 
+import Breadcrumbs from "@/components/breadcrumbs";
+import Layout from "@/components/layout";
+import LoadingIndicator from "@/components/loading-indicator";
+import { RenameModal } from "@/components/rename-modal";
+import { SortableItem } from "@/components/sortable-item";
 // Internal Imports
 import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
-  CardDescription,
 } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useRouter } from "next/navigation";
-import LoadingIndicator from "@/components/loading-indicator";
-import { DynamicSelect } from "@/components/ui/dynamic-select";
-import { SortableItem } from "@/components/sortable-item";
-import {
-  statusItems,
-  scoreItems,
-  miscItemsAnime,
-  miscItemsManga,
-  formatItemsAnime,
-  formatItemsManga,
-  hiddenFormatItemsManga,
-  tagCategories,
-  tags,
-} from "@/lib/options";
-import { fetchAniList } from "@/lib/api";
-import { setItemWithExpiry, getItemWithExpiry } from "@/lib/local-storage";
-import { useAuth } from "@/context/auth-context";
-import Modal from "@/components/ui/modal";
-import { RenameModal } from "@/components/rename-modal";
-import Breadcrumbs from "@/components/breadcrumbs";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Separator } from "@/components/ui/separator";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
 import {
   Command,
   CommandEmpty,
@@ -95,12 +62,44 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import { DynamicSelect } from "@/components/ui/dynamic-select";
+import Modal from "@/components/ui/modal";
+import { Separator } from "@/components/ui/separator";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { useAuth } from "@/context/auth-context";
+import { fetchAniList } from "@/lib/api";
+import { getItemWithExpiry,setItemWithExpiry } from "@/lib/local-storage";
+import {
+  formatItemsAnime,
+  formatItemsManga,
+  hiddenFormatItemsManga,
+  miscItemsAnime,
+  miscItemsManga,
+  scoreItems,
+  statusItems,
+  tagCategories,
+  tags,
+} from "@/lib/options";
 import {
   ApiError,
-  ListCondition,
   CustomList,
-  OptionGroup,
   CustomListApiResponse,
+  ListCondition,
+  OptionGroup,
 } from "@/lib/types";
 
 // Animation variants
@@ -820,17 +819,26 @@ function PageData() {
           variants={fadeIn}
           className="mx-auto w-full max-w-6xl px-4 py-8"
         >
-          <Card className="overflow-hidden border-0 shadow-xl transition-all duration-300 dark:bg-gray-800">
-            <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 pb-8 dark:from-blue-900/40 dark:to-indigo-900/40">
+          <Card className="
+            overflow-hidden border-0 shadow-xl transition-all duration-300
+            dark:bg-gray-800
+          ">
+            <CardHeader className="
+              bg-linear-to-r from-blue-50 to-indigo-50 pb-8
+              dark:from-blue-900/40 dark:to-indigo-900/40
+            ">
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
                   <motion.div
                     initial={{ rotate: -90, opacity: 0 }}
                     animate={{ rotate: 0, opacity: 1 }}
                     transition={{ duration: 0.5, delay: 0.2 }}
-                    className="mr-3 rounded-full bg-blue-100 p-3 text-blue-600 shadow-md dark:bg-blue-800 dark:text-blue-300"
+                    className="
+                      mr-3 rounded-full bg-blue-100 p-3 text-blue-600 shadow-md
+                      dark:bg-blue-800 dark:text-blue-300
+                    "
                   >
-                    <FaSort className="h-6 w-6" aria-hidden="true" />
+                    <FaSort className="size-6" aria-hidden="true" />
                   </motion.div>
                   <div>
                     <CardTitle className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -846,16 +854,20 @@ function PageData() {
                   <SheetTrigger asChild>
                     <Button
                       variant="outline"
-                      className="flex items-center gap-1 bg-white/90 shadow-sm backdrop-blur-sm dark:bg-gray-700 dark:text-white dark:hover:bg-gray-600"
+                      className="
+                        flex items-center gap-1 bg-white/90 shadow-sm backdrop-blur-sm
+                        dark:bg-gray-700 dark:text-white
+                        dark:hover:bg-gray-600
+                      "
                     >
-                      <FaInfoCircle className="mr-1 h-4 w-4" />
+                      <FaInfoCircle className="mr-1 size-4" />
                       Help
                     </Button>
                   </SheetTrigger>
                   <SheetContent>
                     <SheetHeader>
                       <div className="mb-2 flex items-center gap-2">
-                        <FaInfoCircle className="h-5 w-5 text-blue-500 dark:text-blue-400" />
+                        <FaInfoCircle className="size-5 text-blue-500 dark:text-blue-400" />
                         <SheetTitle className="text-lg font-bold text-blue-700 dark:text-blue-300">
                           How to Use the Custom List Manager
                         </SheetTitle>
@@ -869,7 +881,11 @@ function PageData() {
                       {/* Steps */}
                       <ol className="space-y-5">
                         <li className="flex items-start gap-3">
-                          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-lg font-bold text-blue-600 dark:bg-blue-900 dark:text-blue-300">
+                          <span className="
+                            flex size-8 items-center justify-center rounded-full bg-blue-100 text-lg
+                            font-bold text-blue-600
+                            dark:bg-blue-900 dark:text-blue-300
+                          ">
                             1
                           </span>
                           <div>
@@ -883,7 +899,11 @@ function PageData() {
                           </div>
                         </li>
                         <li className="flex items-start gap-3">
-                          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-lg font-bold text-indigo-600 dark:bg-indigo-900 dark:text-indigo-300">
+                          <span className="
+                            flex size-8 items-center justify-center rounded-full bg-indigo-100
+                            text-lg font-bold text-indigo-600
+                            dark:bg-indigo-900 dark:text-indigo-300
+                          ">
                             2
                           </span>
                           <div>
@@ -900,7 +920,11 @@ function PageData() {
                           </div>
                         </li>
                         <li className="flex items-start gap-3">
-                          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-green-100 text-lg font-bold text-green-600 dark:bg-green-900 dark:text-green-300">
+                          <span className="
+                            flex size-8 items-center justify-center rounded-full bg-green-100
+                            text-lg font-bold text-green-600
+                            dark:bg-green-900 dark:text-green-300
+                          ">
                             3
                           </span>
                           <div>
@@ -914,7 +938,11 @@ function PageData() {
                           </div>
                         </li>
                         <li className="flex items-start gap-3">
-                          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-100 text-lg font-bold text-purple-600 dark:bg-purple-900 dark:text-purple-300">
+                          <span className="
+                            flex size-8 items-center justify-center rounded-full bg-purple-100
+                            text-lg font-bold text-purple-600
+                            dark:bg-purple-900 dark:text-purple-300
+                          ">
                             4
                           </span>
                           <div>
@@ -928,7 +956,11 @@ function PageData() {
                           </div>
                         </li>
                         <li className="flex items-start gap-3">
-                          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-yellow-100 text-lg font-bold text-yellow-600 dark:bg-yellow-900 dark:text-yellow-300">
+                          <span className="
+                            flex size-8 items-center justify-center rounded-full bg-yellow-100
+                            text-lg font-bold text-yellow-600
+                            dark:bg-yellow-900 dark:text-yellow-300
+                          ">
                             5
                           </span>
                           <div>
@@ -944,14 +976,20 @@ function PageData() {
                       </ol>
 
                       {/* Tips Section */}
-                      <div className="rounded-lg border-l-4 border-blue-400 bg-blue-50 p-4 dark:border-blue-600 dark:bg-blue-900/20">
+                      <div className="
+                        rounded-lg border-l-4 border-blue-400 bg-blue-50 p-4
+                        dark:border-blue-600 dark:bg-blue-900/20
+                      ">
                         <div className="flex items-start gap-2">
-                          <FaInfoCircle className="mt-0.5 h-5 w-5 text-blue-500 dark:text-blue-400" />
+                          <FaInfoCircle className="mt-0.5 size-5 text-blue-500 dark:text-blue-400" />
                           <div>
                             <span className="font-semibold text-blue-700 dark:text-blue-300">
                               Tips:
                             </span>
-                            <ul className="mt-1 list-disc pl-5 text-sm text-blue-800 dark:text-blue-200">
+                            <ul className="
+                              mt-1 list-disc pl-5 text-sm text-blue-800
+                              dark:text-blue-200
+                            ">
                               <li>
                                 You can hide default status lists using the
                                 checkbox below the search bar.
@@ -981,16 +1019,41 @@ function PageData() {
                   onValueChange={(v) => setActiveTab(v as "ANIME" | "MANGA")}
                   className="w-full"
                 >
-                  <TabsList className="mb-6 grid w-full grid-cols-2 bg-white/20 p-1 backdrop-blur-sm dark:bg-gray-700/50">
+                  <TabsList className="
+                    mb-6 grid w-full grid-cols-2 bg-white/20 p-1 backdrop-blur-sm
+                    dark:bg-gray-700/50
+                  ">
                     <TabsTrigger
                       value="ANIME"
-                      className="relative overflow-hidden rounded-md py-3 font-medium text-gray-700 transition-all after:absolute after:bottom-0 after:left-0 after:h-[3px] after:w-full after:origin-left after:scale-x-0 after:bg-blue-500 after:transition-transform data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-md data-[state=active]:after:scale-x-100 dark:text-gray-200 dark:data-[state=active]:bg-gray-800 dark:data-[state=active]:text-blue-400"
+                      className="
+                        relative overflow-hidden rounded-md py-3 font-medium text-gray-700
+                        transition-all
+                        after:absolute after:bottom-0 after:left-0 after:h-[3px] after:w-full
+                        after:origin-left after:scale-x-0 after:bg-blue-500
+                        after:transition-transform
+                        data-[state=active]:bg-white data-[state=active]:text-blue-600
+                        data-[state=active]:shadow-md
+                        data-[state=active]:after:scale-x-100
+                        dark:text-gray-200
+                        dark:data-[state=active]:bg-gray-800 dark:data-[state=active]:text-blue-400
+                      "
                     >
                       Anime Lists
                     </TabsTrigger>
                     <TabsTrigger
                       value="MANGA"
-                      className="relative overflow-hidden rounded-md py-3 font-medium text-gray-700 transition-all after:absolute after:bottom-0 after:left-0 after:h-[3px] after:w-full after:origin-left after:scale-x-0 after:bg-blue-500 after:transition-transform data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-md data-[state=active]:after:scale-x-100 dark:text-gray-200 dark:data-[state=active]:bg-gray-800 dark:data-[state=active]:text-blue-400"
+                      className="
+                        relative overflow-hidden rounded-md py-3 font-medium text-gray-700
+                        transition-all
+                        after:absolute after:bottom-0 after:left-0 after:h-[3px] after:w-full
+                        after:origin-left after:scale-x-0 after:bg-blue-500
+                        after:transition-transform
+                        data-[state=active]:bg-white data-[state=active]:text-blue-600
+                        data-[state=active]:shadow-md
+                        data-[state=active]:after:scale-x-100
+                        dark:text-gray-200
+                        dark:data-[state=active]:bg-gray-800 dark:data-[state=active]:text-blue-400
+                      "
                     >
                       Manga Lists
                     </TabsTrigger>
@@ -1004,7 +1067,10 @@ function PageData() {
               <div className="mb-6 flex flex-col gap-4">
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                   <div className="relative w-full md:w-64">
-                    <Command className="rounded-lg border border-gray-200 shadow-sm dark:border-gray-700">
+                    <Command className="
+                      rounded-lg border border-gray-200 shadow-sm
+                      dark:border-gray-700
+                    ">
                       <CommandInput
                         placeholder="Search lists..."
                         value={searchTerm}
@@ -1046,9 +1112,17 @@ function PageData() {
                     >
                       <Button
                         onClick={() => fetchLists(activeTab)}
-                        className={`flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md transition-all hover:from-blue-700 hover:to-indigo-700 hover:shadow-lg ${!dataLoaded ? "ring-2 ring-blue-300 ring-offset-2 ring-offset-white dark:ring-blue-500 dark:ring-offset-gray-800" : ""}`}
+                        className={`
+                          flex items-center gap-2 bg-linear-to-r from-blue-600 to-indigo-600
+                          text-white shadow-md transition-all
+                          hover:from-blue-700 hover:to-indigo-700 hover:shadow-lg
+                          ${!dataLoaded ? `
+                            ring-2 ring-blue-300 ring-offset-2 ring-offset-white
+                            dark:ring-blue-500 dark:ring-offset-gray-800
+                          ` : ""}
+                        `}
                       >
-                        <FaArrowDown className="h-4 w-4" />
+                        <FaArrowDown className="size-4" />
                         {!dataLoaded ? "Click to Fetch Lists" : "Fetch Lists"}
                       </Button>
                     </motion.div>
@@ -1060,9 +1134,12 @@ function PageData() {
                       >
                         <Button
                           onClick={addNewList}
-                          className="flex items-center gap-2 bg-green-600 text-white shadow-md hover:bg-green-700 hover:shadow-lg"
+                          className="
+                            flex items-center gap-2 bg-green-600 text-white shadow-md
+                            hover:bg-green-700 hover:shadow-lg
+                          "
                         >
-                          <FaPlus className="h-4 w-4" />
+                          <FaPlus className="size-4" />
                           Add New List
                         </Button>
                       </motion.div>
@@ -1071,14 +1148,17 @@ function PageData() {
                 </div>
 
                 {!isListEmpty && (
-                  <div className="flex items-center space-x-2 rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800/50">
+                  <div className="
+                    flex items-center space-x-2 rounded-md border border-gray-200 bg-gray-50 p-3
+                    dark:border-gray-700 dark:bg-gray-800/50
+                  ">
                     <Checkbox
                       id="hideDefaultStatusLists"
                       checked={hideDefaultStatusLists}
                       onCheckedChange={(checked: boolean) =>
                         setHideDefaultStatusLists(checked)
                       }
-                      className="h-5 w-5"
+                      className="size-5"
                     />
                     <label
                       htmlFor="hideDefaultStatusLists"
@@ -1108,7 +1188,10 @@ function PageData() {
                   variants={fadeInUp}
                   className="flex flex-col items-center justify-center py-12 text-center"
                 >
-                  <div className="mb-4 rounded-full bg-blue-100 p-4 text-blue-500 shadow-inner dark:bg-blue-900/30 dark:text-blue-300">
+                  <div className="
+                    mb-4 rounded-full bg-blue-100 p-4 text-blue-500 shadow-inner
+                    dark:bg-blue-900/30 dark:text-blue-300
+                  ">
                     {!dataLoaded ? (
                       <motion.div
                         animate={{ rotateY: [0, 180, 360] }}
@@ -1118,10 +1201,10 @@ function PageData() {
                           repeatDelay: 1,
                         }}
                       >
-                        <FaArrowDown className="h-8 w-8" />
+                        <FaArrowDown className="size-8" />
                       </motion.div>
                     ) : (
-                      <FaExclamationTriangle className="h-8 w-8" />
+                      <FaExclamationTriangle className="size-8" />
                     )}
                   </div>
                   <h3 className="mb-2 text-xl font-medium text-gray-900 dark:text-white">
@@ -1147,9 +1230,12 @@ function PageData() {
                   >
                     <Button
                       onClick={() => fetchLists(activeTab)}
-                      className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md hover:from-blue-700 hover:to-indigo-700 hover:shadow-lg"
+                      className="
+                        bg-linear-to-r from-blue-600 to-indigo-600 text-white shadow-md
+                        hover:from-blue-700 hover:to-indigo-700 hover:shadow-lg
+                      "
                     >
-                      <FaArrowDown className="mr-2 h-4 w-4" />
+                      <FaArrowDown className="mr-2 size-4" />
                       Fetch Lists
                     </Button>
                   </motion.div>
@@ -1181,18 +1267,27 @@ function PageData() {
                               {listsToRemoveFromAllEntries.includes(
                                 list.name,
                               ) ? (
-                                <span className="ml-2 flex items-center gap-2 rounded bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                                <span className="
+                                  ml-2 flex items-center gap-2 rounded-sm bg-blue-100 px-2 py-0.5
+                                  text-xs font-semibold text-blue-700
+                                  dark:bg-blue-900/30 dark:text-blue-300
+                                ">
                                   Will be removed from all entries
                                   <button
                                     type="button"
-                                    className="ml-1 rounded-full p-0.5 text-blue-700 hover:bg-blue-200 hover:text-blue-900 dark:text-blue-300 dark:hover:bg-blue-800/30"
+                                    className="
+                                      ml-1 rounded-full p-0.5 text-blue-700
+                                      hover:bg-blue-200 hover:text-blue-900
+                                      dark:text-blue-300
+                                      dark:hover:bg-blue-800/30
+                                    "
                                     aria-label="Undo remove from all entries"
                                     tabIndex={0}
                                     onClick={() =>
                                       handleUndoRemoveAll(list.name)
                                     }
                                   >
-                                    <FaTimesCircle className="h-3 w-3" />
+                                    <FaTimesCircle className="size-3" />
                                   </button>
                                 </span>
                               ) : (
@@ -1206,9 +1301,14 @@ function PageData() {
                                           onClick={() =>
                                             handleClearCondition(index)
                                           }
-                                          className="h-8 w-8 rounded-full p-0 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white"
+                                          className="
+                                            size-8 rounded-full p-0 text-gray-400
+                                            hover:bg-gray-100 hover:text-gray-600
+                                            dark:text-gray-300
+                                            dark:hover:bg-gray-700 dark:hover:text-white
+                                          "
                                         >
-                                          <FaTimesCircle className="h-4 w-4" />
+                                          <FaTimesCircle className="size-4" />
                                         </Button>
                                       </TooltipTrigger>
                                       <TooltipContent>
@@ -1236,9 +1336,14 @@ function PageData() {
                                           variant="ghost"
                                           size="sm"
                                           onClick={() => openRenameModal(list)}
-                                          className="h-8 w-8 rounded-full p-0 text-yellow-500 hover:bg-yellow-50 hover:text-yellow-600 dark:text-yellow-400 dark:hover:bg-yellow-900/30 dark:hover:text-yellow-300"
+                                          className="
+                                            size-8 rounded-full p-0 text-yellow-500
+                                            hover:bg-yellow-50 hover:text-yellow-600
+                                            dark:text-yellow-400
+                                            dark:hover:bg-yellow-900/30 dark:hover:text-yellow-300
+                                          "
                                         >
-                                          <FaEdit className="h-4 w-4" />
+                                          <FaEdit className="size-4" />
                                         </Button>
                                       </TooltipTrigger>
                                       <TooltipContent>
@@ -1256,9 +1361,14 @@ function PageData() {
                                           onClick={() =>
                                             handleDeleteList(list.name)
                                           }
-                                          className="h-8 w-8 rounded-full p-0 text-red-500 hover:bg-red-50 hover:text-red-600 dark:text-red-400 dark:hover:bg-red-900/30 dark:hover:text-red-300"
+                                          className="
+                                            size-8 rounded-full p-0 text-red-500
+                                            hover:bg-red-50 hover:text-red-600
+                                            dark:text-red-400
+                                            dark:hover:bg-red-900/30 dark:hover:text-red-300
+                                          "
                                         >
-                                          <FaTrash className="h-4 w-4" />
+                                          <FaTrash className="size-4" />
                                         </Button>
                                       </TooltipTrigger>
                                       <TooltipContent>
@@ -1277,10 +1387,18 @@ function PageData() {
                                           onClick={() =>
                                             handleRemoveAllClick(list)
                                           }
-                                          className={`h-8 w-8 rounded-full p-0 text-blue-500 hover:bg-blue-50 hover:text-blue-600 dark:text-blue-400 dark:hover:bg-blue-900/30 dark:hover:text-blue-300 ${listsToRemoveFromAllEntries.includes(list.name) ? "ring-2 ring-blue-400" : ""}`}
+                                          className={`
+                                            size-8 rounded-full p-0 text-blue-500
+                                            hover:bg-blue-50 hover:text-blue-600
+                                            dark:text-blue-400
+                                            dark:hover:bg-blue-900/30 dark:hover:text-blue-300
+                                            ${listsToRemoveFromAllEntries.includes(list.name) ? `
+                                              ring-2 ring-blue-400
+                                            ` : ""}
+                                          `}
                                           aria-label="Remove from all entries"
                                         >
-                                          <FaTimesCircle className="h-4 w-4" />
+                                          <FaTimesCircle className="size-4" />
                                         </Button>
                                       </TooltipTrigger>
                                       <TooltipContent>
@@ -1302,7 +1420,10 @@ function PageData() {
               {/* Pagination or Note Section */}
               {!isListEmpty && lists.length > 0 && (
                 <div className="mt-6 flex justify-center">
-                  <p className="rounded-full bg-gray-100 px-3 py-1 text-sm text-gray-600 dark:bg-gray-800 dark:text-gray-400">
+                  <p className="
+                    rounded-full bg-gray-100 px-3 py-1 text-sm text-gray-600
+                    dark:bg-gray-800 dark:text-gray-400
+                  ">
                     {lists.length} lists displayed
                   </p>
                 </div>
@@ -1317,7 +1438,12 @@ function PageData() {
                   <Button
                     variant="outline"
                     onClick={() => router.push("/anilist-login")}
-                    className="flex items-center border-gray-300 bg-white text-gray-700 shadow-sm hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                    className="
+                      flex items-center border-gray-300 bg-white text-gray-700 shadow-sm
+                      hover:bg-gray-100
+                      dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300
+                      dark:hover:bg-gray-600
+                    "
                   >
                     Back
                   </Button>
@@ -1329,7 +1455,11 @@ function PageData() {
                 >
                   <Button
                     onClick={confirmAndNavigate}
-                    className="flex items-center bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md hover:from-blue-700 hover:to-indigo-700 hover:shadow-lg"
+                    className="
+                      flex items-center bg-linear-to-r from-blue-600 to-indigo-600 text-white
+                      shadow-md
+                      hover:from-blue-700 hover:to-indigo-700 hover:shadow-lg
+                    "
                     disabled={
                       !dataLoaded ||
                       isListEmpty ||
@@ -1354,7 +1484,10 @@ function PageData() {
         confirmButtonText="Continue to Update"
       >
         <div className="space-y-4">
-          <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 dark:border-blue-900 dark:bg-blue-900/20">
+          <div className="
+            rounded-lg border border-blue-100 bg-blue-50 p-3
+            dark:border-blue-900 dark:bg-blue-900/20
+          ">
             <p className="text-sm font-medium text-blue-800 dark:text-blue-300">
               You&apos;re about to update{" "}
               {lists.filter((list) => list.selectedOption).length} custom lists
@@ -1363,7 +1496,10 @@ function PageData() {
 
           {/* Lists to be removed from all entries (even if not selected for update) */}
           {listsToRemoveFromAllEntries.length > 0 && (
-            <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-900/40 dark:bg-blue-900/10">
+            <div className="
+              rounded-lg border border-blue-200 bg-blue-50 p-3
+              dark:border-blue-900/40 dark:bg-blue-900/10
+            ">
               <p className="mb-2 text-sm font-semibold text-blue-700 dark:text-blue-200">
                 The following lists will be removed from all entries:
               </p>
@@ -1379,7 +1515,7 @@ function PageData() {
                     >
                       <span className="font-bold">{name}</span>
                       {!selected && (
-                        <span className="ml-2 italic text-gray-600 dark:text-gray-400">
+                        <span className="ml-2 text-gray-600 italic dark:text-gray-400">
                           All entries will be removed from this list.
                         </span>
                       )}
@@ -1415,13 +1551,20 @@ function PageData() {
                         hidden: { opacity: 0, y: 10 },
                         visible: { opacity: 1, y: 0 },
                       }}
-                      className="rounded-md border border-gray-200 bg-white p-3 shadow-sm transition-colors dark:border-gray-700 dark:bg-gray-800"
+                      className="
+                        rounded-md border border-gray-200 bg-white p-3 shadow-sm transition-colors
+                        dark:border-gray-700 dark:bg-gray-800
+                      "
                     >
                       <div className="flex flex-col space-y-1">
                         <span className="font-medium text-gray-900 dark:text-gray-100">
                           {list.name}
                           {listsToRemoveFromAllEntries.includes(list.name) && (
-                            <span className="ml-2 rounded bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                            <span className="
+                              ml-2 rounded-sm bg-blue-100 px-2 py-0.5 text-xs font-semibold
+                              text-blue-700
+                              dark:bg-blue-900/30 dark:text-blue-300
+                            ">
                               Will be removed from all entries
                             </span>
                           )}
@@ -1436,9 +1579,12 @@ function PageData() {
             </div>
           </div>
 
-          <div className="rounded-lg border border-amber-100 bg-amber-50 p-3 text-sm dark:border-amber-900/50 dark:bg-amber-900/10">
+          <div className="
+            rounded-lg border border-amber-100 bg-amber-50 p-3 text-sm
+            dark:border-amber-900/50 dark:bg-amber-900/10
+          ">
             <div className="flex items-start">
-              <FaInfoCircle className="mr-2 mt-0.5 h-4 w-4 text-amber-600 dark:text-amber-500" />
+              <FaInfoCircle className="mt-0.5 mr-2 size-4 text-amber-600 dark:text-amber-500" />
               <span className="text-amber-800 dark:text-amber-300">
                 After proceeding, changes will be applied to your AniList
                 account.
@@ -1475,13 +1621,19 @@ function PageData() {
         confirmButtonText="Delete"
       >
         <div className="space-y-4">
-          <div className="rounded-lg border border-red-100 bg-red-50 p-3 dark:border-red-900 dark:bg-red-900/20">
+          <div className="
+            rounded-lg border border-red-100 bg-red-50 p-3
+            dark:border-red-900 dark:bg-red-900/20
+          ">
             <p className="text-sm font-medium text-red-800 dark:text-red-300">
               Are you sure you want to delete the custom list
               <span className="font-bold"> {pendingDeleteList?.name}</span>?
             </p>
           </div>
-          <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 dark:border-blue-900 dark:bg-blue-900/20">
+          <div className="
+            rounded-lg border border-blue-100 bg-blue-50 p-3
+            dark:border-blue-900 dark:bg-blue-900/20
+          ">
             <p className="text-sm text-blue-800 dark:text-blue-300">
               Note: Deleting a custom list only removes it from your list
               structure. Any entries previously associated with this list will
@@ -1503,7 +1655,11 @@ function PageData() {
         <div className="space-y-4">
           <input
             type="text"
-            className="w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+            className="
+              w-full rounded-sm border border-gray-300 px-3 py-2 text-gray-900
+              focus:border-blue-500 focus:outline-none
+              dark:border-gray-700 dark:bg-gray-800 dark:text-white
+            "
             placeholder="Enter new list name"
             value={newListName}
             onChange={(e) => {
@@ -1515,7 +1671,10 @@ function PageData() {
             aria-label="New list name"
           />
           {addListError && (
-            <div className="rounded bg-red-100 px-3 py-2 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300">
+            <div className="
+              rounded-sm bg-red-100 px-3 py-2 text-sm text-red-700
+              dark:bg-red-900/30 dark:text-red-300
+            ">
               {addListError}
             </div>
           )}
@@ -1531,7 +1690,10 @@ function PageData() {
         confirmButtonText="Remove"
       >
         <div className="space-y-4">
-          <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 dark:border-blue-900 dark:bg-blue-900/20">
+          <div className="
+            rounded-lg border border-blue-100 bg-blue-50 p-3
+            dark:border-blue-900 dark:bg-blue-900/20
+          ">
             <p className="text-sm text-blue-800 dark:text-blue-300">
               Are you sure you want to remove the list{" "}
               <span className="font-bold">{pendingRemoveAllList?.name}</span>{" "}

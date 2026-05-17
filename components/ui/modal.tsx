@@ -36,17 +36,30 @@ const Modal: React.FC<ModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm transition-opacity duration-300"
+      className="
+        fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm
+        transition-opacity duration-300
+      "
       aria-modal="true"
       role="dialog"
       aria-labelledby="modal-title"
       aria-describedby="modal-description"
     >
-      <div className="relative mx-auto w-11/12 max-w-md rounded-lg bg-white p-6 text-gray-900 shadow-2xl transition-colors duration-300 dark:bg-gray-800 dark:text-gray-100">
+      <div className="
+        relative mx-auto w-11/12 max-w-md rounded-lg bg-white p-6 text-gray-900 shadow-2xl
+        transition-colors duration-300
+        dark:bg-gray-800 dark:text-gray-100
+      ">
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute right-4 top-4 text-gray-500 transition-colors duration-300 hover:text-gray-700 focus:outline-none dark:text-gray-400 dark:hover:text-gray-200"
+          className="
+            absolute top-4 right-4 text-gray-500 transition-colors duration-300
+            hover:text-gray-700
+            focus:outline-none
+            dark:text-gray-400
+            dark:hover:text-gray-200
+          "
           aria-label="Close Modal"
         >
           <FaTimes size={20} />
@@ -61,7 +74,11 @@ const Modal: React.FC<ModalProps> = ({
         {/* Modal Content */}
         <div
           id="modal-description"
-          className="scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent max-h-[calc(80vh-12rem)] overflow-y-auto"
+          className="
+            max-h-[calc(80vh-12rem)] scrollbar-thin scrollbar-thumb-gray-300
+            scrollbar-track-transparent overflow-y-auto
+            dark:scrollbar-thumb-gray-600
+          "
         >
           {children}
         </div>
@@ -69,7 +86,13 @@ const Modal: React.FC<ModalProps> = ({
         <div className="mt-6 flex justify-end space-x-4">
           <button
             onClick={onClose}
-            className="rounded bg-gray-200 px-4 py-2 text-gray-900 transition-colors duration-300 hover:bg-gray-300 focus:outline-none dark:bg-gray-700 dark:text-white dark:hover:bg-gray-600"
+            className="
+              rounded-sm bg-gray-200 px-4 py-2 text-gray-900 transition-colors duration-300
+              hover:bg-gray-300
+              focus:outline-none
+              dark:bg-gray-700 dark:text-white
+              dark:hover:bg-gray-600
+            "
             aria-label="Cancel"
           >
             Cancel
@@ -79,7 +102,13 @@ const Modal: React.FC<ModalProps> = ({
               onConfirm();
               onClose();
             }}
-            className="rounded bg-blue-600 px-4 py-2 text-white transition-colors duration-300 hover:bg-blue-700 focus:outline-none dark:bg-blue-500 dark:hover:bg-blue-600"
+            className="
+              rounded-sm bg-blue-600 px-4 py-2 text-white transition-colors duration-300
+              hover:bg-blue-700
+              focus:outline-none
+              dark:bg-blue-500
+              dark:hover:bg-blue-600
+            "
             aria-label={confirmButtonText}
           >
             {confirmButtonText}
