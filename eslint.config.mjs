@@ -1,55 +1,80 @@
-import globals from "globals";
-import pluginJs from "@eslint/js";
+import { readFileSync } from "node:fs";
+
+import { defineConfig, globalIgnores } from "eslint/config";
+import eslintPluginBetterTailwindcss from "eslint-plugin-better-tailwindcss";
+import simpleImportSort from "eslint-plugin-simple-import-sort";
 import tseslint from "typescript-eslint";
-import pluginReact from "eslint-plugin-react";
-import eslintPluginPrettierRecommended from "eslint-config-prettier";
-import reactCompiler from "eslint-plugin-react-compiler";
-import nextPlugin from "@next/eslint-plugin-next";
-import path from "node:path";
-import { includeIgnoreFile } from "@eslint/compat";
-import { fileURLToPath } from "node:url";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const prettierIgnorePath = path.resolve(__dirname, ".prettierignore");
+const packageJson = JSON.parse(
+  readFileSync(new URL("./package.json", import.meta.url), "utf8"),
+);
+const explicitReactVersion = String(
+  packageJson.dependencies?.react ??
+    packageJson.devDependencies?.react ??
+    "19.2.6",
+).replace(/^[^\d]*/, "");
 
-/** @type {import('eslint').Linter.Config[]} */
-export default [
-  includeIgnoreFile(prettierIgnorePath),
-  // Ignore patterns
-  {
-    ignores: [
-      // Build output
-      "out/**",
-
-      // Node modules
-      "node_modules/**",
-    ],
-  },
-  {
-    files: ["**/*.{js,mjs,cjs,ts,jsx,tsx}"],
-    plugins: {
-      "react-compiler": reactCompiler,
-      "@next/next": nextPlugin,
-    },
-    rules: {
-      "react-compiler/react-compiler": "error",
-      ...nextPlugin.configs.recommended.rules,
-    },
-  },
-  { languageOptions: { globals: globals.browser } },
-  pluginJs.configs.recommended,
-  pluginReact.configs.flat.recommended,
+const eslintConfig = defineConfig([
+  ...tseslint.configs.recommended,
+  // Explicit React version avoids calling plugin detection which can break under ESLint 10.
+  // Keeps ESLint 10 while preventing `contextOrFilename.getFilename` errors in
+  // eslint-plugin-react's version detection code.
   {
     settings: {
       react: {
-        version: "detect",
-      },
-      next: {
-        rootDir: ".",
+        version: explicitReactVersion,
+        defaultVersion: explicitReactVersion,
       },
     },
   },
-  eslintPluginPrettierRecommended,
-  ...tseslint.configs.recommended,
-];
+  // Override default ignores of eslint-config-next.
+  globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts"]),
+  {
+    extends: [eslintPluginBetterTailwindcss.configs["recommended"]],
+    settings: {
+      "better-tailwindcss": {
+        entryPoint: "app/globals.css",
+      },
+    },
+    rules: {
+      "better-tailwindcss/enforce-consistent-line-wrapping": [
+        "warn",
+        {
+          printWidth: 100,
+          preferSingleLine: true,
+          indent: 2,
+          lineBreakStyle: "windows",
+        },
+      ],
+    },
+  },
+  {
+    plugins: {
+      "simple-import-sort": simpleImportSort,
+    },
+    rules: {
+      "@typescript-eslint/no-unused-expressions": "warn",
+      "@typescript-eslint/no-unused-vars": "warn",
+      "simple-import-sort/imports": "error",
+      "simple-import-sort/exports": "error",
+    },
+  },
+  {
+    rules: {
+      "@next/next/no-img-element": "off",
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "next/image",
+              message: "Use the native <img> element instead of next/image.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+]);
+
+export default eslintConfig;

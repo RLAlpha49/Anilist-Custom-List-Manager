@@ -1,11 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: "standalone",
-  eslint: {
-    ignoreDuringBuilds: false,
-  },
   typescript: {
-    // Set this to true to ignore type errors during build
     ignoreBuildErrors: false,
   },
   reactStrictMode: true,

@@ -18,13 +18,13 @@
 
 ## Features
 
-| Feature                      | Description                                                                                         |
-|------------------------------|-----------------------------------------------------------------------------------------------------|
-| Fetch Anime and Manga Lists  | Easily retrieve your existing lists from Anilist.                                                  |
-| Custom List Management       | Organize your entries into personalized lists for better tracking and organization.                |
-| Sort Entries                 | Sort your entries based on status, score, rereads, genres, tags, and type to quickly find what you're looking for. |
-| Automatic Updates            | Automatically update entries based on the conditions you set, ensuring your lists are up-to-date.  |
-| User-Friendly Interface      | Clean and intuitive UI using Next.js, Tailwind CSS, and Radix UI components.                       |
+| Feature                     | Description                                                                                                        |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Fetch Anime and Manga Lists | Easily retrieve your existing lists from Anilist.                                                                  |
+| Custom List Management      | Organize your entries into personalized lists for better tracking and organization.                                |
+| Sort Entries                | Sort your entries based on status, score, rereads, genres, tags, and type to quickly find what you're looking for. |
+| Automatic Updates           | Automatically update entries based on the conditions you set, ensuring your lists are up-to-date.                  |
+| User-Friendly Interface     | Clean and intuitive UI using Next.js, Tailwind CSS, and Radix UI components.                                       |
 
 ## Prerequisites
 
