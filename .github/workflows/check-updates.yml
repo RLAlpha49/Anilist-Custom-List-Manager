@@ -332,16 +332,6 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      - name: Upload dependency license policy report
-        if: ${{ always() && steps.automation-mode.outputs.should_apply == 'true' }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: dependency-license-policy-report
-          path: .artifacts/licenses/license-policy-report.json
-          include-hidden-files: true
-          if-no-files-found: ignore
-          retention-days: 14
-
   publish-updates:
     timeout-minutes: 30
     runs-on: ubuntu-latest
