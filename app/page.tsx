@@ -2,50 +2,21 @@
 
 import { motion } from "framer-motion";
 import Link from "next/link";
-import React from "react";
 import { Suspense } from "react";
-import { FaGithub } from "react-icons/fa";
+import { FaExclamationTriangle, FaGithub } from "react-icons/fa";
 import { HiOutlineSparkles } from "react-icons/hi";
 import { toast } from "sonner";
 
 import Breadcrumbs from "@/components/breadcrumbs";
 import Layout from "@/components/layout";
 import LoadingIndicator from "@/components/loading-indicator";
-import { Button } from "@/components/ui/button";
-import {
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-
-// Animation variants
-const fadeIn = {
-  hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { duration: 0.6 } },
-};
-
-const fadeInUp = {
-  hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.6 } },
-};
-
-const staggerContainer = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.2,
-    },
-  },
-};
 
 function PageData() {
   const clearCache = () => {
     localStorage.clear();
     toast.success("Cache cleared!", {
-      description: "Your cache has been cleared.",
+      description:
+        "Saved AniList session data, fetched lists, and local setup were cleared from this browser.",
     });
   };
 
@@ -54,313 +25,221 @@ function PageData() {
   return (
     <Layout>
       <Breadcrumbs breadcrumbs={breadcrumbs} />
-      <div className="
-        flex flex-col items-center justify-center px-4 text-gray-900
-        dark:text-gray-100
-      ">
-        {/* Hero Section */}
-        <motion.div
-          initial="hidden"
-          animate="visible"
-          variants={fadeIn}
-          className="
-            relative mb-16 w-full max-w-5xl overflow-hidden rounded-2xl bg-linear-to-br from-blue-50
-            to-indigo-100 p-8 shadow-xl transition-all duration-300
-            dark:from-gray-800 dark:to-gray-900
-          "
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.6 }}
+        className="mx-auto w-full max-w-5xl px-6 py-16"
+      >
+        <motion.p
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="mb-4 text-xs font-semibold tracking-widest uppercase"
+          style={{ color: "var(--z-amber)" }}
         >
-          <motion.div
-            animate={{
-              scale: [1, 1.2, 1],
-              opacity: [0.2, 0.3, 0.2],
-            }}
-            transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-            className="
-              pointer-events-none absolute -top-20 -right-20 size-64 rounded-full bg-blue-400
-              opacity-20 blur-3xl filter
-              dark:bg-blue-600
-            "
-          ></motion.div>
-          <motion.div
-            animate={{
-              scale: [1, 1.3, 1],
-              opacity: [0.2, 0.3, 0.2],
-            }}
-            transition={{
-              duration: 10,
-              repeat: Infinity,
-              ease: "easeInOut",
-              delay: 1,
-            }}
-            className="
-              pointer-events-none absolute -bottom-20 -left-20 size-64 rounded-full bg-indigo-400
-              opacity-20 blur-3xl filter
-              dark:bg-indigo-600
-            "
-          ></motion.div>
+          Powered by AniList API
+        </motion.p>
 
-          <CardHeader className="p-0 pb-6">
-            <motion.div variants={fadeInUp}>
-              <CardTitle className="
-                bg-linear-to-r from-blue-600 to-indigo-600 bg-clip-text pb-2 text-5xl font-bold
-                text-transparent
-                dark:from-blue-400 dark:to-indigo-400
-              ">
-                Anilist Custom List Manager
-              </CardTitle>
-            </motion.div>
-            <motion.div variants={fadeInUp}>
-              <CardDescription className="mt-4 text-xl text-gray-600 dark:text-gray-300">
-                Manage your anime and manga lists with ease
-              </CardDescription>
-            </motion.div>
-          </CardHeader>
-          <CardContent className="p-0">
-            <motion.div variants={fadeInUp}>
-              <p className="mb-8 max-w-3xl text-lg text-gray-700 dark:text-gray-200">
-                Take full control of your Anilist experience by organizing your
-                entries into customized lists. Whether you&apos;re tracking
-                anime, manga, or both, our tool offers advanced features to suit
-                your needs.
-              </p>
-            </motion.div>
-            <motion.div
-              variants={staggerContainer}
-              initial="hidden"
-              animate="visible"
-              className="flex flex-wrap gap-4"
-            >
-              <motion.div
-                variants={fadeInUp}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                <Button
-                  asChild
-                  size="lg"
-                  className="
-                    bg-linear-to-r from-blue-600 to-indigo-600 text-lg font-medium text-white
-                    transition-all duration-300
-                    hover:from-blue-700 hover:to-indigo-700 hover:shadow-lg
-                    dark:from-blue-500 dark:to-indigo-500
-                    dark:hover:from-blue-600 dark:hover:to-indigo-600
-                  "
-                  aria-label="Get Started with Anilist"
-                >
-                  <Link href="/anilist-login">
-                    <HiOutlineSparkles className="mr-2 size-5" />
-                    Get Started
-                  </Link>
-                </Button>
-              </motion.div>
-              <motion.div
-                variants={fadeInUp}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                <Button
-                  variant="outline"
-                  asChild
-                  size="lg"
-                  className="
-                    border-gray-300 bg-white/80 text-lg font-medium text-gray-700 backdrop-blur-sm
-                    transition-all duration-300
-                    hover:bg-gray-100 hover:text-gray-900
-                    dark:border-gray-700 dark:bg-gray-800/80 dark:text-gray-300
-                    dark:hover:bg-gray-700 dark:hover:text-white
-                  "
-                  aria-label="Frequently Asked Questions about Anilist Custom List Manager"
-                >
-                  <Link href="/faq">FAQ</Link>
-                </Button>
-              </motion.div>
-              <motion.div
-                variants={fadeInUp}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                <Button
-                  variant="outline"
-                  asChild
-                  size="lg"
-                  className="
-                    border-gray-300 bg-white/80 text-lg font-medium text-gray-700 backdrop-blur-sm
-                    transition-all duration-300
-                    hover:bg-gray-100 hover:text-gray-900
-                    dark:border-gray-700 dark:bg-gray-800/80 dark:text-gray-300
-                    dark:hover:bg-gray-700 dark:hover:text-white
-                  "
-                  aria-label="View on GitHub"
-                >
-                  <Link
-                    href="https://github.com/RLAlpha49/Anilist-Custom-List-Manager"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <FaGithub className="mr-2 size-5" />
-                    GitHub
-                  </Link>
-                </Button>
-              </motion.div>
-            </motion.div>
-          </CardContent>
-        </motion.div>
-
-        {/* Features Carousel */}
-
-        {/* How It Works */}
-        <motion.div
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, amount: 0.3 }}
-          variants={fadeInUp}
-          className="mb-16 w-full max-w-5xl"
+        <motion.h1
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2, duration: 0.6 }}
+          className="mb-6 text-6xl/tight font-black md:text-7xl"
+          style={{ fontFamily: "var(--font-syne-var)", color: "var(--z-text)" }}
         >
-          <div className="mb-8 text-center">
-            <motion.h2
-              variants={fadeInUp}
-              className="mb-2 text-3xl font-bold text-gray-900 dark:text-white"
-            >
-              How It Works
-            </motion.h2>
-            <motion.p
-              variants={fadeInUp}
-              className="mx-auto max-w-2xl text-gray-600 dark:text-gray-300"
-            >
-              Get started with Anilist Custom List Manager in three simple steps
-            </motion.p>
-            <motion.div variants={fadeInUp}>
-              <Separator className="mx-auto mt-6 w-24 bg-blue-200 dark:bg-blue-800" />
-            </motion.div>
-          </div>
+          Manage Your
+          <br />
+          <span style={{ color: "var(--z-amber)" }}>Lists.</span>{" "}
+          <span style={{ color: "var(--z-pink)" }}>Your Way.</span>
+        </motion.h1>
 
-          <motion.div
-            variants={staggerContainer}
-            className="grid gap-8 md:grid-cols-3"
+        <motion.p
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="mb-10 max-w-2xl text-lg/relaxed"
+          style={{ color: "var(--z-muted)" }}
+        >
+          Take full control of your AniList experience. Create custom lists, set
+          smart conditions, and automate how your anime and manga entries are
+          organized.
+        </motion.p>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="mb-20 flex flex-wrap gap-4"
+        >
+          <Link
+            href="/anilist-login"
+            className="
+              inline-flex items-center gap-2 rounded-lg px-8 py-4 text-base font-bold transition-all
+              duration-200
+              hover:brightness-110
+              active:scale-95
+            "
+            style={{ backgroundColor: "var(--z-amber)", color: "#07060f" }}
+            aria-label="Get Started with Anilist"
           >
-            <motion.div
-              whileHover={{
-                y: -5,
-                boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1)",
-              }}
-              transition={{ duration: 0.3 }}
-              className="
-                relative rounded-xl bg-white p-6 text-center shadow-md transition-all duration-300
-                dark:bg-gray-800
-              "
-            >
-              <div className="
-                absolute inset-x-0 -top-4 mx-auto flex size-10 items-center justify-center
-                rounded-full bg-blue-600 text-xl font-bold text-white
-                dark:bg-blue-500
-              ">
-                1
-              </div>
-              <h3 className="mt-6 text-xl font-semibold text-gray-900 dark:text-white">
-                Connect with Anilist
-              </h3>
-              <p className="mt-3 text-gray-700 dark:text-gray-300">
-                Log in with your Anilist account to grant access to your lists
-                and entries.
-              </p>
-            </motion.div>
-
-            <motion.div
-              whileHover={{
-                y: -5,
-                boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1)",
-              }}
-              transition={{ duration: 0.3 }}
-              className="
-                relative rounded-xl bg-white p-6 text-center shadow-md transition-all duration-300
-                hover:shadow-lg
-                dark:bg-gray-800
-              "
-            >
-              <div className="
-                absolute inset-x-0 -top-4 mx-auto flex size-10 items-center justify-center
-                rounded-full bg-indigo-600 text-xl font-bold text-white
-                dark:bg-indigo-500
-              ">
-                2
-              </div>
-              <h3 className="mt-6 text-xl font-semibold text-gray-900 dark:text-white">
-                Customize Your View
-              </h3>
-              <p className="mt-3 text-gray-700 dark:text-gray-300">
-                Apply filters, sort options, and criteria to view entries
-                exactly how you want.
-              </p>
-            </motion.div>
-
-            <motion.div
-              whileHover={{
-                y: -5,
-                boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1)",
-              }}
-              transition={{ duration: 0.3 }}
-              className="
-                relative rounded-xl bg-white p-6 text-center shadow-md transition-all duration-300
-                hover:shadow-lg
-                dark:bg-gray-800
-              "
-            >
-              <div className="
-                absolute inset-x-0 -top-4 mx-auto flex size-10 items-center justify-center
-                rounded-full bg-purple-600 text-xl font-bold text-white
-                dark:bg-purple-500
-              ">
-                3
-              </div>
-              <h3 className="mt-6 text-xl font-semibold text-gray-900 dark:text-white">
-                Organize with Ease
-              </h3>
-              <p className="mt-3 text-gray-700 dark:text-gray-300">
-                Move entries between lists, update them in bulk, and keep
-                everything perfectly organized.
-              </p>
-            </motion.div>
-          </motion.div>
+            <HiOutlineSparkles size={18} />
+            Get Started
+          </Link>
+          <Link
+            href="/faq"
+            className="
+              inline-flex items-center gap-2 rounded-lg px-8 py-4 text-base transition-all
+              duration-200
+              hover:bg-(--z-card-up)
+              active:scale-95
+            "
+            style={{
+              border: "1px solid var(--z-border-mid)",
+              color: "var(--z-text)",
+            }}
+            aria-label="Frequently Asked Questions"
+          >
+            Learn More
+          </Link>
+          <Link
+            href="https://github.com/RLAlpha49/Anilist-Custom-List-Manager"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="
+              inline-flex items-center gap-2 rounded-lg px-8 py-4 text-base transition-all
+              duration-200
+              hover:text-(--z-text)
+              active:scale-95
+            "
+            style={{
+              border: "1px solid var(--z-border)",
+              color: "var(--z-muted)",
+            }}
+            aria-label="View on GitHub"
+          >
+            <FaGithub size={18} />
+            GitHub
+          </Link>
         </motion.div>
 
-        {/* Clear Cache Button */}
         <motion.div
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, amount: 0.3 }}
-          variants={fadeInUp}
-          className="mb-12 w-full max-w-5xl rounded-xl bg-white p-6 shadow-md dark:bg-gray-800"
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5, duration: 0.6 }}
+          className="mb-16 grid grid-cols-1 gap-4 md:grid-cols-3"
         >
-          <div className="
-            flex flex-col items-center justify-between space-y-4
-            sm:flex-row sm:space-y-0
-          ">
-            <div>
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-                Cache Management
+          {[
+            {
+              step: "01",
+              title: "Connect AniList",
+              desc: "Link your AniList account securely with OAuth in one click.",
+              accent: "var(--z-amber)",
+            },
+            {
+              step: "02",
+              title: "Configure Lists",
+              desc: "Create unlimited custom lists and set smart sorting conditions.",
+              accent: "var(--z-pink)",
+            },
+            {
+              step: "03",
+              title: "Sync & Update",
+              desc: "Apply changes to all your anime and manga entries automatically.",
+              accent: "var(--z-frost)",
+            },
+          ].map((feat, i) => (
+            <motion.div
+              key={feat.step}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 + i * 0.1 }}
+              className="rounded-xl p-5 transition-all duration-200"
+              style={{
+                backgroundColor: "var(--z-card)",
+                border: "1px solid var(--z-border)",
+              }}
+            >
+              <div
+                className="mb-3 text-3xl font-bold tracking-tight opacity-20"
+                style={{
+                  fontFamily: "var(--font-syne-var)",
+                  color: feat.accent,
+                }}
+              >
+                {feat.step}
+              </div>
+              <h3
+                className="mb-2 font-bold"
+                style={{
+                  fontFamily: "var(--font-syne-var)",
+                  color: "var(--z-text)",
+                }}
+              >
+                {feat.title}
               </h3>
-              <p className="text-gray-600 dark:text-gray-300">
-                Clear your local storage to refresh data and fix potential
-                issues.
+              <p
+                className="text-sm/relaxed"
+                style={{ color: "var(--z-muted)" }}
+              >
+                {feat.desc}
+              </p>
+            </motion.div>
+          ))}
+        </motion.div>
+
+        <div
+          className="space-y-4 pt-8"
+          style={{ borderTop: "1px solid var(--z-border)" }}
+        >
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p
+                className="text-sm font-medium"
+                style={{ color: "var(--z-subtle)" }}
+              >
+                Issues? Try clearing your local cache.
+              </p>
+              <p className="mt-1 text-xs" style={{ color: "var(--z-muted)" }}>
+                This signs you out locally and removes saved lists, fetched
+                results, and setup data from this browser.
               </p>
             </div>
-            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-              <Button
-                onClick={clearCache}
-                className="
-                  bg-red-500 text-white transition-all duration-300
-                  hover:bg-red-600
-                  dark:bg-red-600
-                  dark:hover:bg-red-700
-                "
-                aria-label="Clear Cache"
-              >
-                Clear Cache
-              </Button>
-            </motion.div>
+            <button
+              onClick={clearCache}
+              className="
+                rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200
+                active:scale-95
+              "
+              style={{
+                border: "1px solid rgba(248,113,113,0.24)",
+                color: "var(--z-red)",
+                backgroundColor: "rgba(248,113,113,0.06)",
+              }}
+              aria-label="Clear Cache"
+            >
+              Clear Cache
+            </button>
           </div>
-        </motion.div>
-      </div>
+          <div
+            className="flex items-start gap-3 rounded-xl p-3"
+            style={{
+              backgroundColor: "rgba(245,166,35,0.08)",
+              border: "1px solid rgba(245,166,35,0.18)",
+            }}
+          >
+            <FaExclamationTriangle
+              className="mt-0.5 shrink-0"
+              style={{ color: "var(--z-amber)" }}
+            />
+            <p className="text-xs/relaxed" style={{ color: "var(--z-text)" }}>
+              Use this only if the app is acting weird. It does{" "}
+              <span className="font-semibold">not</span> change AniList itself —
+              it only wipes cached data stored in this browser.
+            </p>
+          </div>
+        </div>
+      </motion.div>
     </Layout>
   );
 }

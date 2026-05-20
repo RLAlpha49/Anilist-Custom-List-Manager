@@ -45,7 +45,12 @@ export const formatItemsManga: string[] = [
   "Novel",
 ];
 
-export const hiddenFormatItemsManga: string[] = ["manga", "manwha", "manhua"];
+export const hiddenFormatItemsManga: string[] = [
+  "manhwa",
+  "manwha",
+  "manhua",
+  "manga",
+];
 
 export const tagCategories: string[] = [
   "Cast",

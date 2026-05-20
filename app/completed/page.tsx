@@ -1,481 +1,381 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { useRouter } from "next/navigation";
-import React from "react";
-import { JSX, Suspense, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   FaCheckCircle,
-  FaGithub,
+  FaClock,
+  FaExclamationTriangle,
   FaHome,
   FaList,
-  FaRocket,
-  FaStar,
+  FaRedo,
 } from "react-icons/fa";
-import { toast } from "sonner";
 
-import Breadcrumbs from "@/components/breadcrumbs";
-import Layout from "@/components/layout";
-import LoadingIndicator from "@/components/loading-indicator";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { getItemWithExpiry, removeItemWithExpiry } from "@/lib/local-storage";
-import { cn } from "@/lib/utils";
+import { getItemWithExpiry } from "@/lib/local-storage";
 
-interface Summary {
-  totalListsUpdated: number;
-  totalEntriesUpdated: number;
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface UpdateStats {
+  totalUpdated: number;
+  errorCount: number;
+  timeTaken: number;
 }
 
-interface CompletedPageProps {
-  summary?: Summary;
-}
+// ─── Stat Card ────────────────────────────────────────────────────────────────
 
-// Confetti component for celebration effect
-const Confetti = () => {
-  return (
-    <div className="pointer-events-none absolute inset-0 z-10 overflow-hidden">
-      {Array.from({ length: 60 }).map((_, index) => {
-        const size = Math.random() * 10 + 5;
-        const duration = Math.random() * 3 + 2;
-        const left = Math.random() * 100;
-        const delay = Math.random() * 0.5;
-        const colors = [
-          "bg-blue-500",
-          "bg-green-500",
-          "bg-yellow-400",
-          "bg-pink-500",
-          "bg-purple-500",
-          "bg-indigo-500",
-          "bg-red-500",
-        ];
-        const color = colors[Math.floor(Math.random() * colors.length)];
-
-        return (
-          <motion.div
-            key={index}
-            className={cn("absolute rounded-sm opacity-80", color)}
-            initial={{
-              top: -20,
-              left: `${left}%`,
-              width: size,
-              height: size,
-              opacity: 1,
-            }}
-            animate={{
-              top: "100%",
-              opacity: 0,
-              rotate: Math.random() * 360,
-            }}
-            transition={{
-              duration,
-              delay,
-              ease: "easeOut",
-              repeat: 1,
-              repeatDelay: 3,
-            }}
-          />
-        );
-      })}
-    </div>
-  );
-};
-
-// Statistic component for displaying numbers
-const StatisticCard = ({ label, value }: { label: string; value: number }) => {
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  color,
+  delay = 0,
+}: Readonly<{
+  icon: React.ComponentType<{ size?: number; style?: React.CSSProperties }>;
+  label: string;
+  value: string;
+  color: string;
+  delay?: number;
+}>) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ type: "spring", stiffness: 100, damping: 12 }}
-      className="
-        flex flex-col items-center justify-center rounded-lg bg-linear-to-br from-white to-gray-100
-        p-4 text-center shadow-md
-        dark:from-gray-800 dark:to-gray-900
-      "
+      transition={{ delay, duration: 0.4, ease: "easeOut" }}
+      className="flex flex-col items-center gap-2 rounded-2xl p-5"
+      style={{
+        backgroundColor: "var(--z-card-up)",
+        border: "1px solid var(--z-border)",
+      }}
     >
-      <motion.span
-        initial={{ scale: 0 }}
-        animate={{ scale: 1 }}
-        transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
-        className="text-3xl font-bold text-blue-600 dark:text-blue-400"
+      <div
+        className="flex size-10 items-center justify-center rounded-full"
+        style={{
+          backgroundColor: `${color}18`,
+          border: `1px solid ${color}40`,
+        }}
+      >
+        <Icon size={16} style={{ color }} />
+      </div>
+      <p
+        className="text-2xl font-black tabular-nums"
+        style={{ color: "var(--z-text)", fontFamily: "var(--font-syne)" }}
       >
         {value}
-      </motion.span>
-      <span className="mt-1 text-sm font-medium text-gray-600 dark:text-gray-400">
+      </p>
+      <p
+        className="text-center text-xs font-medium"
+        style={{ color: "var(--z-muted)" }}
+      >
         {label}
-      </span>
+      </p>
     </motion.div>
-  );
-};
-
-function PageData({ summary }: CompletedPageProps): JSX.Element {
-  const router = useRouter();
-  const [localSummary, setLocalSummary] = useState<Summary>({
-    totalListsUpdated: 0,
-    totalEntriesUpdated: 0,
-  });
-  const [showConfetti, setShowConfetti] = useState(true);
-
-  const hasFetchedSummary = useRef(false);
-
-  useEffect(() => {
-    if (hasFetchedSummary.current) return;
-    hasFetchedSummary.current = true;
-
-    const storedSummary = getItemWithExpiry<string>("updateSummary");
-    let summaryData: Summary = { totalListsUpdated: 0, totalEntriesUpdated: 0 };
-
-    if (storedSummary) {
-      summaryData = JSON.parse(storedSummary);
-      removeItemWithExpiry("updateSummary");
-    } else if (summary) {
-      summaryData = summary;
-    } else {
-      toast.warning("No Update Information", {
-        description: "No summary data was found for your recent update.",
-      });
-    }
-
-    setLocalSummary(summaryData);
-
-    // Hide confetti after 5 seconds
-    const timer = setTimeout(() => setShowConfetti(false), 5000);
-    return () => clearTimeout(timer);
-  }, [summary]);
-
-  const handleGoHome = () => {
-    router.push("/");
-  };
-
-  const handleManageLists = () => {
-    router.push("/custom-list-manager");
-  };
-
-  const breadcrumbs = [
-    { name: "Home", href: "/" },
-    { name: "Completed", href: "/completed" },
-  ];
-
-  // Animation variants for staggered animations
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    show: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.1,
-      },
-    },
-  };
-
-  const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
-    show: {
-      opacity: 1,
-      y: 0,
-      transition: {
-        type: "spring" as const,
-        stiffness: 100,
-        damping: 12,
-      },
-    },
-  };
-
-  return (
-    <Layout>
-      <Breadcrumbs breadcrumbs={breadcrumbs} />
-      <div className="
-        relative flex min-h-[80vh] items-center justify-center overflow-auto px-4 py-8
-      ">
-        {showConfetti && <Confetti />}
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="w-full max-w-2xl"
-        >
-          <Card className="
-            overflow-hidden border-0 bg-white/90 shadow-xl backdrop-blur-sm
-            dark:bg-gray-800/90 dark:shadow-blue-900/5
-          ">
-            <div className="
-              absolute inset-x-0 top-0 h-2 bg-linear-to-r from-green-400 via-blue-500 to-purple-500
-            "></div>
-
-            <CardHeader className="pb-2 text-center">
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{
-                  type: "spring",
-                  stiffness: 200,
-                  damping: 15,
-                  duration: 0.8,
-                }}
-                className="
-                  relative mx-auto mb-3 flex size-24 items-center justify-center rounded-full
-                  bg-linear-to-br from-green-400 to-green-600 shadow-lg shadow-green-500/20
-                  dark:from-green-500 dark:to-green-700
-                "
-              >
-                <motion.div
-                  animate={{
-                    scale: [1, 1.2, 1],
-                    rotate: [0, 5, 0, -5, 0],
-                  }}
-                  transition={{
-                    duration: 2,
-                    repeat: Infinity,
-                    repeatType: "loop",
-                    ease: "easeInOut",
-                    times: [0, 0.2, 0.5, 0.8, 1],
-                  }}
-                >
-                  <FaCheckCircle
-                    className="size-12 text-white"
-                    aria-hidden="true"
-                  />
-                </motion.div>
-                <motion.div
-                  className="absolute -inset-1 rounded-full"
-                  animate={{
-                    boxShadow: [
-                      "0 0 0 0px rgba(74, 222, 128, 0.3)",
-                      "0 0 0 10px rgba(74, 222, 128, 0)",
-                    ],
-                  }}
-                  transition={{
-                    duration: 2,
-                    repeat: Infinity,
-                    repeatType: "loop",
-                  }}
-                />
-              </motion.div>
-
-              <CardTitle className="
-                bg-linear-to-r from-green-600 via-blue-600 to-purple-600 bg-clip-text text-3xl
-                font-bold text-transparent
-                dark:from-green-400 dark:via-blue-400 dark:to-purple-400
-              ">
-                Update Complete!
-              </CardTitle>
-              <CardDescription className="mt-2 text-base text-gray-600 dark:text-gray-300">
-                Your AniList has been successfully organized and updated.
-              </CardDescription>
-            </CardHeader>
-
-            <CardContent className="p-6">
-              <motion.div
-                variants={containerVariants}
-                initial="hidden"
-                animate="show"
-                className="space-y-6"
-              >
-                {localSummary.totalListsUpdated === 0 &&
-                localSummary.totalEntriesUpdated === 0 ? (
-                  <motion.div
-                    variants={itemVariants}
-                    className="
-                      flex flex-col items-center justify-center rounded-lg bg-yellow-50 p-4
-                      text-center text-yellow-700
-                      dark:bg-yellow-900/30 dark:text-yellow-300
-                    "
-                  >
-                    <FaStar className="mb-3 size-8 opacity-70" />
-                    <p>
-                      No update information was found for your recent update.
-                    </p>
-                  </motion.div>
-                ) : (
-                  <motion.div variants={itemVariants}>
-                    <h3 className="
-                      mb-4 text-center text-lg font-semibold text-gray-700
-                      dark:text-gray-300
-                    ">
-                      Your Update Summary
-                    </h3>
-                    <div className="grid grid-cols-2 gap-4">
-                      <StatisticCard
-                        label="Custom Lists Checked"
-                        value={localSummary.totalListsUpdated}
-                      />
-                      <StatisticCard
-                        label="Entries Modified"
-                        value={localSummary.totalEntriesUpdated}
-                      />
-                    </div>
-                  </motion.div>
-                )}
-
-                <motion.div
-                  variants={itemVariants}
-                  className="
-                    flex flex-col justify-center space-y-3
-                    sm:flex-row sm:space-y-0 sm:space-x-4
-                  "
-                >
-                  <motion.div
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.97 }}
-                    className="w-full sm:w-auto"
-                  >
-                    <Button
-                      onClick={handleManageLists}
-                      className="
-                        flex w-full items-center justify-center rounded-full bg-linear-to-r
-                        from-blue-500 to-indigo-600 px-6 py-2 text-sm font-medium text-white
-                        shadow-md transition-all duration-200
-                        hover:shadow-lg
-                        sm:w-auto
-                        dark:from-blue-600 dark:to-indigo-700
-                      "
-                      aria-label="Manage Lists Again"
-                    >
-                      <FaList
-                        className="mr-2 size-4 text-white"
-                        aria-hidden="true"
-                      />
-                      Manage Lists
-                    </Button>
-                  </motion.div>
-                  <motion.div
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.97 }}
-                  >
-                    <Button
-                      variant="outline"
-                      onClick={handleGoHome}
-                      className="
-                        flex w-full items-center justify-center rounded-full border border-gray-300
-                        bg-white px-6 py-2 text-sm font-medium text-gray-700 shadow-sm
-                        transition-all duration-200
-                        hover:bg-gray-50 hover:shadow-md
-                        sm:w-auto
-                        dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300
-                        dark:hover:bg-gray-700
-                      "
-                      aria-label="Navigate to Home"
-                    >
-                      <FaHome className="mr-2 size-4" aria-hidden="true" />
-                      Home
-                    </Button>
-                  </motion.div>
-                </motion.div>
-
-                <motion.div
-                  variants={itemVariants}
-                  className="
-                    rounded-xl border border-gray-200 bg-gray-50 p-5
-                    dark:border-gray-700 dark:bg-gray-800/50
-                  "
-                >
-                  <h2 className="mb-4 text-center text-xl font-bold text-gray-800 dark:text-white">
-                    <FaRocket
-                      className="mr-2 mb-1 inline-block size-5 text-purple-500"
-                      aria-hidden="true"
-                    />
-                    Check Out My Other Projects
-                  </h2>
-                  <div className="flex flex-wrap justify-center gap-3">
-                    <ProjectLink
-                      href="https://github.com/RLAlpha49/AniCards"
-                      name="AniCards"
-                      color="from-purple-500 to-indigo-600"
-                    />
-                    <ProjectLink
-                      href="https://github.com/RLAlpha49/AniSearchModel"
-                      name="AniSearchModel"
-                      color="from-green-500 to-emerald-600"
-                    />
-                    <ProjectLink
-                      href="https://github.com/RLAlpha49/AniSearch"
-                      name="AniSearch"
-                      color="from-yellow-500 to-amber-600"
-                    />
-                    <ProjectLink
-                      href="https://github.com/RLAlpha49/SpotifySkipTracker"
-                      name="SpotifySkipTracker"
-                      color="from-indigo-500 to-blue-600"
-                    />
-                    <ProjectLink
-                      href="https://github.com/RLAlpha49/Anilist-Manga-Updater"
-                      name="Anilist-Manga-Updater"
-                      color="from-red-500 to-rose-600"
-                      className="sm:col-span-2 md:col-span-1"
-                    />
-                  </div>
-                </motion.div>
-              </motion.div>
-            </CardContent>
-
-            <CardFooter className="
-              flex items-center justify-center border-t border-gray-200 bg-gray-50 px-6 py-4
-              dark:border-gray-700 dark:bg-gray-800/30
-            ">
-              <p className="text-center text-sm text-gray-600 dark:text-gray-400">
-                Thank you for using AniList Custom List Manager!
-              </p>
-            </CardFooter>
-          </Card>
-        </motion.div>
-      </div>
-    </Layout>
   );
 }
 
-// Project link component
-const ProjectLink = ({
-  href,
-  name,
-  color,
-  className,
-}: {
-  href: string;
-  name: string;
-  color: string;
-  className?: string;
-}) => {
-  return (
-    <motion.a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      whileHover={{ scale: 1.05 }}
-      whileTap={{ scale: 0.97 }}
-      className={cn("h-12", className)}
-      aria-label={`View ${name} project on GitHub`}
-    >
-      <div
-        className={cn(
-          "flex h-full items-center justify-center rounded-lg bg-linear-to-r p-px",
-          color,
-        )}
-      >
-        <div className="
-          flex size-full items-center justify-center rounded-lg bg-white/50 p-2 px-3 text-sm
-          font-medium text-black
-          dark:bg-gray-800/50 dark:text-gray-300
-        ">
-          <FaGithub className="mr-2 size-4" aria-hidden="true" />
-          <span className="text-center">{name}</span>
-        </div>
-      </div>
-    </motion.a>
-  );
-};
+// ─── Particle component ───────────────────────────────────────────────────────
 
-export default function Page() {
+function Particle({
+  x,
+  y,
+  color,
+  delay,
+  size,
+}: Readonly<{
+  x: string;
+  y: string;
+  color: string;
+  delay: number;
+  size: number;
+}>) {
   return (
-    <Suspense fallback={<LoadingIndicator />}>
-      <PageData summary={undefined} />
-    </Suspense>
+    <motion.div
+      className="pointer-events-none absolute rounded-full"
+      style={{
+        left: x,
+        top: y,
+        width: size,
+        height: size,
+        backgroundColor: color,
+      }}
+      initial={{ opacity: 0, scale: 0, y: 0 }}
+      animate={{
+        opacity: [0, 1, 0],
+        scale: [0, 1, 0.5],
+        y: [-20, -80],
+        x: [0, Math.random() > 0.5 ? 30 : -30],
+      }}
+      transition={{
+        delay,
+        duration: 1.4,
+        ease: "easeOut",
+      }}
+    />
+  );
+}
+
+// ─── Particles burst ──────────────────────────────────────────────────────────
+
+const PARTICLES = [
+  {
+    id: "p1",
+    x: "48%",
+    y: "42%",
+    color: "var(--z-amber)",
+    delay: 0.2,
+    size: 6,
+  },
+  { id: "p2", x: "52%", y: "40%", color: "var(--z-pink)", delay: 0.3, size: 5 },
+  {
+    id: "p3",
+    x: "45%",
+    y: "44%",
+    color: "var(--z-frost)",
+    delay: 0.25,
+    size: 4,
+  },
+  {
+    id: "p4",
+    x: "55%",
+    y: "43%",
+    color: "var(--z-amber)",
+    delay: 0.35,
+    size: 5,
+  },
+  {
+    id: "p5",
+    x: "50%",
+    y: "38%",
+    color: "var(--z-green)",
+    delay: 0.15,
+    size: 7,
+  },
+  { id: "p6", x: "43%", y: "41%", color: "var(--z-pink)", delay: 0.4, size: 4 },
+  {
+    id: "p7",
+    x: "57%",
+    y: "41%",
+    color: "var(--z-frost)",
+    delay: 0.28,
+    size: 6,
+  },
+  {
+    id: "p8",
+    x: "46%",
+    y: "39%",
+    color: "var(--z-amber)",
+    delay: 0.18,
+    size: 5,
+  },
+];
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
+
+export default function CompletedPage() {
+  const router = useRouter();
+  const [stats, setStats] = useState<UpdateStats | null>(null);
+  const [showParticles, setShowParticles] = useState(false);
+
+  useEffect(() => {
+    const raw = getItemWithExpiry<string>("updateStats");
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as UpdateStats;
+        setStats(parsed);
+      } catch {
+        setStats({ totalUpdated: 0, errorCount: 0, timeTaken: 0 });
+      }
+    } else {
+      setStats({ totalUpdated: 0, errorCount: 0, timeTaken: 0 });
+    }
+
+    // Trigger particle burst after checkmark appears
+    const t = setTimeout(() => setShowParticles(true), 500);
+    return () => clearTimeout(t);
+  }, []);
+
+  const formatTime = (seconds: number): string => {
+    if (seconds < 60) return `${seconds}s`;
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return s > 0 ? `${m}m ${s}s` : `${m}m`;
+  };
+
+  return (
+    <div
+      className="
+        relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-4 py-12
+      "
+      style={{ backgroundColor: "var(--z-bg)" }}
+    >
+      {/* Background glow */}
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(ellipse 60% 50% at 50% 40%, rgba(245,166,35,0.06) 0%, transparent 70%)",
+        }}
+      />
+
+      {/* Particles */}
+      <AnimatePresence>
+        {showParticles && PARTICLES.map((p) => <Particle key={p.id} {...p} />)}
+      </AnimatePresence>
+
+      <div className="relative z-10 flex w-full max-w-lg flex-col items-center">
+        {/* ── Animated checkmark ────────────────────────────────────────── */}
+        <motion.div
+          initial={{ scale: 0, rotate: -30 }}
+          animate={{ scale: 1, rotate: 0 }}
+          transition={{
+            type: "spring",
+            stiffness: 260,
+            damping: 18,
+            delay: 0.1,
+          }}
+          className="relative mb-6"
+        >
+          {/* Outer glow ring */}
+          <motion.div
+            className="absolute inset-0 rounded-full"
+            initial={{ opacity: 0, scale: 0.6 }}
+            animate={{ opacity: [0, 0.6, 0], scale: [0.6, 1.6, 2] }}
+            transition={{ delay: 0.4, duration: 1.2, ease: "easeOut" }}
+            style={{
+              backgroundColor: "transparent",
+              border: "2px solid rgba(34,197,94,0.5)",
+            }}
+          />
+
+          {/* Main circle */}
+          <div
+            className="relative flex size-24 items-center justify-center rounded-full"
+            style={{
+              backgroundColor: "rgba(34,197,94,0.1)",
+              border: "2px solid rgba(34,197,94,0.45)",
+              boxShadow:
+                "0 0 0 8px rgba(34,197,94,0.05), 0 0 60px rgba(34,197,94,0.2)",
+            }}
+          >
+            <FaCheckCircle size={44} style={{ color: "var(--z-green)" }} />
+          </div>
+        </motion.div>
+
+        {/* ── Heading ───────────────────────────────────────────────────── */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.35, duration: 0.4 }}
+          className="mb-2 text-center"
+        >
+          <h1
+            className="text-4xl font-black tracking-tight"
+            style={{
+              fontFamily: "var(--font-syne)",
+              color: "var(--z-text)",
+            }}
+          >
+            Update Complete!
+          </h1>
+          <p className="mt-2 text-base" style={{ color: "var(--z-muted)" }}>
+            Your AniList custom lists have been synced.
+          </p>
+        </motion.div>
+
+        {/* ── Stats grid ────────────────────────────────────────────────── */}
+        {stats && (
+          <div className="mt-8 grid w-full grid-cols-3 gap-3">
+            <StatCard
+              icon={FaList}
+              label="Entries Updated"
+              value={String(stats.totalUpdated)}
+              color="var(--z-amber)"
+              delay={0.5}
+            />
+            <StatCard
+              icon={FaExclamationTriangle}
+              label="Errors"
+              value={String(stats.errorCount)}
+              color={stats.errorCount > 0 ? "var(--z-red)" : "var(--z-muted)"}
+              delay={0.6}
+            />
+            <StatCard
+              icon={FaClock}
+              label="Time Taken"
+              value={formatTime(stats.timeTaken)}
+              color="var(--z-frost)"
+              delay={0.7}
+            />
+          </div>
+        )}
+
+        {/* ── Nothing updated notice ─────────────────────────────────────── */}
+        {stats?.totalUpdated === 0 && stats.errorCount === 0 && (
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.9 }}
+            className="mt-4 text-center text-sm"
+            style={{ color: "var(--z-muted)" }}
+          >
+            No entries needed updating — your lists were already in sync.
+          </motion.p>
+        )}
+
+        {/* ── Action buttons ────────────────────────────────────────────── */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.85, duration: 0.4 }}
+          className="mt-9 flex w-full flex-col gap-3 sm:flex-row"
+        >
+          <button
+            onClick={() => router.push("/")}
+            className="
+              flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl py-3.5 text-sm
+              font-semibold transition-all
+              hover:bg-z-card-up
+              active:scale-[0.97]
+            "
+            style={{
+              border: "1px solid var(--z-border-mid)",
+              color: "var(--z-muted)",
+            }}
+          >
+            <FaHome size={13} />
+            Return Home
+          </button>
+
+          <button
+            onClick={() => router.push("/custom-list-manager")}
+            className="
+              flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl py-3.5 text-sm
+              font-bold transition-all
+              hover:brightness-110
+              active:scale-[0.97]
+            "
+            style={{
+              background:
+                "linear-gradient(135deg, var(--z-amber) 0%, #e8952a 100%)",
+              color: "#07060f",
+            }}
+          >
+            <FaRedo size={11} />
+            Manage Lists Again
+          </button>
+        </motion.div>
+
+        {/* ── Footer note ───────────────────────────────────────────────── */}
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1.1 }}
+          className="mt-8 text-center text-xs"
+          style={{ color: "var(--z-subtle)" }}
+        >
+          Changes are reflected on AniList immediately.
+        </motion.p>
+      </div>
+    </div>
   );
 }

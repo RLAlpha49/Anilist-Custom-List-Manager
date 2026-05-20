@@ -1,4 +1,3 @@
-import { motion } from "framer-motion";
 import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -35,41 +34,39 @@ const RenameModal = React.memo(
         isOpen={isOpen}
         onClose={onClose}
         onConfirm={handleRename}
-        title={`Rename "${currentListName}"`}
-        confirmButtonText="Save"
+        title="Rename List"
+        confirmButtonText="Save Changes"
       >
-        <div className="flex flex-col space-y-4">
-          <label
-            htmlFor="newListName"
-            className="text-base font-medium text-gray-900 dark:text-gray-200"
-          >
-            New List Name:
-          </label>
-          <motion.div
-            initial={{ y: 5, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.3 }}
-          >
+        <div className="space-y-4">
+          <p className="text-sm text-z-muted">
+            Renaming:{" "}
+            <span className="font-semibold text-z-amber">
+              &quot;{currentListName}&quot;
+            </span>
+          </p>
+          <div className="space-y-2">
+            <label
+              htmlFor="newListName"
+              className="text-xs font-semibold tracking-widest text-z-muted uppercase"
+            >
+              New Name
+            </label>
             <input
               type="text"
               id="newListName"
               value={newListName}
               onChange={(e) => setNewListName(e.target.value)}
               className="
-                w-full rounded-md border border-gray-300 bg-white px-4 py-3 text-gray-900 shadow-sm
-                transition-colors duration-200
-                focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50 focus:outline-none
-                dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100
-                dark:focus:border-blue-400 dark:focus:ring-blue-400/50
+                w-full rounded-md border border-(--z-border-mid) bg-z-card-up px-4 py-3 text-z-text
+                transition-colors
+                placeholder:text-z-subtle
+                focus:border-(--z-amber) focus:outline-none
               "
               placeholder="Enter new list name"
               aria-label="New list name"
               autoFocus
             />
-          </motion.div>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            Choose a unique name for your list
-          </p>
+          </div>
         </div>
       </Modal>
     );

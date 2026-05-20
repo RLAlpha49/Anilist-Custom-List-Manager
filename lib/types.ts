@@ -5,6 +5,12 @@ export interface ApiError extends Error {
   };
 }
 
+export interface RateLimitInfo {
+  remaining: number | null;
+  limit: number | null;
+  resetAt: number | null;
+}
+
 interface Media {
   id: number;
   title: {
@@ -80,7 +86,7 @@ export interface MediaEntry {
 }
 
 interface MediaList {
-  isCustom: boolean;
+  isCustomList: boolean;
   entries: MediaEntry[];
   name: string;
   status: string;
@@ -93,6 +99,7 @@ export interface ApiResponse {
     message: string;
     status?: number;
   }[];
+  rateLimit?: RateLimitInfo;
 }
 
 export interface MediaListResponse {

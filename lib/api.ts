@@ -1,6 +1,116 @@
 import { toast } from "sonner";
 
-import { ApiError, ApiResponse } from "./types";
+import { ApiError, ApiResponse, RateLimitInfo } from "./types";
+
+export interface AniListRetryContext {
+  reason: "networkError" | "rateLimit" | "serverError";
+  retryAfterSeconds: number;
+  retryAttempt: number;
+}
+
+interface ErrorPayload {
+  errors?: Array<{ message?: string }>;
+  message?: string;
+}
+
+const parseResponseBody = (rawBody: string): ErrorPayload | null => {
+  if (!rawBody) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(rawBody) as ErrorPayload;
+  } catch {
+    return null;
+  }
+};
+
+const getResponseErrorMessage = (
+  status: number,
+  payload: ErrorPayload | null,
+): string =>
+  payload?.errors
+    ?.map((error) => error.message)
+    .filter(Boolean)
+    .join(", ") ||
+  payload?.message ||
+  `HTTP error! status: ${status}`;
+
+const parseHeaderNumber = (value: string | null): number | null => {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const getRateLimitInfo = (headers: Headers): RateLimitInfo => ({
+  remaining: parseHeaderNumber(headers.get("x-ratelimit-remaining")),
+  limit: parseHeaderNumber(headers.get("x-ratelimit-limit")),
+  resetAt: parseHeaderNumber(headers.get("x-ratelimit-reset")),
+});
+
+const isNetworkError = (apiError: ApiError): boolean =>
+  apiError.message === "Network Error" ||
+  apiError.message.includes("NetworkError");
+
+const notifyRetry = (
+  retryContext: AniListRetryContext,
+  onRetry?: (retryContext: AniListRetryContext) => void,
+) => {
+  if (retryContext.reason === "serverError") {
+    toast.warning("Server Error", {
+      description: `Retrying request in ${retryContext.retryAfterSeconds} seconds... Attempt ${retryContext.retryAttempt}`,
+    });
+  } else {
+    toast.warning("Rate Limit Exceeded", {
+      description: `Retrying request in ${retryContext.retryAfterSeconds} seconds... Attempt ${retryContext.retryAttempt}`,
+    });
+  }
+
+  onRetry?.(retryContext);
+};
+
+const retryRequest = async (
+  apiCall: () => Promise<ApiResponse>,
+  retryCount: number,
+  retryAfterSeconds: number,
+  maxRetries: number,
+  reason: AniListRetryContext["reason"],
+  onRetry?: (retryContext: AniListRetryContext) => void,
+  onFailure?: (error: ApiError) => void,
+): Promise<ApiResponse> => {
+  if (retryCount >= maxRetries) {
+    console.error("Max retries reached for AniList requests.");
+    const maxRetryError = new Error(
+      "Max retries reached for AniList requests.",
+    ) as ApiError;
+    onFailure?.(maxRetryError);
+    throw maxRetryError;
+  }
+
+  const retryContext: AniListRetryContext = {
+    reason,
+    retryAfterSeconds,
+    retryAttempt: retryCount + 1,
+  };
+
+  console.warn(
+    `AniList request will retry after ${retryAfterSeconds} seconds due to ${reason}.`,
+  );
+  notifyRetry(retryContext, onRetry);
+  await delay(retryAfterSeconds * 1000);
+
+  return handleRateLimit(
+    apiCall,
+    retryCount + 1,
+    retryAfterSeconds,
+    maxRetries,
+    onRetry,
+    onFailure,
+  );
+};
 
 /**
  * Handles API rate limiting by retrying requests based on the error response.
@@ -18,58 +128,54 @@ const handleRateLimit = async (
   retryCount = 0,
   retryAfter = 60,
   maxRetries = 5,
-  onRetry?: (retryAttempt: number) => void,
+  onRetry?: (retryContext: AniListRetryContext) => void,
   onFailure?: (error: ApiError) => void,
 ): Promise<ApiResponse> => {
   try {
-    const response = await apiCall();
-    return response;
+    return await apiCall();
   } catch (error) {
     const apiError = error as ApiError;
     const statusCode = apiError.response?.status || null;
-    const isNetworkError =
-      apiError.message === "Network Error" ||
-      apiError.message.includes("NetworkError");
 
-    if (statusCode === 429 || isNetworkError) {
-      if (retryCount >= maxRetries) {
-        console.error("Max retries reached for rate limiting.");
-        if (onFailure) onFailure(apiError);
-        throw new Error("Max retries reached for rate limiting.");
-      }
-      console.warn(
-        "Rate limit exceeded or network error, retrying after delay...",
-      );
-      if (onRetry) onRetry(retryCount + 1);
-      await delay(retryAfter * 1000);
-      return handleRateLimit(
+    if (statusCode === 429) {
+      return retryRequest(
         apiCall,
-        retryCount + 1,
+        retryCount,
         retryAfter,
         maxRetries,
+        "rateLimit",
         onRetry,
         onFailure,
       );
-    } else if (statusCode === 500 && retryCount < 5) {
-      console.warn("Server error, retrying in 15 seconds...");
-      if (onRetry) onRetry(retryCount + 1);
-      toast.warning("Server Error", {
-        description: `Retrying request in 15 seconds... Attempt ${retryCount + 1}`,
-      });
-      await delay(15000);
-      return handleRateLimit(
-        apiCall,
-        retryCount + 1,
-        retryAfter,
-        maxRetries,
-        onRetry,
-        onFailure,
-      );
-    } else {
-      console.error("API call failed:", apiError);
-      if (onFailure) onFailure(apiError);
-      throw apiError;
     }
+
+    if (isNetworkError(apiError)) {
+      return retryRequest(
+        apiCall,
+        retryCount,
+        retryAfter,
+        maxRetries,
+        "networkError",
+        onRetry,
+        onFailure,
+      );
+    }
+
+    if (statusCode === 500 && retryCount < 5) {
+      return retryRequest(
+        apiCall,
+        retryCount,
+        15,
+        5,
+        "serverError",
+        onRetry,
+        onFailure,
+      );
+    }
+
+    console.error("API call failed:", apiError);
+    if (onFailure) onFailure(apiError);
+    throw apiError;
   }
 };
 
@@ -93,9 +199,9 @@ interface AniListResponse {
  */
 export const fetchAniList = async (
   query: string,
-  variables: Record<string, unknown> = {},
+  variables: Record<string, unknown> | undefined,
   token: string,
-  onRetry?: (retryAttempt: number) => void,
+  onRetry?: (retryContext: AniListRetryContext) => void,
   onFailure?: (error: ApiError) => void,
 ): Promise<ApiResponse> => {
   const url = "https://graphql.anilist.co";
@@ -106,24 +212,31 @@ export const fetchAniList = async (
       "Content-Type": "application/json",
       Accept: "application/json",
     },
-    body: JSON.stringify({ query, variables }),
+    body: JSON.stringify({ query, variables: variables ?? {} }),
   };
 
   return handleRateLimit(
     () =>
       fetch(url, options).then(async (response) => {
+        const rawBody = await response.text();
+        const parsedBody = parseResponseBody(rawBody);
+
         if (!response.ok) {
           const apiError = new Error(
-            `HTTP error! status: ${response.status}`,
+            getResponseErrorMessage(response.status, parsedBody),
           ) as ApiError;
           apiError.response = { status: response.status };
           throw apiError;
         }
-        const data = (await response.json()) as AniListResponse;
+
+        const data = parsedBody as AniListResponse;
         if (data.errors) {
           throw new Error(data.errors.map((error) => error.message).join(", "));
         }
-        return data as ApiResponse;
+        return {
+          ...(data as ApiResponse),
+          rateLimit: getRateLimitInfo(response.headers),
+        };
       }),
     0,
     60,

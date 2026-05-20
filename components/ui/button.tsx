@@ -6,10 +6,11 @@ import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
   `
-    inline-flex items-center justify-center rounded-md text-sm font-medium whitespace-nowrap
-    ring-offset-background transition-colors
+    inline-flex cursor-pointer items-center justify-center rounded-md text-sm font-medium
+    whitespace-nowrap ring-offset-background transition-all duration-200
     focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2
     focus-visible:outline-none
+    active:scale-[0.97]
     disabled:pointer-events-none disabled:opacity-50
   `,
   {

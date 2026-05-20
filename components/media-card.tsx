@@ -1,26 +1,19 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
-import { Check, Minus, Plus } from "lucide-react";
-import React from "react";
-import { useEffect } from "react";
-import { FaExternalLinkAlt } from "react-icons/fa";
-
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { motion } from "framer-motion";
+import React, { useEffect } from "react";
 
 export interface MediaCardProps {
-  id: number;
-  image: string;
-  romajiTitle: string;
-  englishTitle: string;
-  status: string;
-  score: number | null;
-  repeatCount: number;
-  customListChanges: string[];
-  anilistLink: string;
-  isUpdated: boolean;
-  onAnimationEnd: () => void;
+  readonly image: string;
+  readonly romajiTitle: string;
+  readonly englishTitle: string;
+  readonly status: string;
+  readonly score: number | null;
+  readonly repeatCount: number;
+  readonly customListChanges: string[];
+  readonly anilistLink: string;
+  readonly isUpdated: boolean;
+  readonly onAnimationEnd: () => void;
 }
 
 export function MediaCard({
@@ -50,19 +43,19 @@ export function MediaCard({
   const getStatusColor = (status: string) => {
     switch (status) {
       case "COMPLETED":
-        return "bg-gradient-to-r from-green-500 to-emerald-600 dark:from-green-600 dark:to-emerald-700";
+        return "bg-(--z-amber-dim) text-z-amber border border-[rgba(245,166,35,0.2)]";
       case "CURRENT":
-        return "bg-gradient-to-r from-blue-500 to-sky-600 dark:from-blue-600 dark:to-sky-700";
+        return "bg-[rgba(34,211,238,0.1)] text-z-frost border border-[rgba(34,211,238,0.2)]";
       case "PLANNING":
-        return "bg-gradient-to-r from-purple-500 to-violet-600 dark:from-purple-600 dark:to-violet-700";
+        return "bg-[rgba(232,121,249,0.12)] text-z-pink border border-[rgba(232,121,249,0.2)]";
       case "PAUSED":
-        return "bg-gradient-to-r from-yellow-500 to-amber-600 dark:from-yellow-600 dark:to-amber-700";
+        return "bg-[rgba(248,113,113,0.1)] text-z-red border border-[rgba(248,113,113,0.2)]";
       case "DROPPED":
-        return "bg-gradient-to-r from-red-500 to-rose-600 dark:from-red-600 dark:to-rose-700";
+        return "bg-[rgba(248,113,113,0.1)] text-z-red border border-[rgba(248,113,113,0.2)]";
       case "REPEATING":
-        return "bg-gradient-to-r from-indigo-500 to-blue-600 dark:from-indigo-600 dark:to-blue-700";
+        return "bg-[rgba(52,211,153,0.1)] text-z-green border border-[rgba(52,211,153,0.2)]";
       default:
-        return "bg-gradient-to-r from-gray-500 to-slate-600 dark:from-gray-600 dark:to-slate-700";
+        return "bg-z-card-up text-z-muted border border-(--z-border)";
     }
   };
 
@@ -90,193 +83,84 @@ export function MediaCard({
         transition: { duration: 0.2, ease: "easeOut" },
       }}
       transition={{ duration: 0.15 }}
-      className={cn(
-        `
-          group overflow-hidden rounded-xl bg-white shadow-md transition-all duration-300
-          dark:bg-gray-800/90
-        `,
-        "border border-gray-100 dark:border-gray-700",
-        "hover:shadow-lg hover:shadow-blue-500/5 dark:hover:shadow-blue-900/10",
-      )}
     >
-      <div className="flex flex-col md:flex-row">
-        <div className="relative h-52 w-full shrink-0 overflow-hidden md:h-auto md:w-44">
-          <div
-            className="
-              absolute inset-0 bg-cover bg-center transition-transform duration-200
-              group-hover:scale-110
-            "
-            style={{ backgroundImage: `url(${image})` }}
+      <div className="
+        group flex gap-3 rounded-lg border border-(--z-border) bg-z-card p-3 transition-all
+        duration-200
+        hover:border-(--z-border-mid)
+      ">
+        {/* Cover image — small, left side */}
+        <div className="relative h-20 w-14 shrink-0 overflow-hidden rounded-sm">
+          <img
+            src={image}
+            alt={romajiTitle}
+            className="size-full object-cover"
           />
-          <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/40 to-transparent" />
-
-          <div className="absolute bottom-3 left-3 flex items-center gap-1.5">
-            <span
-              className={`
-                rounded-md px-2.5 py-1 text-xs font-medium tracking-wider text-white uppercase
-                ${getStatusColor(status)}
-                shadow-md
-              `}
-            >
-              {status.toLowerCase()}
-            </span>
-            {repeatCount > 1 && (
-              <span className="
-                rounded-md bg-linear-to-r from-indigo-500 to-purple-600 px-2 py-1 text-xs
-                font-medium text-white shadow-md
-              ">
-                ×{repeatCount}
-              </span>
-            )}
-          </div>
-
-          <AnimatePresence>
-            {isUpdated && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="
-                  absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm
-                "
-              >
-                <motion.div
-                  initial={{ scale: 0, rotate: -10 }}
-                  animate={{ scale: 1, rotate: 0 }}
-                  exit={{ scale: 0, rotate: 10 }}
-                  transition={{
-                    type: "spring",
-                    damping: 12,
-                    stiffness: 200,
-                  }}
-                  className="
-                    flex size-16 items-center justify-center rounded-full bg-linear-to-br
-                    from-green-400 to-emerald-600 text-white shadow-lg shadow-green-500/30
-                  "
-                >
-                  <Check className="size-9" />
-                </motion.div>
-              </motion.div>
-            )}
-          </AnimatePresence>
         </div>
 
-        <div className="flex flex-1 flex-col p-4">
-          <div className="mb-2">
-            <h3 className="line-clamp-1 text-lg font-bold text-gray-900 dark:text-white">
-              {romajiTitle}
-            </h3>
-            {englishTitle !== "N/A" && (
-              <p className="line-clamp-1 text-sm text-gray-600 dark:text-gray-400">
-                {englishTitle}
-              </p>
-            )}
+        {/* Content */}
+        <div className="flex min-w-0 flex-1 flex-col justify-between gap-2">
+          {/* Title + status row */}
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <h3
+                className="truncate text-sm/tight font-bold text-z-text"
+                style={{ fontFamily: "var(--font-syne)" }}
+              >
+                {romajiTitle}
+              </h3>
+              {englishTitle && englishTitle !== romajiTitle && (
+                <p className="mt-0.5 truncate text-xs text-z-muted">
+                  {englishTitle}
+                </p>
+              )}
+            </div>
+            {/* Status badge */}
+            <span
+              className={`
+                shrink-0 rounded-sm px-2 py-0.5 text-[10px] font-semibold tracking-wide uppercase
+                ${getStatusColor(status)}
+              `}
+            >
+              {status}
+            </span>
           </div>
 
-          <div className="mb-3 flex items-center gap-3">
-            {score !== null && score > 0 && (
-              <div className="flex items-center gap-1.5">
-                <div
-                  className={cn(
-                    "flex size-8 items-center justify-center rounded-full shadow-sm",
-                    score >= 8
-                      ? "bg-linear-to-r from-yellow-400 to-amber-500 text-white"
-                      : score >= 6
-                        ? "bg-linear-to-r from-blue-400 to-cyan-500 text-white"
-                        : `
-                          bg-linear-to-r from-gray-200 to-gray-300 text-gray-700
-                          dark:from-gray-700 dark:to-gray-600 dark:text-gray-300
-                        `,
-                  )}
-                >
-                  <span className="text-xs font-bold">{score}</span>
-                </div>
-                <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
-                  Score
-                </span>
-              </div>
+          {/* Score + repeats row */}
+          <div className="flex items-center gap-3 text-xs text-z-muted">
+            {score !== null && (
+              <span className="flex items-center gap-1">
+                <span className="text-sm font-bold text-z-amber">{score}</span>
+                <span className="text-z-subtle">/10</span>
+              </span>
             )}
+            {repeatCount > 0 && <span>{repeatCount}× repeat</span>}
+            <a
+              href={anilistLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="ml-auto text-z-subtle transition-colors hover:text-z-amber"
+            >
+              ↗
+            </a>
           </div>
 
+          {/* Custom list changes */}
           {customListChanges.length > 0 && (
-            <div className="
-              mb-4 rounded-lg border border-gray-100 bg-gray-50/80 p-3
-              dark:border-gray-700 dark:bg-gray-800/50
-            ">
-              <p className="
-                mb-2 text-xs font-medium tracking-wider text-gray-500 uppercase
-                dark:text-gray-400
-              ">
-                List Changes:
-              </p>
-              <ul className="space-y-1.5">
-                {customListChanges.map((change, index) => {
-                  const [list, action] = change.split(": ");
-                  const isAdding = action.includes("Add");
-
-                  return (
-                    <motion.li
-                      key={index}
-                      initial={{ opacity: 0, x: -5 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.1 }}
-                      className="flex items-center gap-2 text-sm"
-                    >
-                      <span
-                        className={cn(
-                          "flex size-5 items-center justify-center rounded-full shadow-sm",
-                          isAdding
-                            ? `
-                              bg-linear-to-r from-green-200 to-emerald-300 text-green-600
-                              dark:from-green-900/50 dark:to-emerald-800/50 dark:text-green-400
-                            `
-                            : `
-                              bg-linear-to-r from-red-200 to-rose-300 text-red-600
-                              dark:from-red-900/50 dark:to-rose-800/50 dark:text-red-400
-                            `,
-                        )}
-                      >
-                        {isAdding ? (
-                          <Plus className="size-3" />
-                        ) : (
-                          <Minus className="size-3" />
-                        )}
-                      </span>
-                      <span className="font-medium text-gray-700 dark:text-gray-300">
-                        {list}
-                      </span>
-                    </motion.li>
-                  );
-                })}
-              </ul>
+            <div className="flex flex-wrap gap-1">
+              {customListChanges.map((change) => (
+                <span
+                  key={change}
+                  className="
+                    rounded-sm border border-[rgba(245,166,35,0.3)] bg-(--z-amber-dim) px-1.5 py-0.5
+                    text-[10px] text-z-amber
+                  "
+                >
+                  {change}
+                </span>
+              ))}
             </div>
           )}
-
-          <div className="mt-auto flex justify-end">
-            <Button
-              variant="outline"
-              size="sm"
-              asChild
-              className={cn(
-                "flex items-center gap-1.5 text-xs transition-all duration-300",
-                "text-gray-500 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-600",
-                `
-                  dark:border-gray-700 dark:text-gray-400
-                  dark:hover:border-blue-700 dark:hover:bg-blue-950/30 dark:hover:text-blue-400
-                `,
-              )}
-            >
-              <a
-                href={anilistLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5"
-              >
-                <span>View on AniList</span>
-                <FaExternalLinkAlt className="size-3" />
-              </a>
-            </Button>
-          </div>
         </div>
       </div>
     </motion.div>

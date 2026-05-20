@@ -1,11 +1,8 @@
 "use client";
 
-import { motion } from "framer-motion";
-import Link from "next/link";
-import React from "react";
-import { Suspense, useEffect, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import React, { Suspense, useEffect, useState } from "react";
 import {
-  FaHome,
   FaListAlt,
   FaLock,
   FaQuestionCircle,
@@ -24,15 +21,6 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface FAQItem {
@@ -119,27 +107,6 @@ const faqData: FAQItem[] = [
   },
 ];
 
-// Animation variants
-const fadeIn = {
-  hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { duration: 0.5 } },
-};
-
-const fadeInUp = {
-  hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.5 } },
-};
-
-const staggerContainer = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.1,
-    },
-  },
-};
-
 function PageData() {
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [filteredFAQ, setFilteredFAQ] = useState<FAQItem[]>(faqData);
@@ -173,19 +140,6 @@ function PageData() {
     setFilteredFAQ(result);
   }, [searchTerm, activeTab]);
 
-  // Group FAQs by category for display
-  const faqsByCategory = filteredFAQ.reduce(
-    (acc, item) => {
-      const categoryId = item.categoryId;
-      if (!acc[categoryId]) {
-        acc[categoryId] = [];
-      }
-      acc[categoryId].push(item);
-      return acc;
-    },
-    {} as Record<string, FAQItem[]>,
-  );
-
   return (
     <Layout>
       <Breadcrumbs
@@ -194,225 +148,164 @@ function PageData() {
           { name: "FAQ", href: "/faq" },
         ]}
       />
-      <div className="
-        flex min-h-screen flex-col items-center justify-start bg-linear-to-b from-gray-50 to-white
-        px-4 py-12 text-gray-900
-        dark:from-gray-900 dark:to-gray-800 dark:text-gray-100
-      ">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="mx-auto w-full max-w-4xl px-6 py-12"
+      >
+        {/* Header */}
         <motion.div
-          className="w-full max-w-4xl"
-          initial="hidden"
-          animate="visible"
-          variants={fadeIn}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-10"
         >
-          {/* Header Section */}
-          <motion.div className="mb-12 text-center" variants={fadeInUp}>
-            <div className="
-              mb-6 inline-flex size-24 items-center justify-center rounded-full bg-blue-100
-              dark:bg-blue-900/30
-            ">
-              <FaQuestionCircle className="size-12 text-blue-600 dark:text-blue-400" />
-            </div>
-            <motion.h1
+          <p className="mb-3 text-xs font-semibold tracking-widest text-z-amber uppercase">
+            Help &amp; Documentation
+          </p>
+          <h1 className="mb-4 text-5xl font-black text-z-text">
+            Frequently Asked
+            <br />
+            <span className="text-z-amber">Questions</span>
+          </h1>
+          <p className="max-w-xl text-z-muted">
+            Everything you need to know about managing your anime and manga
+            lists.
+          </p>
+        </motion.div>
+
+        {/* Search */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="mb-8"
+        >
+          <div className="relative">
+            <FaSearch
+              className="absolute top-1/2 left-4 -translate-y-1/2 text-z-subtle"
+              size={14}
+            />
+            <input
+              type="text"
+              placeholder="Search questions..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
               className="
-                mb-4 bg-linear-to-r from-blue-600 to-indigo-600 bg-clip-text text-4xl font-bold
-                text-transparent
-                dark:from-blue-400 dark:to-indigo-400
+                w-full rounded-xl border border-(--z-border-mid) bg-z-card py-3.5 pr-4 pl-10
+                text-z-text transition-colors
+                placeholder:text-z-subtle
+                focus:border-(--z-amber) focus:outline-none
               "
-              variants={fadeInUp}
-            >
-              Frequently Asked Questions
-            </motion.h1>
-            <motion.p
-              className="mx-auto mt-2 max-w-2xl text-xl text-gray-600 dark:text-gray-300"
-              variants={fadeInUp}
-            >
-              Find answers to the most common questions about AniList Custom
-              List Manager.
-            </motion.p>
-          </motion.div>
+            />
+          </div>
+        </motion.div>
 
-          {/* Search Bar */}
-          <motion.div className="relative mb-8" variants={fadeInUp}>
-            <div className="relative">
-              <FaSearch className="
-                absolute top-1/2 left-3 -translate-y-1/2 text-gray-400
-                dark:text-gray-400
-              " />
-              <Input
-                type="text"
-                placeholder="Search FAQs..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+        {/* Category Tabs */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+          className="mb-8"
+        >
+          <Tabs
+            defaultValue="all"
+            value={activeTab}
+            onValueChange={setActiveTab}
+          >
+            <TabsList className="
+              h-auto flex-wrap rounded-xl border border-(--z-border) bg-z-card p-1
+            ">
+              <TabsTrigger
+                value="all"
                 className="
-                  h-12 border-gray-200 bg-white pl-10
-                  focus-visible:ring-blue-500
-                  dark:border-gray-700 dark:bg-gray-800
-                  dark:focus-visible:ring-blue-400
+                  rounded-lg px-4 py-2 text-sm text-z-muted transition-all
+                  data-[state=active]:bg-(--z-amber-dim) data-[state=active]:text-z-amber
                 "
-              />
-            </div>
-          </motion.div>
-
-          {/* Category Tabs */}
-          <motion.div className="mb-8" variants={fadeInUp}>
-            <Tabs
-              defaultValue="all"
-              value={activeTab}
-              onValueChange={setActiveTab}
-            >
-              <TabsList className="
-                mb-6 flex w-full flex-nowrap overflow-x-auto bg-gray-100 p-1
-                dark:bg-gray-800
-              ">
+              >
+                <FaQuestionCircle className="mr-2 size-4" />
+                All
+              </TabsTrigger>
+              {uniqueCategories.map((categoryId) => (
                 <TabsTrigger
-                  value="all"
+                  key={categoryId}
+                  value={categoryId}
                   className="
-                    shrink-0
-                    data-[state=active]:bg-white
-                    dark:data-[state=active]:bg-gray-700
+                    rounded-lg px-4 py-2 text-sm text-z-muted transition-all
+                    data-[state=active]:bg-(--z-amber-dim) data-[state=active]:text-z-amber
                   "
                 >
-                  <FaQuestionCircle className="mr-2 size-4" />
-                  All Categories
+                  <span className="mr-2">{getCategoryIcon(categoryId)}</span>
+                  {
+                    faqData.find((item) => item.categoryId === categoryId)
+                      ?.category
+                  }
                 </TabsTrigger>
-                {uniqueCategories.map((categoryId) => (
-                  <TabsTrigger
-                    key={categoryId}
-                    value={categoryId}
-                    className="
-                      shrink-0
-                      data-[state=active]:bg-white
-                      dark:data-[state=active]:bg-gray-700
-                    "
-                  >
-                    {getCategoryIcon(categoryId)}
-                    <span className="ml-2">
-                      {
-                        faqData.find((item) => item.categoryId === categoryId)
-                          ?.category
-                      }
-                    </span>
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
-          </motion.div>
+              ))}
+            </TabsList>
+          </Tabs>
+        </motion.div>
 
-          {filteredFAQ.length > 0 ? (
+        {/* FAQ Items */}
+        {filteredFAQ.length > 0 ? (
+          <AnimatePresence mode="wait">
             <motion.div
-              variants={staggerContainer}
-              initial="hidden"
-              animate="visible"
-              className="space-y-6"
+              key={activeTab + searchTerm}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="space-y-3"
             >
-              {Object.entries(faqsByCategory).map(([categoryId, items]) => (
-                <motion.div
-                  key={categoryId}
-                  variants={fadeInUp}
-                  className="space-y-4"
+              {filteredFAQ.map((item) => (
+                <div
+                  key={item.question}
+                  className="
+                    overflow-hidden rounded-xl border border-(--z-border) bg-z-card transition-all
+                    duration-200
+                    hover:border-(--z-border-mid)
+                  "
                 >
-                  <Card className="overflow-hidden border-0 bg-white shadow-md dark:bg-gray-800">
-                    <CardHeader className="
-                      bg-linear-to-r from-blue-50 to-indigo-50 pb-2
-                      dark:from-gray-800 dark:to-gray-800
-                    ">
-                      <div className="flex items-center">
-                        <span className="text-blue-500 dark:text-blue-400">
-                          {getCategoryIcon(categoryId)}
-                        </span>
-                        <CardTitle className="
-                          ml-2 text-xl font-semibold text-gray-900
-                          dark:text-white
-                        ">
-                          {items[0].category}
-                        </CardTitle>
-                      </div>
-                      <CardDescription>
-                        <Badge
-                          variant="outline"
-                          className="
-                            border-blue-200 bg-blue-50 text-blue-700
-                            dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-400
-                          "
-                        >
-                          {items.length}{" "}
-                          {items.length === 1 ? "question" : "questions"}
-                        </Badge>
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="pt-4 pb-2">
-                      <Accordion type="single" collapsible className="w-full">
-                        {items.map((item, itemIndex) => (
-                          <AccordionItem
-                            key={itemIndex}
-                            value={`item-${categoryId}-${itemIndex}`}
-                            className="border-b border-gray-200 last:border-0 dark:border-gray-700"
-                          >
-                            <AccordionTrigger className="
-                              py-4 text-left font-medium text-gray-900
-                              hover:text-blue-600 hover:no-underline
-                              dark:text-white
-                              dark:hover:text-blue-400
-                            ">
-                              {item.question}
-                            </AccordionTrigger>
-                            <AccordionContent className="
-                              max-w-full pb-4 wrap-break-word text-gray-700
-                              dark:text-gray-300
-                            ">
-                              <motion.div
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                transition={{ duration: 0.3 }}
-                                className="max-w-none"
-                              >
-                                {item.answer}
-                              </motion.div>
-                            </AccordionContent>
-                          </AccordionItem>
-                        ))}
-                      </Accordion>
-                    </CardContent>
-                  </Card>
-                </motion.div>
+                  <Accordion type="single" collapsible>
+                    <AccordionItem value={item.question} className="border-0">
+                      <AccordionTrigger className="
+                        px-5 py-4 text-left font-semibold text-z-text
+                        hover:no-underline
+                      ">
+                        <div className="flex flex-col items-start gap-1.5">
+                          <span>{item.question}</span>
+                          <span className="
+                            text-xs font-semibold tracking-widest text-z-amber uppercase
+                          ">
+                            {item.category}
+                          </span>
+                        </div>
+                      </AccordionTrigger>
+                      <AccordionContent className="px-5 pb-5 text-sm/relaxed text-z-muted">
+                        {item.answer}
+                      </AccordionContent>
+                    </AccordionItem>
+                  </Accordion>
+                </div>
               ))}
             </motion.div>
-          ) : (
-            <motion.div variants={fadeInUp} className="py-12 text-center">
-              <div className="
-                mb-4 inline-flex size-16 items-center justify-center rounded-full bg-gray-100
-                dark:bg-gray-800
-              ">
-                <FaSearch className="size-8 text-gray-400" />
-              </div>
-              <h3 className="text-xl font-medium text-gray-900 dark:text-white">
-                No matching questions found
-              </h3>
-              <p className="mt-2 text-gray-600 dark:text-gray-400">
-                Try a different search term or category
-              </p>
-            </motion.div>
-          )}
-
-          {/* Back to Home Link */}
-          <motion.div variants={fadeInUp} className="mt-12 text-center">
-            <Link
-              href="/"
-              className="
-                inline-flex items-center rounded-full bg-blue-100 px-6 py-3 text-blue-700
-                transition-colors
-                hover:bg-blue-200
-                dark:bg-blue-800/40 dark:text-blue-300
-                dark:hover:bg-blue-700/50
-              "
+          </AnimatePresence>
+        ) : (
+          <div className="py-16 text-center">
+            <p className="mb-2 text-z-muted">
+              No questions found for &ldquo;{searchTerm}&rdquo;
+            </p>
+            <button
+              onClick={() => {
+                setSearchTerm("");
+                setActiveTab("all");
+              }}
+              className="text-sm text-z-amber hover:underline"
             >
-              <FaHome className="mr-2 size-4" />
-              Back to Home
-            </Link>
-          </motion.div>
-        </motion.div>
-      </div>
+              Clear search
+            </button>
+          </div>
+        )}
+      </motion.div>
     </Layout>
   );
 }

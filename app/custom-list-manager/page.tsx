@@ -17,9 +17,10 @@ import {
 } from "@dnd-kit/sortable";
 import { AnimatePresence, motion } from "framer-motion";
 import { useRouter } from "next/navigation";
-import React from "react";
 // External Imports
 import {
+  memo,
+  type ReactNode,
   Suspense,
   useCallback,
   useEffect,
@@ -33,7 +34,6 @@ import {
   FaExclamationTriangle,
   FaInfoCircle,
   FaPlus,
-  FaSort,
   FaTimesCircle,
   FaTrash,
 } from "react-icons/fa";
@@ -45,14 +45,6 @@ import LoadingIndicator from "@/components/loading-indicator";
 import { RenameModal } from "@/components/rename-modal";
 import { SortableItem } from "@/components/sortable-item";
 // Internal Imports
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Command,
@@ -64,7 +56,6 @@ import {
 } from "@/components/ui/command";
 import { DynamicSelect } from "@/components/ui/dynamic-select";
 import Modal from "@/components/ui/modal";
-import { Separator } from "@/components/ui/separator";
 import {
   Sheet,
   SheetContent,
@@ -82,7 +73,11 @@ import {
 } from "@/components/ui/tooltip";
 import { useAuth } from "@/context/auth-context";
 import { fetchAniList } from "@/lib/api";
-import { getItemWithExpiry, setItemWithExpiry } from "@/lib/local-storage";
+import {
+  getItemWithExpiry,
+  getJsonItemWithExpiry,
+  setItemWithExpiry,
+} from "@/lib/local-storage";
 import {
   formatItemsAnime,
   formatItemsManga,
@@ -102,32 +97,214 @@ import {
   OptionGroup,
 } from "@/lib/types";
 
-// Animation variants
-const fadeIn = {
-  hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { duration: 0.4 } },
+function debounce<T extends unknown[]>(
+  func: (...args: T) => void,
+  wait: number,
+): (...args: T) => void {
+  let timeout: NodeJS.Timeout;
+  return function (...args: T) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+}
+
+function getFormatLabel(item: string): string {
+  if (hiddenFormatItemsManga.includes(item.toLowerCase())) {
+    const countryMap: Record<string, string> = {
+      manga: "Manga (Japan)",
+      manhwa: "Manga (South Korean)",
+      manwha: "Manga (South Korean)",
+      manhua: "Manga (Chinese)",
+    };
+    return `Format set to ${countryMap[item.toLowerCase()] ?? item}`;
+  }
+  return `Format set to ${item}`;
+}
+
+type MediaType = "ANIME" | "MANGA";
+
+interface CachedListState {
+  lists: CustomList[];
+  originalSectionOrder: string[];
+  dataLoaded: boolean;
+  isListEmpty: boolean;
+}
+
+const EMPTY_LIST_STATE: CachedListState = {
+  lists: [],
+  originalSectionOrder: [],
+  dataLoaded: false,
+  isListEmpty: true,
 };
 
-const fadeInUp = {
-  hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.4 } },
-};
+function ActionIconButton({
+  ariaLabel,
+  tooltip,
+  onClick,
+  className,
+  style,
+  children,
+}: Readonly<{
+  ariaLabel: string;
+  tooltip: string;
+  onClick: () => void;
+  className: string;
+  style: React.CSSProperties;
+  children: ReactNode;
+}>) {
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            aria-label={ariaLabel}
+            onClick={onClick}
+            className={`inline-flex shrink-0 items-center justify-center ${className}`}
+            style={style}
+          >
+            {children}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>{tooltip}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
 
-const staggerContainer = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.05,
-    },
-  },
-};
+const CustomListRow = memo(function CustomListRow({
+  list,
+  index,
+  options,
+  markedForRemoval,
+  onUndoRemoveAll,
+  onClearCondition,
+  onValueChange,
+  onOpenRename,
+  onDelete,
+  onRemoveAll,
+}: Readonly<{
+  list: CustomList;
+  index: number;
+  options: OptionGroup[];
+  markedForRemoval: boolean;
+  onUndoRemoveAll: (listName: string) => void;
+  onClearCondition: (index: number) => void;
+  onValueChange: (index: number, value: string) => void;
+  onOpenRename: (list: CustomList) => void;
+  onDelete: (name: string) => void;
+  onRemoveAll: (list: CustomList) => void;
+}>) {
+  return (
+    <SortableItem id={list.name}>
+      <span className="font-semibold" style={{ color: "var(--z-text)" }}>
+        {list.name}
+      </span>
+
+      {markedForRemoval ? (
+        <span
+          className="
+            ml-2 inline-flex items-center gap-2 rounded-full px-2 py-0.5 text-xs font-semibold
+          "
+          style={{
+            backgroundColor: "var(--z-amber-dim)",
+            color: "var(--z-amber)",
+          }}
+        >
+          Will be removed from all entries{" "}
+          <button
+            type="button"
+            aria-label="Undo remove from all entries"
+            onClick={() => onUndoRemoveAll(list.name)}
+            className="rounded-full p-0.5 transition-colors hover:brightness-110"
+          >
+            <FaTimesCircle className="size-3" />
+          </button>
+        </span>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <ActionIconButton
+            ariaLabel="Clear condition"
+            tooltip="Clear condition"
+            onClick={() => onClearCondition(index)}
+            className="
+              size-8 rounded-full p-0 transition-all duration-150
+              hover:bg-z-card-up
+              active:scale-90
+            "
+            style={{ color: "var(--z-muted)" }}
+          >
+            <FaTimesCircle className="size-4" />
+          </ActionIconButton>
+
+          <div className="w-full min-w-48 sm:w-auto">
+            <DynamicSelect
+              value={list.selectedOption || ""}
+              onValueChange={(value: string) => onValueChange(index, value)}
+              options={options}
+              placeholder="Select a condition"
+              className="min-w-60"
+            />
+          </div>
+
+          <ActionIconButton
+            ariaLabel="Rename list"
+            tooltip="Rename list"
+            onClick={() => onOpenRename(list)}
+            className="
+              size-8 rounded-full p-0 transition-all duration-150
+              hover:bg-z-amber-dim
+              active:scale-90
+            "
+            style={{ color: "var(--z-amber)" }}
+          >
+            <FaEdit className="size-4" />
+          </ActionIconButton>
+
+          <ActionIconButton
+            ariaLabel="Delete list"
+            tooltip="Delete list"
+            onClick={() => onDelete(list.name)}
+            className="
+              size-8 rounded-full p-0 transition-all duration-150
+              hover:bg-[rgba(248,113,113,0.12)]
+              active:scale-90
+            "
+            style={{ color: "var(--z-red)" }}
+          >
+            <FaTrash className="size-4" />
+          </ActionIconButton>
+
+          <ActionIconButton
+            ariaLabel="Remove from all entries"
+            tooltip="Remove from all entries"
+            onClick={() => onRemoveAll(list)}
+            className="
+              size-8 rounded-full p-0 transition-all duration-150
+              hover:bg-[rgba(34,211,238,0.12)]
+              active:scale-90
+            "
+            style={{ color: "var(--z-frost)" }}
+          >
+            <FaTimesCircle className="size-4" />
+          </ActionIconButton>
+        </div>
+      )}
+    </SortableItem>
+  );
+});
 
 function PageData() {
   // State Hooks
   const [lists, setLists] = useState<CustomList[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
-  const [listType, setListType] = useState<"ANIME" | "MANGA">("ANIME");
+  const [listType, setListType] = useState<MediaType>("ANIME");
   const [hideDefaultStatusLists, setHideDefaultStatusLists] =
     useState<boolean>(true);
   const [showPopup, setShowPopup] = useState<boolean>(false);
@@ -141,7 +318,13 @@ function PageData() {
     [],
   );
   const [searchTerm, setSearchTerm] = useState<string>("");
-  const [activeTab, setActiveTab] = useState<"ANIME" | "MANGA">("ANIME");
+  const [activeTab, setActiveTab] = useState<MediaType>("ANIME");
+  const [listCache, setListCache] = useState<
+    Record<MediaType, CachedListState>
+  >({
+    ANIME: EMPTY_LIST_STATE,
+    MANGA: EMPTY_LIST_STATE,
+  });
   // Delete confirmation modal state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [pendingDeleteList, setPendingDeleteList] = useState<CustomList | null>(
@@ -156,15 +339,9 @@ function PageData() {
   const [pendingRemoveAllList, setPendingRemoveAllList] =
     useState<CustomList | null>(null);
   const [listsToRemoveFromAllEntries, setListsToRemoveFromAllEntries] =
-    useState<string[]>(() => {
-      try {
-        return JSON.parse(
-          getItemWithExpiry("listsToRemoveFromAllEntries") || "[]",
-        );
-      } catch {
-        return [];
-      }
-    });
+    useState<string[]>(() =>
+      getJsonItemWithExpiry<string[]>("listsToRemoveFromAllEntries", []),
+    );
 
   // Ref Hooks
   const updateSectionOrderRef =
@@ -307,21 +484,6 @@ function PageData() {
     updateSectionOrderRef.current = updateSectionOrder;
   }, [updateSectionOrder]);
 
-  function debounce<T extends unknown[]>(
-    func: (...args: T) => void,
-    wait: number,
-  ): (...args: T) => void {
-    let timeout: NodeJS.Timeout;
-    return function (...args: T) {
-      const later = () => {
-        clearTimeout(timeout);
-        func(...args);
-      };
-      clearTimeout(timeout);
-      timeout = setTimeout(later, wait);
-    };
-  }
-
   const debounceUpdateSectionOrder = useMemo(
     () =>
       debounce((newOrder: string[]) => {
@@ -354,19 +516,33 @@ function PageData() {
     );
   }, [hideDefaultStatusLists]);
 
+  useEffect(() => {
+    setListCache((prev) => ({
+      ...prev,
+      [listType]: {
+        lists,
+        originalSectionOrder,
+        dataLoaded,
+        isListEmpty,
+      },
+    }));
+  }, [dataLoaded, isListEmpty, lists, listType, originalSectionOrder]);
+
   // Update when tab changes
   useEffect(() => {
     if (activeTab !== listType) {
+      const cachedState = listCache[activeTab];
       setListType(activeTab);
-      if (dataLoaded) {
-        setDataLoaded(false);
-        setLists([]);
-        setIsListEmpty(true);
-      }
+      setLists(cachedState.lists);
+      setOriginalSectionOrder(cachedState.originalSectionOrder);
+      setDataLoaded(cachedState.dataLoaded);
+      setIsListEmpty(cachedState.isListEmpty);
+      setLoading(false);
     }
-  }, [activeTab, listType, dataLoaded]);
+  }, [activeTab, listCache, listType]);
 
   const getDefaultOption = useCallback((listName: string): string | null => {
+    const normalizedListName = listName.toLowerCase();
     const allItems: string[] = [
       ...statusItems,
       ...scoreItems,
@@ -383,8 +559,23 @@ function PageData() {
       return `Score set to below 5`;
     }
 
+    if (
+      normalizedListName.includes("manhwa") ||
+      normalizedListName.includes("manwha")
+    ) {
+      return getFormatLabel("manhwa");
+    }
+
+    if (normalizedListName.includes("manhua")) {
+      return getFormatLabel("manhua");
+    }
+
+    if (normalizedListName.includes("manga")) {
+      return getFormatLabel("manga");
+    }
+
     for (const item of allItems) {
-      if (listName.toLowerCase().includes(item.toLowerCase())) {
+      if (normalizedListName.includes(item.toLowerCase())) {
         if (statusItems.includes(item)) {
           return `Status set to ${item}`;
         } else if (scoreItems.includes(item)) {
@@ -396,16 +587,7 @@ function PageData() {
           formatItemsManga.includes(item) ||
           hiddenFormatItemsManga.includes(item)
         ) {
-          if (hiddenFormatItemsManga.includes(item.toLowerCase())) {
-            const countryMap: Record<string, string> = {
-              manga: "Manga (Japan)",
-              manwha: "Manga (South Korean)",
-              manhua: "Manga (Chinese)",
-            };
-            return `Format set to ${countryMap[item.toLowerCase()]}`;
-          } else {
-            return `Format set to ${item}`;
-          }
+          return getFormatLabel(item);
         } else if (tagCategories.includes(item)) {
           return `Tag Categories contain ${item}`;
         } else if (tags.includes(item)) {
@@ -500,7 +682,7 @@ function PageData() {
   }, []);
 
   const fetchLists = useCallback(
-    async (type: "ANIME" | "MANGA"): Promise<void> => {
+    async (type: MediaType): Promise<void> => {
       if (!userId) {
         toast.error("Error", {
           description: "User ID is not available.",
@@ -509,7 +691,6 @@ function PageData() {
       }
       setLoading(true);
       setIsListEmpty(true);
-      setActiveTab(type);
 
       const query = `
 				query ($userId: Int) {
@@ -605,33 +786,31 @@ function PageData() {
     setShowPopup(false);
     setItemWithExpiry(
       "lists",
-      JSON.stringify(
-        lists.map((list) => ({
-          name: list.name,
-          selectedOption: list.selectedOption,
-        })),
-      ),
+      lists.map((list) => ({
+        name: list.name,
+        selectedOption: list.selectedOption,
+      })),
       60 * 60 * 24 * 1000,
     );
     setItemWithExpiry(
       "listsToRemoveFromAllEntries",
-      JSON.stringify(listsToRemoveFromAllEntries),
+      listsToRemoveFromAllEntries,
       60 * 60 * 24 * 1000,
     );
     setItemWithExpiry("listType", listType, 60 * 60 * 24 * 1000);
     setItemWithExpiry("userId", userId?.toString() || "", 60 * 60 * 24 * 1000);
     setItemWithExpiry(
       "hideDefaultStatusLists",
-      JSON.stringify(hideDefaultStatusLists),
+      hideDefaultStatusLists,
       60 * 60 * 24 * 1000,
     );
     router.push("/custom-list-manager/update");
   };
 
-  const openRenameModal = (list: CustomList): void => {
+  const openRenameModal = useCallback((list: CustomList): void => {
     setCurrentEditList(list);
     setShowRenameModal(true);
-  };
+  }, []);
 
   const handleDeleteList = useCallback(
     (name: string) => {
@@ -707,11 +886,11 @@ function PageData() {
     [lists, listType, fetchAniListData, toast, originalSectionOrder],
   );
 
-  const addNewList = () => {
+  const addNewList = useCallback(() => {
     setNewListName("");
     setAddListError("");
     setShowAddModal(true);
-  };
+  }, []);
 
   const handleAddListConfirm = async () => {
     const trimmedName = newListName.trim();
@@ -771,19 +950,19 @@ function PageData() {
   };
 
   // Remove from all entries logic
-  const handleRemoveAllClick = (list: CustomList) => {
+  const handleRemoveAllClick = useCallback((list: CustomList) => {
     setPendingRemoveAllList(list);
     setShowRemoveAllModal(true);
-  };
+  }, []);
 
   // Undo remove from all entries
-  const handleUndoRemoveAll = (listName: string) => {
+  const handleUndoRemoveAll = useCallback((listName: string) => {
     setListsToRemoveFromAllEntries((prev) =>
       prev.filter((name) => name !== listName),
     );
-  };
+  }, []);
 
-  const handleRemoveAllConfirm = () => {
+  const handleRemoveAllConfirm = useCallback(() => {
     if (pendingRemoveAllList) {
       setListsToRemoveFromAllEntries((prev) => {
         if (!prev.includes(pendingRemoveAllList.name)) {
@@ -794,12 +973,187 @@ function PageData() {
       setShowRemoveAllModal(false);
       setPendingRemoveAllList(null);
     }
-  };
+  }, [pendingRemoveAllList]);
 
-  const handleRemoveAllCancel = () => {
+  const handleRemoveAllCancel = useCallback(() => {
     setShowRemoveAllModal(false);
     setPendingRemoveAllList(null);
-  };
+  }, []);
+
+  const listOptions = useMemo(
+    () => getOptions(listType),
+    [getOptions, listType],
+  );
+
+  const renderedListRows = useMemo(
+    () =>
+      lists.map((list, index) => (
+        <CustomListRow
+          key={list.name}
+          list={list}
+          index={index}
+          options={listOptions}
+          markedForRemoval={listsToRemoveFromAllEntries.includes(list.name)}
+          onUndoRemoveAll={handleUndoRemoveAll}
+          onClearCondition={handleClearCondition}
+          onValueChange={handleValueChange}
+          onOpenRename={openRenameModal}
+          onDelete={handleDeleteList}
+          onRemoveAll={handleRemoveAllClick}
+        />
+      )),
+    [
+      handleClearCondition,
+      handleDeleteList,
+      handleRemoveAllClick,
+      handleUndoRemoveAll,
+      handleValueChange,
+      listOptions,
+      lists,
+      listsToRemoveFromAllEntries,
+      openRenameModal,
+    ],
+  );
+
+  function renderEmptyContent() {
+    if (!dataLoaded) {
+      return (
+        <motion.div
+          key={activeTab + "-empty"}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex flex-col items-center justify-center py-16 text-center"
+        >
+          <div
+            className="mb-4 rounded-full p-4"
+            style={{
+              backgroundColor: "var(--z-amber-dim)",
+              color: "var(--z-amber)",
+            }}
+          >
+            <motion.div
+              animate={{ rotateY: [0, 180, 360] }}
+              transition={{ duration: 2, repeat: Infinity, repeatDelay: 1 }}
+            >
+              <FaArrowDown className="size-8" />
+            </motion.div>
+          </div>
+          <h3
+            className="mb-2 text-lg font-bold"
+            style={{ color: "var(--z-text)" }}
+          >
+            No Lists Loaded
+          </h3>
+          <p
+            className="mb-6 max-w-md text-sm"
+            style={{ color: "var(--z-muted)" }}
+          >
+            Click{" "}
+            <span className="font-semibold" style={{ color: "var(--z-amber)" }}>
+              Fetch Lists
+            </span>{" "}
+            to load your {activeTab.toLowerCase()} lists from AniList.
+          </p>
+          <button
+            onClick={() => fetchLists(activeTab)}
+            aria-label="Fetch lists"
+            className="
+              flex items-center gap-2 rounded-lg px-6 py-3 font-bold transition-all duration-200
+              hover:brightness-110
+              active:scale-95
+            "
+            style={{ backgroundColor: "var(--z-amber)", color: "#07060f" }}
+          >
+            <FaArrowDown className="size-4" />
+            Fetch Lists
+          </button>
+        </motion.div>
+      );
+    }
+    return (
+      <motion.div
+        key={activeTab + "-no-lists"}
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex flex-col items-center justify-center py-16 text-center"
+      >
+        <div
+          className="mb-4 rounded-full p-4"
+          style={{
+            backgroundColor: "var(--z-amber-dim)",
+            color: "var(--z-amber)",
+          }}
+        >
+          <FaExclamationTriangle className="size-8" />
+        </div>
+        <h3
+          className="mb-2 text-lg font-bold"
+          style={{ color: "var(--z-text)" }}
+        >
+          No Lists Found
+        </h3>
+        <p
+          className="mb-6 max-w-md text-sm"
+          style={{ color: "var(--z-muted)" }}
+        >
+          You don&apos;t have any custom lists yet. Start by fetching your lists
+          from AniList.
+        </p>
+        <button
+          onClick={() => fetchLists(activeTab)}
+          aria-label="Fetch lists"
+          className="
+            flex items-center gap-2 rounded-lg px-6 py-3 font-bold transition-all duration-200
+            hover:brightness-110
+            active:scale-95
+          "
+          style={{ backgroundColor: "var(--z-amber)", color: "#07060f" }}
+        >
+          <FaArrowDown className="size-4" />
+          Fetch Lists
+        </button>
+      </motion.div>
+    );
+  }
+
+  function renderListContent() {
+    if (loading) {
+      return (
+        <div className="flex flex-col items-center justify-center py-16">
+          <LoadingIndicator size="lg" />
+          <p className="mt-4 text-sm" style={{ color: "var(--z-muted)" }}>
+            Loading your custom lists...
+          </p>
+        </div>
+      );
+    }
+    if (isListEmpty) {
+      return renderEmptyContent();
+    }
+    return (
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={activeTab}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={lists.map((list) => list.name)}
+              strategy={verticalListSortingStrategy}
+            >
+              <div className="space-y-3">{renderedListRows}</div>
+            </SortableContext>
+          </DndContext>
+        </motion.div>
+      </AnimatePresence>
+    );
+  }
 
   const breadcrumbs = [
     { name: "Home", href: "/" },
@@ -812,676 +1166,393 @@ function PageData() {
   return (
     <Layout>
       <Breadcrumbs breadcrumbs={breadcrumbs} />
-      <div className="min-w-[80vw]">
+      <div className="mx-auto w-full max-w-5xl px-4 py-10">
+        {/* Page Header */}
         <motion.div
-          initial="hidden"
-          animate="visible"
-          variants={fadeIn}
-          className="mx-auto w-full max-w-6xl px-4 py-8"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-8"
         >
-          <Card className="
-            overflow-hidden border-0 shadow-xl transition-all duration-300
-            dark:bg-gray-800
-          ">
-            <CardHeader className="
-              bg-linear-to-r from-blue-50 to-indigo-50 pb-8
-              dark:from-blue-900/40 dark:to-indigo-900/40
-            ">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <motion.div
-                    initial={{ rotate: -90, opacity: 0 }}
-                    animate={{ rotate: 0, opacity: 1 }}
-                    transition={{ duration: 0.5, delay: 0.2 }}
-                    className="
-                      mr-3 rounded-full bg-blue-100 p-3 text-blue-600 shadow-md
-                      dark:bg-blue-800 dark:text-blue-300
-                    "
-                  >
-                    <FaSort className="size-6" aria-hidden="true" />
-                  </motion.div>
-                  <div>
-                    <CardTitle className="text-2xl font-bold text-gray-900 dark:text-white">
-                      Custom List Manager
-                    </CardTitle>
-                    <CardDescription className="mt-1 text-gray-600 dark:text-gray-300">
-                      Organize and manage your AniList entries effortlessly.
-                    </CardDescription>
-                  </div>
-                </div>
-
-                <Sheet>
-                  <SheetTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className="
-                        flex items-center gap-1 bg-white/90 shadow-sm backdrop-blur-sm
-                        dark:bg-gray-700 dark:text-white
-                        dark:hover:bg-gray-600
-                      "
+          <p
+            className="mb-2 text-xs font-semibold tracking-widest uppercase"
+            style={{ color: "var(--z-amber)" }}
+          >
+            Step 2 of 3 — Custom Lists
+          </p>
+          <div className="flex items-start justify-between gap-4">
+            <h1
+              className="text-3xl font-black"
+              style={{
+                fontFamily: "var(--font-syne-var)",
+                color: "var(--z-text)",
+              }}
+            >
+              Your Custom Lists
+            </h1>
+            <Sheet>
+              <SheetTrigger asChild>
+                <button
+                  aria-label="Open help panel"
+                  className="
+                    flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium
+                    transition-all duration-200
+                    hover:bg-z-card-up hover:text-z-text
+                    active:scale-95
+                  "
+                  style={{
+                    border: "1px solid var(--z-border-mid)",
+                    color: "var(--z-muted)",
+                  }}
+                >
+                  <FaInfoCircle className="size-4" />
+                  Help
+                </button>
+              </SheetTrigger>
+              <SheetContent
+                style={{
+                  backgroundColor: "var(--z-surface)",
+                  borderLeft: "1px solid var(--z-border)",
+                }}
+              >
+                <SheetHeader>
+                  <div className="mb-2 flex items-center gap-2">
+                    <FaInfoCircle
+                      className="size-5"
+                      style={{ color: "var(--z-amber)" }}
+                    />
+                    <SheetTitle
+                      className="text-lg font-bold"
+                      style={{
+                        color: "var(--z-text)",
+                        fontFamily: "var(--font-syne-var)",
+                      }}
                     >
-                      <FaInfoCircle className="mr-1 size-4" />
-                      Help
-                    </Button>
-                  </SheetTrigger>
-                  <SheetContent>
-                    <SheetHeader>
-                      <div className="mb-2 flex items-center gap-2">
-                        <FaInfoCircle className="size-5 text-blue-500 dark:text-blue-400" />
-                        <SheetTitle className="text-lg font-bold text-blue-700 dark:text-blue-300">
-                          How to Use the Custom List Manager
-                        </SheetTitle>
-                      </div>
-                      <SheetDescription>
-                        Easily organize and manage your AniList custom lists
-                        with these steps:
-                      </SheetDescription>
-                    </SheetHeader>
-                    <div className="mt-8 space-y-6">
-                      {/* Steps */}
-                      <ol className="space-y-5">
-                        <li className="flex items-start gap-3">
-                          <span className="
-                            flex size-8 items-center justify-center rounded-full bg-blue-100 text-lg
-                            font-bold text-blue-600
-                            dark:bg-blue-900 dark:text-blue-300
-                          ">
-                            1
+                      How to Use the Custom List Manager
+                    </SheetTitle>
+                  </div>
+                  <SheetDescription style={{ color: "var(--z-muted)" }}>
+                    Easily organize and manage your AniList custom lists with
+                    these steps:
+                  </SheetDescription>
+                </SheetHeader>
+                <div className="mt-8 space-y-6">
+                  <ol className="space-y-5">
+                    {[
+                      {
+                        step: "1",
+                        title: "Select Anime or Manga",
+                        desc: "Switch between Anime and Manga lists using the tabs at the top.",
+                      },
+                      {
+                        step: "2",
+                        title: "Fetch Your Lists",
+                        desc: "Click Fetch Lists to load your custom lists from AniList.",
+                      },
+                      {
+                        step: "3",
+                        title: "Drag to Reorder",
+                        desc: "Drag and drop lists to change their order. The new order is saved automatically.",
+                      },
+                      {
+                        step: "4",
+                        title: "Set Conditions",
+                        desc: "Choose conditions for each list to control how entries are sorted and filtered.",
+                      },
+                      {
+                        step: "5",
+                        title: "Add, Rename, or Delete Lists",
+                        desc: "Use the buttons to add new lists, rename, or delete existing ones.",
+                      },
+                    ].map(({ step, title, desc }) => (
+                      <li key={step} className="flex items-start gap-3">
+                        <span
+                          className="
+                            flex size-8 shrink-0 items-center justify-center rounded-full text-sm
+                            font-bold
+                          "
+                          style={{
+                            backgroundColor: "var(--z-amber-dim)",
+                            color: "var(--z-amber)",
+                          }}
+                        >
+                          {step}
+                        </span>
+                        <div>
+                          <span
+                            className="font-semibold"
+                            style={{ color: "var(--z-text)" }}
+                          >
+                            {title}
                           </span>
-                          <div>
-                            <span className="font-semibold text-gray-900 dark:text-white">
-                              Select Anime or Manga
-                            </span>
-                            <p className="text-sm text-gray-700 dark:text-gray-300">
-                              Switch between Anime and Manga lists using the
-                              tabs at the top.
-                            </p>
-                          </div>
-                        </li>
-                        <li className="flex items-start gap-3">
-                          <span className="
-                            flex size-8 items-center justify-center rounded-full bg-indigo-100
-                            text-lg font-bold text-indigo-600
-                            dark:bg-indigo-900 dark:text-indigo-300
-                          ">
-                            2
-                          </span>
-                          <div>
-                            <span className="font-semibold text-gray-900 dark:text-white">
-                              Fetch Your Lists
-                            </span>
-                            <p className="text-sm text-gray-700 dark:text-gray-300">
-                              Click{" "}
-                              <span className="font-medium text-blue-600 dark:text-blue-400">
-                                Fetch Lists
-                              </span>{" "}
-                              to load your custom lists from AniList.
-                            </p>
-                          </div>
-                        </li>
-                        <li className="flex items-start gap-3">
-                          <span className="
-                            flex size-8 items-center justify-center rounded-full bg-green-100
-                            text-lg font-bold text-green-600
-                            dark:bg-green-900 dark:text-green-300
-                          ">
-                            3
-                          </span>
-                          <div>
-                            <span className="font-semibold text-gray-900 dark:text-white">
-                              Drag to Reorder
-                            </span>
-                            <p className="text-sm text-gray-700 dark:text-gray-300">
-                              Drag and drop lists to change their order. The new
-                              order is saved automatically.
-                            </p>
-                          </div>
-                        </li>
-                        <li className="flex items-start gap-3">
-                          <span className="
-                            flex size-8 items-center justify-center rounded-full bg-purple-100
-                            text-lg font-bold text-purple-600
-                            dark:bg-purple-900 dark:text-purple-300
-                          ">
-                            4
-                          </span>
-                          <div>
-                            <span className="font-semibold text-gray-900 dark:text-white">
-                              Set Conditions
-                            </span>
-                            <p className="text-sm text-gray-700 dark:text-gray-300">
-                              Choose conditions for each list to control how
-                              entries are sorted and filtered.
-                            </p>
-                          </div>
-                        </li>
-                        <li className="flex items-start gap-3">
-                          <span className="
-                            flex size-8 items-center justify-center rounded-full bg-yellow-100
-                            text-lg font-bold text-yellow-600
-                            dark:bg-yellow-900 dark:text-yellow-300
-                          ">
-                            5
-                          </span>
-                          <div>
-                            <span className="font-semibold text-gray-900 dark:text-white">
-                              Add, Rename, or Delete Lists
-                            </span>
-                            <p className="text-sm text-gray-700 dark:text-gray-300">
-                              Use the buttons to add new lists, rename, or
-                              delete existing ones.
-                            </p>
-                          </div>
-                        </li>
-                      </ol>
-
-                      {/* Tips Section */}
-                      <div className="
-                        rounded-lg border-l-4 border-blue-400 bg-blue-50 p-4
-                        dark:border-blue-600 dark:bg-blue-900/20
-                      ">
-                        <div className="flex items-start gap-2">
-                          <FaInfoCircle className="mt-0.5 size-5 text-blue-500 dark:text-blue-400" />
-                          <div>
-                            <span className="font-semibold text-blue-700 dark:text-blue-300">
-                              Tips:
-                            </span>
-                            <ul className="
-                              mt-1 list-disc pl-5 text-sm text-blue-800
-                              dark:text-blue-200
-                            ">
-                              <li>
-                                You can hide default status lists using the
-                                checkbox below the search bar.
-                              </li>
-                              <li>
-                                Click <span className="font-medium">Next</span>{" "}
-                                to proceed to updating your lists after setting
-                                conditions.
-                              </li>
-                              <li>
-                                Hover over icons for tooltips describing their
-                                actions.
-                              </li>
-                            </ul>
-                          </div>
+                          <p
+                            className="text-sm"
+                            style={{ color: "var(--z-muted)" }}
+                          >
+                            {desc}
+                          </p>
                         </div>
+                      </li>
+                    ))}
+                  </ol>
+                  <div
+                    className="rounded-lg p-4"
+                    style={{
+                      backgroundColor: "var(--z-amber-dim)",
+                      border: "1px solid var(--z-border)",
+                    }}
+                  >
+                    <div className="flex items-start gap-2">
+                      <FaInfoCircle
+                        className="mt-0.5 size-5 shrink-0"
+                        style={{ color: "var(--z-amber)" }}
+                      />
+                      <div>
+                        <span
+                          className="font-semibold"
+                          style={{ color: "var(--z-amber)" }}
+                        >
+                          Tips:
+                        </span>
+                        <ul
+                          className="mt-1 list-disc space-y-1 pl-5 text-sm"
+                          style={{ color: "var(--z-text)" }}
+                        >
+                          <li>
+                            You can hide default status lists using the checkbox
+                            below the search bar.
+                          </li>
+                          <li>
+                            Click <span className="font-medium">Next</span> to
+                            proceed to updating your lists after setting
+                            conditions.
+                          </li>
+                          <li>
+                            Hover over icons for tooltips describing their
+                            actions.
+                          </li>
+                        </ul>
                       </div>
                     </div>
-                  </SheetContent>
-                </Sheet>
-              </div>
-
-              <div className="mt-8">
-                <Tabs
-                  defaultValue="ANIME"
-                  value={activeTab}
-                  onValueChange={(v) => setActiveTab(v as "ANIME" | "MANGA")}
-                  className="w-full"
-                >
-                  <TabsList className="
-                    mb-6 grid w-full grid-cols-2 bg-white/20 p-1 backdrop-blur-sm
-                    dark:bg-gray-700/50
-                  ">
-                    <TabsTrigger
-                      value="ANIME"
-                      className="
-                        relative overflow-hidden rounded-md py-3 font-medium text-gray-700
-                        transition-all
-                        after:absolute after:bottom-0 after:left-0 after:h-[3px] after:w-full
-                        after:origin-left after:scale-x-0 after:bg-blue-500
-                        after:transition-transform
-                        data-[state=active]:bg-white data-[state=active]:text-blue-600
-                        data-[state=active]:shadow-md
-                        data-[state=active]:after:scale-x-100
-                        dark:text-gray-200
-                        dark:data-[state=active]:bg-gray-800 dark:data-[state=active]:text-blue-400
-                      "
-                    >
-                      Anime Lists
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="MANGA"
-                      className="
-                        relative overflow-hidden rounded-md py-3 font-medium text-gray-700
-                        transition-all
-                        after:absolute after:bottom-0 after:left-0 after:h-[3px] after:w-full
-                        after:origin-left after:scale-x-0 after:bg-blue-500
-                        after:transition-transform
-                        data-[state=active]:bg-white data-[state=active]:text-blue-600
-                        data-[state=active]:shadow-md
-                        data-[state=active]:after:scale-x-100
-                        dark:text-gray-200
-                        dark:data-[state=active]:bg-gray-800 dark:data-[state=active]:text-blue-400
-                      "
-                    >
-                      Manga Lists
-                    </TabsTrigger>
-                  </TabsList>
-                </Tabs>
-              </div>
-            </CardHeader>
-
-            <CardContent className="p-6">
-              {/* Search and Controls */}
-              <div className="mb-6 flex flex-col gap-4">
-                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                  <div className="relative w-full md:w-64">
-                    <Command className="
-                      rounded-lg border border-gray-200 shadow-sm
-                      dark:border-gray-700
-                    ">
-                      <CommandInput
-                        placeholder="Search lists..."
-                        value={searchTerm}
-                        onValueChange={setSearchTerm}
-                        className="h-10"
-                      />
-                      {searchTerm && (
-                        <CommandList>
-                          <CommandEmpty>No lists found</CommandEmpty>
-                          <CommandGroup>
-                            {lists.map((list) => (
-                              <CommandItem
-                                key={list.name}
-                                onSelect={() => setSearchTerm(list.name)}
-                                className="cursor-pointer"
-                              >
-                                {list.name}
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </CommandList>
-                      )}
-                    </Command>
-                  </div>
-
-                  <div className="flex gap-3">
-                    <motion.div
-                      whileHover={{ scale: 1.03 }}
-                      whileTap={{ scale: 0.97 }}
-                      transition={
-                        !dataLoaded
-                          ? {
-                              duration: 2,
-                              repeat: Infinity,
-                              repeatType: "loop",
-                            }
-                          : {}
-                      }
-                    >
-                      <Button
-                        onClick={() => fetchLists(activeTab)}
-                        className={`
-                          flex items-center gap-2 bg-linear-to-r from-blue-600 to-indigo-600
-                          text-white shadow-md transition-all
-                          hover:from-blue-700 hover:to-indigo-700 hover:shadow-lg
-                          ${
-                          !dataLoaded
-                            ? `
-                              ring-2 ring-blue-300 ring-offset-2 ring-offset-white
-                              dark:ring-blue-500 dark:ring-offset-gray-800
-                            `
-                            : ""
-                        }`}
-                      >
-                        <FaArrowDown className="size-4" />
-                        {!dataLoaded ? "Click to Fetch Lists" : "Fetch Lists"}
-                      </Button>
-                    </motion.div>
-
-                    {!isListEmpty && (
-                      <motion.div
-                        whileHover={{ scale: 1.03 }}
-                        whileTap={{ scale: 0.97 }}
-                      >
-                        <Button
-                          onClick={addNewList}
-                          className="
-                            flex items-center gap-2 bg-green-600 text-white shadow-md
-                            hover:bg-green-700 hover:shadow-lg
-                          "
-                        >
-                          <FaPlus className="size-4" />
-                          Add New List
-                        </Button>
-                      </motion.div>
-                    )}
                   </div>
                 </div>
-
-                {!isListEmpty && (
-                  <div className="
-                    flex items-center space-x-2 rounded-md border border-gray-200 bg-gray-50 p-3
-                    dark:border-gray-700 dark:bg-gray-800/50
-                  ">
-                    <Checkbox
-                      id="hideDefaultStatusLists"
-                      checked={hideDefaultStatusLists}
-                      onCheckedChange={(checked: boolean) =>
-                        setHideDefaultStatusLists(checked)
-                      }
-                      className="size-5"
-                    />
-                    <label
-                      htmlFor="hideDefaultStatusLists"
-                      className="text-sm font-medium text-gray-800 dark:text-gray-200"
-                    >
-                      Hide Default Status Lists
-                    </label>
-                  </div>
-                )}
-              </div>
-
-              <Separator className="mb-6" />
-
-              {/* List Content Section */}
-              {loading ? (
-                <div className="flex flex-col items-center justify-center py-12">
-                  <LoadingIndicator size="lg" />
-                  <p className="mt-4 text-gray-600 dark:text-gray-400">
-                    Loading your custom lists...
-                  </p>
-                </div>
-              ) : isListEmpty ? (
-                <motion.div
-                  key={activeTab + "-empty"}
-                  initial="hidden"
-                  animate="visible"
-                  variants={fadeInUp}
-                  className="flex flex-col items-center justify-center py-12 text-center"
-                >
-                  <div className="
-                    mb-4 rounded-full bg-blue-100 p-4 text-blue-500 shadow-inner
-                    dark:bg-blue-900/30 dark:text-blue-300
-                  ">
-                    {!dataLoaded ? (
-                      <motion.div
-                        animate={{ rotateY: [0, 180, 360] }}
-                        transition={{
-                          duration: 2,
-                          repeat: Infinity,
-                          repeatDelay: 1,
-                        }}
-                      >
-                        <FaArrowDown className="size-8" />
-                      </motion.div>
-                    ) : (
-                      <FaExclamationTriangle className="size-8" />
-                    )}
-                  </div>
-                  <h3 className="mb-2 text-xl font-medium text-gray-900 dark:text-white">
-                    {!dataLoaded ? "No Lists Loaded" : "No Lists Found"}
-                  </h3>
-                  <p className="mb-6 max-w-md text-gray-600 dark:text-gray-300">
-                    {!dataLoaded ? (
-                      <>
-                        Click the{" "}
-                        <span className="font-medium text-blue-600 dark:text-blue-400">
-                          Fetch Lists
-                        </span>{" "}
-                        button to load your {activeTab.toLowerCase()} lists from
-                        AniList.
-                      </>
-                    ) : (
-                      "You don't have any custom lists yet. Start by fetching your lists from AniList."
-                    )}
-                  </p>
-                  <motion.div
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    <Button
-                      onClick={() => fetchLists(activeTab)}
-                      className="
-                        bg-linear-to-r from-blue-600 to-indigo-600 text-white shadow-md
-                        hover:from-blue-700 hover:to-indigo-700 hover:shadow-lg
-                      "
-                    >
-                      <FaArrowDown className="mr-2 size-4" />
-                      Fetch Lists
-                    </Button>
-                  </motion.div>
-                </motion.div>
-              ) : (
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={activeTab}
-                    initial="hidden"
-                    animate="visible"
-                    exit="hidden"
-                    variants={staggerContainer}
-                  >
-                    <DndContext
-                      sensors={sensors}
-                      collisionDetection={closestCenter}
-                      onDragEnd={handleDragEnd}
-                    >
-                      <SortableContext
-                        items={lists.map((list) => list.name)}
-                        strategy={verticalListSortingStrategy}
-                      >
-                        <div className="space-y-4">
-                          {lists.map((list, index) => (
-                            <SortableItem key={list.name} id={list.name}>
-                              <span className="font-medium text-gray-900 dark:text-gray-100">
-                                {list.name}
-                              </span>
-                              {listsToRemoveFromAllEntries.includes(
-                                list.name,
-                              ) ? (
-                                <span className="
-                                  ml-2 flex items-center gap-2 rounded-sm bg-blue-100 px-2 py-0.5
-                                  text-xs font-semibold text-blue-700
-                                  dark:bg-blue-900/30 dark:text-blue-300
-                                ">
-                                  Will be removed from all entries
-                                  <button
-                                    type="button"
-                                    className="
-                                      ml-1 rounded-full p-0.5 text-blue-700
-                                      hover:bg-blue-200 hover:text-blue-900
-                                      dark:text-blue-300
-                                      dark:hover:bg-blue-800/30
-                                    "
-                                    aria-label="Undo remove from all entries"
-                                    tabIndex={0}
-                                    onClick={() =>
-                                      handleUndoRemoveAll(list.name)
-                                    }
-                                  >
-                                    <FaTimesCircle className="size-3" />
-                                  </button>
-                                </span>
-                              ) : (
-                                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                                  <TooltipProvider>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() =>
-                                            handleClearCondition(index)
-                                          }
-                                          className="
-                                            size-8 rounded-full p-0 text-gray-400
-                                            hover:bg-gray-100 hover:text-gray-600
-                                            dark:text-gray-300
-                                            dark:hover:bg-gray-700 dark:hover:text-white
-                                          "
-                                        >
-                                          <FaTimesCircle className="size-4" />
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent>
-                                        <p>Clear condition</p>
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  </TooltipProvider>
-
-                                  <div className="w-full min-w-48 sm:w-auto">
-                                    <DynamicSelect
-                                      value={list.selectedOption || ""}
-                                      onValueChange={(value: string) =>
-                                        handleValueChange(index, value)
-                                      }
-                                      options={getOptions(listType)}
-                                      placeholder="Select a condition"
-                                      className="min-w-[240px] shadow-sm"
-                                    />
-                                  </div>
-
-                                  <TooltipProvider>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() => openRenameModal(list)}
-                                          className="
-                                            size-8 rounded-full p-0 text-yellow-500
-                                            hover:bg-yellow-50 hover:text-yellow-600
-                                            dark:text-yellow-400
-                                            dark:hover:bg-yellow-900/30 dark:hover:text-yellow-300
-                                          "
-                                        >
-                                          <FaEdit className="size-4" />
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent>
-                                        <p>Rename list</p>
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  </TooltipProvider>
-
-                                  <TooltipProvider>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() =>
-                                            handleDeleteList(list.name)
-                                          }
-                                          className="
-                                            size-8 rounded-full p-0 text-red-500
-                                            hover:bg-red-50 hover:text-red-600
-                                            dark:text-red-400
-                                            dark:hover:bg-red-900/30 dark:hover:text-red-300
-                                          "
-                                        >
-                                          <FaTrash className="size-4" />
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent>
-                                        <p>Delete list</p>
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  </TooltipProvider>
-
-                                  {/* Remove from All Entries Button */}
-                                  <TooltipProvider>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() =>
-                                            handleRemoveAllClick(list)
-                                          }
-                                          className={`
-                                            size-8 rounded-full p-0 text-blue-500
-                                            hover:bg-blue-50 hover:text-blue-600
-                                            dark:text-blue-400
-                                            dark:hover:bg-blue-900/30 dark:hover:text-blue-300
-                                            ${
-                                            listsToRemoveFromAllEntries.includes(
-                                              list.name,
-                                            )
-                                              ? `ring-2 ring-blue-400`
-                                              : ""
-                                          }`}
-                                          aria-label="Remove from all entries"
-                                        >
-                                          <FaTimesCircle className="size-4" />
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent>
-                                        <p>Remove from all entries</p>
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  </TooltipProvider>
-                                </div>
-                              )}
-                            </SortableItem>
-                          ))}
-                        </div>
-                      </SortableContext>
-                    </DndContext>
-                  </motion.div>
-                </AnimatePresence>
-              )}
-
-              {/* Pagination or Note Section */}
-              {!isListEmpty && lists.length > 0 && (
-                <div className="mt-6 flex justify-center">
-                  <p className="
-                    rounded-full bg-gray-100 px-3 py-1 text-sm text-gray-600
-                    dark:bg-gray-800 dark:text-gray-400
-                  ">
-                    {lists.length} lists displayed
-                  </p>
-                </div>
-              )}
-
-              {/* Navigation Buttons */}
-              <div className="mt-8 flex justify-between">
-                <motion.div
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.97 }}
-                >
-                  <Button
-                    variant="outline"
-                    onClick={() => router.push("/anilist-login")}
-                    className="
-                      flex items-center border-gray-300 bg-white text-gray-700 shadow-sm
-                      hover:bg-gray-100
-                      dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300
-                      dark:hover:bg-gray-600
-                    "
-                  >
-                    Back
-                  </Button>
-                </motion.div>
-
-                <motion.div
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.97 }}
-                >
-                  <Button
-                    onClick={confirmAndNavigate}
-                    className="
-                      flex items-center bg-linear-to-r from-blue-600 to-indigo-600 text-white
-                      shadow-md
-                      hover:from-blue-700 hover:to-indigo-700 hover:shadow-lg
-                    "
-                    disabled={
-                      !dataLoaded ||
-                      isListEmpty ||
-                      lists.filter((list) => list.selectedOption).length === 0
-                    }
-                  >
-                    Next
-                  </Button>
-                </motion.div>
-              </div>
-            </CardContent>
-          </Card>
+              </SheetContent>
+            </Sheet>
+          </div>
         </motion.div>
+
+        {/* Anime / Manga Tabs */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.05 }}
+          className="mb-6"
+        >
+          <Tabs
+            defaultValue="ANIME"
+            value={activeTab}
+            onValueChange={(v) => setActiveTab(v as "ANIME" | "MANGA")}
+            className="w-full"
+          >
+            <TabsList
+              className="grid w-full grid-cols-2"
+              style={{
+                backgroundColor: "var(--z-card)",
+                border: "1px solid var(--z-border)",
+              }}
+            >
+              <TabsTrigger
+                value="ANIME"
+                className="rounded-md font-semibold data-[state=active]:font-bold"
+                style={{ color: "var(--z-muted)" }}
+              >
+                Anime Lists
+              </TabsTrigger>
+              <TabsTrigger
+                value="MANGA"
+                className="rounded-md font-semibold data-[state=active]:font-bold"
+                style={{ color: "var(--z-muted)" }}
+              >
+                Manga Lists
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </motion.div>
+
+        {/* Toolbar */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="mb-6 space-y-4"
+        >
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="relative w-full sm:w-64">
+              <Command
+                className="rounded-lg"
+                style={{
+                  backgroundColor: "var(--z-surface)",
+                  border: "1px solid var(--z-border)",
+                }}
+              >
+                <CommandInput
+                  placeholder="Search lists..."
+                  value={searchTerm}
+                  onValueChange={setSearchTerm}
+                  className="h-10"
+                  style={{ color: "var(--z-text)" }}
+                />
+                {searchTerm && (
+                  <CommandList style={{ backgroundColor: "var(--z-card)" }}>
+                    <CommandEmpty style={{ color: "var(--z-muted)" }}>
+                      No lists found
+                    </CommandEmpty>
+                    <CommandGroup>
+                      {lists.map((list) => (
+                        <CommandItem
+                          key={list.name}
+                          onSelect={() => setSearchTerm(list.name)}
+                          className="cursor-pointer"
+                          style={{ color: "var(--z-text)" }}
+                        >
+                          {list.name}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                )}
+              </Command>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={() => fetchLists(activeTab)}
+                aria-label="Fetch lists from AniList"
+                className="
+                  flex items-center gap-2 rounded-lg px-5 py-2.5 font-bold transition-all
+                  duration-200
+                  hover:brightness-110
+                  active:scale-95
+                "
+                style={{ backgroundColor: "var(--z-amber)", color: "#07060f" }}
+              >
+                <FaArrowDown className="size-4" />
+                {dataLoaded ? "Fetch Lists" : "Click to Fetch Lists"}
+              </button>
+              {!isListEmpty && (
+                <button
+                  onClick={addNewList}
+                  aria-label="Add new list"
+                  className="
+                    flex cursor-pointer items-center gap-2 rounded-lg px-5 py-2.5 font-semibold
+                    transition-all duration-200
+                    hover:bg-z-card-high
+                    active:scale-95
+                  "
+                  style={{
+                    backgroundColor: "var(--z-card)",
+                    border: "1px solid var(--z-border-mid)",
+                    color: "var(--z-text)",
+                  }}
+                >
+                  <FaPlus
+                    className="size-4"
+                    style={{ color: "var(--z-amber)" }}
+                  />
+                  Add New List
+                </button>
+              )}
+            </div>
+          </div>
+          {!isListEmpty && (
+            <div
+              className="flex items-center gap-3 rounded-lg p-3"
+              style={{
+                backgroundColor: "var(--z-card)",
+                border: "1px solid var(--z-border)",
+              }}
+            >
+              <Checkbox
+                id="hideDefaultStatusLists"
+                checked={hideDefaultStatusLists}
+                onCheckedChange={(checked: boolean) =>
+                  setHideDefaultStatusLists(checked)
+                }
+                className="size-5"
+              />
+              <label
+                htmlFor="hideDefaultStatusLists"
+                className="cursor-pointer text-sm font-medium"
+                style={{ color: "var(--z-text)" }}
+              >
+                Hide Default Status Lists
+              </label>
+            </div>
+          )}
+        </motion.div>
+
+        {/* Separator */}
+        <div
+          className="mb-6"
+          style={{ borderTop: "1px solid var(--z-border)" }}
+        />
+
+        {/* List Content */}
+        {renderListContent()}
+
+        {/* List count */}
+        {!isListEmpty && lists.length > 0 && (
+          <div className="mt-6 flex justify-center">
+            <span
+              className="rounded-full px-3 py-1 text-xs font-semibold"
+              style={{
+                backgroundColor: "var(--z-card)",
+                border: "1px solid var(--z-border)",
+                color: "var(--z-muted)",
+              }}
+            >
+              {lists.length} {lists.length === 1 ? "list" : "lists"}
+            </span>
+          </div>
+        )}
+
+        {/* Navigation */}
+        <div className="mt-10 flex justify-between">
+          <button
+            aria-label="Back to login page"
+            onClick={() => router.push("/anilist-login")}
+            className="
+              cursor-pointer rounded-lg px-4 py-2 font-medium transition-all duration-200
+              hover:bg-z-card-up hover:text-z-text
+              active:scale-95
+            "
+            style={{
+              border: "1px solid var(--z-border-mid)",
+              color: "var(--z-muted)",
+            }}
+          >
+            Back
+          </button>
+          <button
+            aria-label="Proceed to update step"
+            onClick={confirmAndNavigate}
+            disabled={
+              !dataLoaded ||
+              isListEmpty ||
+              lists.filter((list) => list.selectedOption).length === 0
+            }
+            className="
+              rounded-lg px-6 py-3 font-bold transition-all duration-200
+              hover:brightness-110
+              active:scale-95
+              disabled:cursor-not-allowed disabled:opacity-40
+            "
+            style={{ backgroundColor: "var(--z-amber)", color: "#07060f" }}
+          >
+            Next
+          </button>
+        </div>
       </div>
 
-      {/* Confirmation Popup */}
+      {/* Confirm Popup Modal */}
       <Modal
         isOpen={showPopup}
         onClose={() => setShowPopup(false)}
@@ -1490,23 +1561,33 @@ function PageData() {
         confirmButtonText="Continue to Update"
       >
         <div className="space-y-4">
-          <div className="
-            rounded-lg border border-blue-100 bg-blue-50 p-3
-            dark:border-blue-900 dark:bg-blue-900/20
-          ">
-            <p className="text-sm font-medium text-blue-800 dark:text-blue-300">
+          <div
+            className="rounded-lg p-3"
+            style={{
+              backgroundColor: "var(--z-amber-dim)",
+              border: "1px solid var(--z-border)",
+            }}
+          >
+            <p
+              className="text-sm font-medium"
+              style={{ color: "var(--z-amber)" }}
+            >
               You&apos;re about to update{" "}
               {lists.filter((list) => list.selectedOption).length} custom lists
             </p>
           </div>
-
-          {/* Lists to be removed from all entries (even if not selected for update) */}
           {listsToRemoveFromAllEntries.length > 0 && (
-            <div className="
-              rounded-lg border border-blue-200 bg-blue-50 p-3
-              dark:border-blue-900/40 dark:bg-blue-900/10
-            ">
-              <p className="mb-2 text-sm font-semibold text-blue-700 dark:text-blue-200">
+            <div
+              className="rounded-lg p-3"
+              style={{
+                backgroundColor: "var(--z-card)",
+                border: "1px solid var(--z-border)",
+              }}
+            >
+              <p
+                className="mb-2 text-sm font-semibold"
+                style={{ color: "var(--z-frost)" }}
+              >
                 The following lists will be removed from all entries:
               </p>
               <ul className="ml-4 list-disc space-y-1">
@@ -1517,11 +1598,15 @@ function PageData() {
                   return (
                     <li
                       key={name}
-                      className="text-sm text-blue-800 dark:text-blue-300"
+                      className="text-sm"
+                      style={{ color: "var(--z-text)" }}
                     >
                       <span className="font-bold">{name}</span>
                       {!selected && (
-                        <span className="ml-2 text-gray-600 italic dark:text-gray-400">
+                        <span
+                          className="ml-2 italic"
+                          style={{ color: "var(--z-muted)" }}
+                        >
                           All entries will be removed from this list.
                         </span>
                       )}
@@ -1531,67 +1616,67 @@ function PageData() {
               </ul>
             </div>
           )}
-
-          <div className="overflow-visible">
-            <div className="pr-6">
-              <motion.ul
-                initial="hidden"
-                animate="visible"
-                variants={{
-                  hidden: { opacity: 0 },
-                  visible: {
-                    opacity: 1,
-                    transition: {
-                      staggerChildren: 0.07,
-                    },
-                  },
-                }}
-                className="space-y-2"
-              >
-                {lists
-                  .filter((list) => list.selectedOption)
-                  .map((list) => (
-                    <motion.li
-                      key={list.name}
-                      variants={{
-                        hidden: { opacity: 0, y: 10 },
-                        visible: { opacity: 1, y: 0 },
-                      }}
-                      className="
-                        rounded-md border border-gray-200 bg-white p-3 shadow-sm transition-colors
-                        dark:border-gray-700 dark:bg-gray-800
-                      "
-                    >
-                      <div className="flex flex-col space-y-1">
-                        <span className="font-medium text-gray-900 dark:text-gray-100">
-                          {list.name}
-                          {listsToRemoveFromAllEntries.includes(list.name) && (
-                            <span className="
-                              ml-2 rounded-sm bg-blue-100 px-2 py-0.5 text-xs font-semibold
-                              text-blue-700
-                              dark:bg-blue-900/30 dark:text-blue-300
-                            ">
-                              Will be removed from all entries
-                            </span>
-                          )}
-                        </span>
-                        <span className="text-sm text-gray-600 dark:text-gray-400">
-                          {list.selectedOption}
-                        </span>
-                      </div>
-                    </motion.li>
-                  ))}
-              </motion.ul>
-            </div>
+          <div className="overflow-visible pr-1">
+            <motion.ul
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="space-y-2"
+            >
+              {lists
+                .filter((list) => list.selectedOption)
+                .map((list) => (
+                  <motion.li
+                    key={list.name}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="rounded-lg p-3"
+                    style={{
+                      backgroundColor: "var(--z-card-up)",
+                      border: "1px solid var(--z-border)",
+                    }}
+                  >
+                    <div className="flex flex-col space-y-1">
+                      <span
+                        className="font-semibold"
+                        style={{ color: "var(--z-text)" }}
+                      >
+                        {list.name}
+                        {listsToRemoveFromAllEntries.includes(list.name) && (
+                          <span
+                            className="ml-2 rounded-full px-2 py-0.5 text-xs font-semibold"
+                            style={{
+                              backgroundColor: "var(--z-amber-dim)",
+                              color: "var(--z-amber)",
+                            }}
+                          >
+                            Will be removed from all entries
+                          </span>
+                        )}
+                      </span>
+                      <span
+                        className="text-sm"
+                        style={{ color: "var(--z-muted)" }}
+                      >
+                        {list.selectedOption}
+                      </span>
+                    </div>
+                  </motion.li>
+                ))}
+            </motion.ul>
           </div>
-
-          <div className="
-            rounded-lg border border-amber-100 bg-amber-50 p-3 text-sm
-            dark:border-amber-900/50 dark:bg-amber-900/10
-          ">
-            <div className="flex items-start">
-              <FaInfoCircle className="mt-0.5 mr-2 size-4 text-amber-600 dark:text-amber-500" />
-              <span className="text-amber-800 dark:text-amber-300">
+          <div
+            className="rounded-lg p-3"
+            style={{
+              backgroundColor: "var(--z-amber-dim)",
+              border: "1px solid var(--z-border)",
+            }}
+          >
+            <div className="flex items-start gap-2">
+              <FaInfoCircle
+                className="mt-0.5 size-4 shrink-0"
+                style={{ color: "var(--z-amber)" }}
+              />
+              <span className="text-sm" style={{ color: "var(--z-text)" }}>
                 After proceeding, changes will be applied to your AniList
                 account.
               </span>
@@ -1604,7 +1689,7 @@ function PageData() {
       <RenameModal
         isOpen={showRenameModal}
         onClose={() => setShowRenameModal(false)}
-        currentListName={currentEditList?.name || ""}
+        currentListName={currentEditList?.name ?? ""}
         onRename={async (newName: string) => {
           if (currentEditList) {
             await handleRenameList(currentEditList, newName);
@@ -1625,22 +1710,32 @@ function PageData() {
         }}
         title="Delete Custom List?"
         confirmButtonText="Delete"
+        variant="danger"
       >
         <div className="space-y-4">
-          <div className="
-            rounded-lg border border-red-100 bg-red-50 p-3
-            dark:border-red-900 dark:bg-red-900/20
-          ">
-            <p className="text-sm font-medium text-red-800 dark:text-red-300">
-              Are you sure you want to delete the custom list
-              <span className="font-bold"> {pendingDeleteList?.name}</span>?
+          <div
+            className="rounded-lg p-3"
+            style={{
+              backgroundColor: "rgba(248,113,113,0.1)",
+              border: "1px solid rgba(248,113,113,0.2)",
+            }}
+          >
+            <p
+              className="text-sm font-medium"
+              style={{ color: "var(--z-red)" }}
+            >
+              Are you sure you want to delete the custom list{" "}
+              <span className="font-bold">{pendingDeleteList?.name}</span>?
             </p>
           </div>
-          <div className="
-            rounded-lg border border-blue-100 bg-blue-50 p-3
-            dark:border-blue-900 dark:bg-blue-900/20
-          ">
-            <p className="text-sm text-blue-800 dark:text-blue-300">
+          <div
+            className="rounded-lg p-3"
+            style={{
+              backgroundColor: "var(--z-card)",
+              border: "1px solid var(--z-border)",
+            }}
+          >
+            <p className="text-sm" style={{ color: "var(--z-muted)" }}>
               Note: Deleting a custom list only removes it from your list
               structure. Any entries previously associated with this list will
               still retain the association. If you add a new list with the same
@@ -1661,11 +1756,12 @@ function PageData() {
         <div className="space-y-4">
           <input
             type="text"
-            className="
-              w-full rounded-sm border border-gray-300 px-3 py-2 text-gray-900
-              focus:border-blue-500 focus:outline-none
-              dark:border-gray-700 dark:bg-gray-800 dark:text-white
-            "
+            className="w-full rounded-lg px-3 py-2 focus:outline-none"
+            style={{
+              backgroundColor: "var(--z-surface)",
+              border: "1px solid var(--z-border)",
+              color: "var(--z-text)",
+            }}
             placeholder="Enter new list name"
             value={newListName}
             onChange={(e) => {
@@ -1677,10 +1773,13 @@ function PageData() {
             aria-label="New list name"
           />
           {addListError && (
-            <div className="
-              rounded-sm bg-red-100 px-3 py-2 text-sm text-red-700
-              dark:bg-red-900/30 dark:text-red-300
-            ">
+            <div
+              className="rounded-lg px-3 py-2 text-sm"
+              style={{
+                backgroundColor: "rgba(248,113,113,0.1)",
+                color: "var(--z-red)",
+              }}
+            >
               {addListError}
             </div>
           )}
@@ -1694,15 +1793,21 @@ function PageData() {
         onConfirm={handleRemoveAllConfirm}
         title="Remove List from All Entries?"
         confirmButtonText="Remove"
+        variant="danger"
       >
         <div className="space-y-4">
-          <div className="
-            rounded-lg border border-blue-100 bg-blue-50 p-3
-            dark:border-blue-900 dark:bg-blue-900/20
-          ">
-            <p className="text-sm text-blue-800 dark:text-blue-300">
+          <div
+            className="rounded-lg p-3"
+            style={{
+              backgroundColor: "var(--z-card)",
+              border: "1px solid var(--z-border)",
+            }}
+          >
+            <p className="text-sm" style={{ color: "var(--z-muted)" }}>
               Are you sure you want to remove the list{" "}
-              <span className="font-bold">{pendingRemoveAllList?.name}</span>{" "}
+              <span className="font-bold" style={{ color: "var(--z-text)" }}>
+                {pendingRemoveAllList?.name}
+              </span>{" "}
               from all entries? This will not delete the list itself, but will
               remove it from every entry that currently has it during the next
               update.

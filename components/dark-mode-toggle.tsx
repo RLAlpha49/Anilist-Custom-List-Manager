@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from "react";
+import { FC, useEffect, useState } from "react";
 import { FaMoon, FaSun } from "react-icons/fa";
 
-const DarkModeToggle: React.FC = () => {
+const DarkModeToggle: FC = () => {
   const [isDark, setIsDark] = useState<boolean>(false);
 
   useEffect(() => {
@@ -9,17 +9,22 @@ const DarkModeToggle: React.FC = () => {
     if (storedTheme) {
       setIsDark(storedTheme === "dark");
       if (storedTheme === "dark") {
+        document.documentElement.classList.remove("light");
         document.documentElement.classList.add("dark");
       } else {
+        document.documentElement.classList.add("light");
         document.documentElement.classList.remove("dark");
       }
     } else {
-      const prefersDark = window.matchMedia(
+      const prefersDark = globalThis.matchMedia(
         "(prefers-color-scheme: dark)",
       ).matches;
       setIsDark(prefersDark);
       if (prefersDark) {
         document.documentElement.classList.add("dark");
+      } else {
+        document.documentElement.classList.add("light");
+        document.documentElement.classList.remove("dark");
       }
     }
   }, []);
@@ -28,9 +33,11 @@ const DarkModeToggle: React.FC = () => {
     const newIsDark = !isDark;
     setIsDark(newIsDark);
     if (newIsDark) {
+      document.documentElement.classList.remove("light");
       document.documentElement.classList.add("dark");
       localStorage.setItem("theme", "dark");
     } else {
+      document.documentElement.classList.add("light");
       document.documentElement.classList.remove("dark");
       localStorage.setItem("theme", "light");
     }
@@ -40,15 +47,14 @@ const DarkModeToggle: React.FC = () => {
     <button
       onClick={toggleDarkMode}
       className="
-        rounded-full bg-gray-200 p-2 text-gray-800 transition-colors duration-300
-        hover:bg-gray-300
-        focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none
-        dark:bg-gray-700 dark:text-gray-200
-        dark:hover:bg-gray-600
+        rounded-md border border-(--z-border-mid) bg-z-card-up p-2 text-z-muted transition-all
+        duration-150
+        hover:border-(--z-amber) hover:bg-z-card-up hover:text-z-amber
+        active:scale-95
       "
       aria-label={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
     >
-      {isDark ? <FaSun size={20} /> : <FaMoon size={20} />}
+      {isDark ? <FaSun size={16} /> : <FaMoon size={16} />}
     </button>
   );
 };
