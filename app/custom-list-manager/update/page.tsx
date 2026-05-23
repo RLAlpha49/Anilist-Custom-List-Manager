@@ -624,9 +624,10 @@ function PendingCard({ entry }: Readonly<{ entry: TrackedEntry }>) {
 
   return (
     <motion.div
+      layout
       initial={{ opacity: 0, scale: 0.98, y: -8 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
-      exit={{ opacity: 0, x: 24, scale: 0.98 }}
+      exit={{ opacity: 0, y: -20, scale: 0.98 }}
       transition={{ type: "spring", stiffness: 280, damping: 28 }}
       className="relative overflow-hidden rounded-xl"
       style={{
@@ -771,9 +772,9 @@ function UpdatingCard({ entry }: Readonly<{ entry: TrackedEntry }>) {
 
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.96, y: 8 }}
+      initial={{ opacity: 0, scale: 0.96, y: 40 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.96, y: -8 }}
+      exit={{ opacity: 0, scale: 0.96, y: 36 }}
       transition={{ type: "spring", stiffness: 320, damping: 28 }}
       className="relative overflow-hidden rounded-xl"
       style={{
@@ -927,6 +928,7 @@ function DoneCard({ entry }: Readonly<{ entry: TrackedEntry }>) {
 
   return (
     <motion.div
+      layout
       initial={{ opacity: 0, y: -12, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: 18, scale: 0.96 }}
@@ -1302,6 +1304,7 @@ export default function UpdatePage() {
         pendingQueueRef.current = rest;
         setPendingEntries(rest);
         setCurrentUpdating({ ...nextEntry, state: "updating" });
+        let completedEntry: TrackedEntry | null = null;
 
         const visibleAt = Date.now();
         await waitForUiCommit();
@@ -1331,9 +1334,7 @@ export default function UpdatePage() {
           );
           updateRateLimitState(response.rateLimit);
           updatedCountRef.current += 1;
-
-          const doneEntry: TrackedEntry = { ...nextEntry, state: "done" };
-          setDoneEntries((prev) => [doneEntry, ...prev]);
+          completedEntry = { ...nextEntry, state: "done" };
         } catch (err) {
           console.error("Failed to update entry", nextEntry.entry.id, err);
           errorCountRef.current += 1;
@@ -1358,6 +1359,12 @@ export default function UpdatePage() {
           }
 
           setCurrentUpdating(null);
+
+          if (completedEntry) {
+            const doneEntry = completedEntry;
+            setDoneEntries((prev) => [doneEntry, ...prev]);
+          }
+
           setProcessedCount(updatedCountRef.current + errorCountRef.current);
         }
 
@@ -2208,10 +2215,12 @@ export default function UpdatePage() {
                 >
                   <div className="max-h-168 overflow-y-auto pr-1 sm:pr-2">
                     <div className="space-y-3">
-                      <AnimatePresence>
-                        {pendingEntries.map((entry) => (
-                          <PendingCard key={entry.entry.id} entry={entry} />
-                        ))}
+                      <AnimatePresence mode="popLayout" initial={false}>
+                        <motion.div layout className="space-y-3">
+                          {pendingEntries.map((entry) => (
+                            <PendingCard key={entry.entry.id} entry={entry} />
+                          ))}
+                        </motion.div>
                       </AnimatePresence>
 
                       {pendingEntries.length === 0 && (
@@ -2267,13 +2276,15 @@ export default function UpdatePage() {
                     <div className="max-h-168 overflow-y-auto pr-1 sm:pr-2">
                       {doneEntries.length > 0 ? (
                         <div className="space-y-3">
-                          <AnimatePresence>
-                            {doneEntries.map((entry) => (
-                              <DoneCard
-                                key={`done-${entry.entry.id}`}
-                                entry={entry}
-                              />
-                            ))}
+                          <AnimatePresence mode="popLayout" initial={false}>
+                            <motion.div layout className="space-y-3">
+                              {doneEntries.map((entry) => (
+                                <DoneCard
+                                  key={`done-${entry.entry.id}`}
+                                  entry={entry}
+                                />
+                              ))}
+                            </motion.div>
                           </AnimatePresence>
                         </div>
                       ) : (
