@@ -29,7 +29,15 @@ import {
   getJsonItemWithExpiry,
   setItemWithExpiry,
 } from "@/lib/local-storage";
-import { MediaEntry, MediaListResponse, RateLimitInfo } from "@/lib/types";
+import {
+  AniListRequestVariables,
+  hasPagedMediaListCollectionData,
+  MediaEntry,
+  MediaListPaginationMetadata,
+  MediaListResponse,
+  MutationResponse,
+  RateLimitInfo,
+} from "@/lib/types";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -72,6 +80,19 @@ interface RetryStatus extends AniListRetryContext {
   startedAt: number;
 }
 
+interface MediaListQueryVariables extends AniListRequestVariables {
+  userId: number;
+  type: string;
+  chunk: number;
+  perChunk: number;
+}
+
+interface SaveEntryMutationVariables extends AniListRequestVariables {
+  id: number;
+  customLists: string[];
+  hiddenFromStatusLists: boolean;
+}
+
 type QueueListGroup = NonNullable<
   MediaListResponse["data"]["MediaListCollection"]
 >["lists"][number];
@@ -81,6 +102,7 @@ type PendingAction = "pause" | "stop" | "complete" | null;
 const PRE_REQUEST_RENDER_DELAY_MS = 120;
 const REQUEST_INTERVAL_MS = 2000;
 const LOW_RATE_LIMIT_THRESHOLD = 5;
+const MEDIA_LIST_PAGE_SIZE = 50;
 
 const STATUS_REGEX = /^Status set to (.+)$/;
 const SCORE_REGEX = /^Score set to (\d+)$/;
@@ -440,8 +462,14 @@ function buildTrackedEntries(
 // ─── GraphQL ──────────────────────────────────────────────────────────────────
 
 const MEDIA_LIST_QUERY = `
-  query ($userId: Int, $type: MediaType) {
-    MediaListCollection(userId: $userId, type: $type) {
+  query ($userId: Int, $type: MediaType, $chunk: Int, $perChunk: Int) {
+    MediaListCollection(
+      userId: $userId
+      type: $type
+      chunk: $chunk
+      perChunk: $perChunk
+    ) {
+      hasNextChunk
       lists {
         name
         status
@@ -1188,28 +1216,63 @@ export default function UpdatePage() {
       }
 
       try {
-        const response = await fetchAniList(
-          MEDIA_LIST_QUERY,
-          { userId, type: listType },
-          authToken,
-          handleRetryState,
-        );
+        const trackedEntryMap = new Map<number, TrackedEntry>();
+        let pagination: MediaListPaginationMetadata = {
+          chunk: 1,
+          perChunk: MEDIA_LIST_PAGE_SIZE,
+          hasNextChunk: true,
+        };
 
-        updateRateLimitState(response.rateLimit);
+        do {
+          const response = await fetchAniList<
+            MediaListResponse["data"],
+            MediaListQueryVariables
+          >(
+            MEDIA_LIST_QUERY,
+            {
+              userId,
+              type: listType,
+              chunk: pagination.chunk,
+              perChunk: pagination.perChunk,
+            },
+            authToken,
+            handleRetryState,
+          );
 
-        if (cancelled) {
-          return;
-        }
-        const mediaListCollection = response.data.MediaListCollection as
-          | MediaListResponse["data"]["MediaListCollection"]
-          | undefined;
-        const lists = mediaListCollection?.lists ?? [];
-        const trackedEntries = buildTrackedEntries(
-          lists,
-          listConfigs,
-          listsToRemove,
-          hideDefaultStatusLists,
-        );
+          updateRateLimitState(response.rateLimit);
+
+          if (cancelled) {
+            return;
+          }
+
+          if (!hasPagedMediaListCollectionData(response.data)) {
+            throw new Error(
+              "AniList returned an unexpected media list payload.",
+            );
+          }
+
+          const { lists, hasNextChunk } = response.data.MediaListCollection;
+          const trackedEntriesForChunk = buildTrackedEntries(
+            lists,
+            listConfigs,
+            listsToRemove,
+            hideDefaultStatusLists,
+          );
+
+          for (const trackedEntry of trackedEntriesForChunk) {
+            if (!trackedEntryMap.has(trackedEntry.entry.id)) {
+              trackedEntryMap.set(trackedEntry.entry.id, trackedEntry);
+            }
+          }
+
+          pagination = {
+            ...pagination,
+            chunk: pagination.chunk + 1,
+            hasNextChunk,
+          };
+        } while (pagination.hasNextChunk);
+
+        const trackedEntries = [...trackedEntryMap.values()];
 
         if (trackedEntries.length === 0) {
           setItemWithExpiry(
@@ -1322,7 +1385,10 @@ export default function UpdatePage() {
         }
 
         try {
-          const response = await fetchAniList(
+          const response = await fetchAniList<
+            MutationResponse["data"],
+            SaveEntryMutationVariables
+          >(
             SAVE_ENTRY_MUTATION,
             {
               id: nextEntry.entry.id,
