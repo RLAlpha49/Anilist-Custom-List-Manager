@@ -5,15 +5,12 @@
     "app/**/layout.tsx",
     "app/globals.css",
     ".husky/pre-commit",
-    ".husky/pre-push"
+    ".husky/pre-push",
   ],
   "project": ["**/*.ts", "**/*.tsx"],
-  "ignoreDependencies": [
-    "lint-staged",
-    "postcss-load-config"
-  ],
+  "ignoreDependencies": ["lint-staged", "postcss-load-config"],
   "ignoreBinaries": ["ncu"],
   "ignoreIssues": {
-    "components/ui/*.tsx": ["exports", "types"]
-  }
+    "components/ui/*.tsx": ["exports", "types"],
+  },
 }
