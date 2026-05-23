@@ -46,14 +46,6 @@ import { RenameModal } from "@/components/rename-modal";
 import { SortableItem } from "@/components/sortable-item";
 // Internal Imports
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
 import { DynamicSelect } from "@/components/ui/dynamic-select";
 import Modal from "@/components/ui/modal";
 import {
@@ -317,7 +309,6 @@ function PageData() {
   const [originalSectionOrder, setOriginalSectionOrder] = useState<string[]>(
     [],
   );
-  const [searchTerm, setSearchTerm] = useState<string>("");
   const [activeTab, setActiveTab] = useState<MediaType>("ANIME");
   const [listCache, setListCache] = useState<
     Record<MediaType, CachedListState>
@@ -1319,7 +1310,7 @@ function PageData() {
                         >
                           <li>
                             You can hide default status lists using the checkbox
-                            below the search bar.
+                            below the toolbar.
                           </li>
                           <li>
                             Click <span className="font-medium">Next</span> to
@@ -1386,42 +1377,6 @@ function PageData() {
           className="mb-6 space-y-4"
         >
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="relative w-full sm:w-64">
-              <Command
-                className="rounded-lg"
-                style={{
-                  backgroundColor: "var(--z-surface)",
-                  border: "1px solid var(--z-border)",
-                }}
-              >
-                <CommandInput
-                  placeholder="Search lists..."
-                  value={searchTerm}
-                  onValueChange={setSearchTerm}
-                  className="h-10"
-                  style={{ color: "var(--z-text)" }}
-                />
-                {searchTerm && (
-                  <CommandList style={{ backgroundColor: "var(--z-card)" }}>
-                    <CommandEmpty style={{ color: "var(--z-muted)" }}>
-                      No lists found
-                    </CommandEmpty>
-                    <CommandGroup>
-                      {lists.map((list) => (
-                        <CommandItem
-                          key={list.name}
-                          onSelect={() => setSearchTerm(list.name)}
-                          className="cursor-pointer"
-                          style={{ color: "var(--z-text)" }}
-                        >
-                          {list.name}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                )}
-              </Command>
-            </div>
             <div className="flex flex-wrap gap-3">
               <button
                 onClick={() => fetchLists(activeTab)}
