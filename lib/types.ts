@@ -1,9 +1,30 @@
-export interface ApiError extends Error {
+export type ApiErrorKind = "http" | "graphql" | "network" | "unknown";
+
+export interface AniListGraphQLError {
   message: string;
+  path?: Array<string | number>;
+  locations?: Array<{
+    line: number;
+    column: number;
+  }>;
+  extensions?: Record<string, unknown>;
+  status?: number;
+}
+
+export interface ApiError extends Error {
+  kind: ApiErrorKind;
+  message: string;
+  messages: string[];
+  status: number | null;
+  retryable: boolean;
+  graphQLErrors?: AniListGraphQLError[];
   response?: {
     status: number;
   };
+  cause?: unknown;
 }
+
+export type AniListRequestVariables = Record<string, unknown>;
 
 export interface RateLimitInfo {
   remaining: number | null;
@@ -92,26 +113,29 @@ interface MediaList {
   status: string;
 }
 
-// Base response type for all API calls
-export interface ApiResponse {
-  data: Record<string, unknown>;
-  errors?: {
-    message: string;
-    status?: number;
-  }[];
+interface MediaListCollection {
+  lists: MediaList[];
+  hasNextChunk?: boolean;
+}
+
+// Base response type for all AniList API calls.
+export interface ApiResponse<TData> {
+  data: TData;
+  errors?: AniListGraphQLError[];
   rateLimit?: RateLimitInfo;
 }
 
 export interface MediaListResponse {
   data: {
-    MediaListCollection?: {
-      lists: MediaList[];
-    };
+    MediaListCollection?: MediaListCollection | null;
   };
-  errors?: {
-    message: string;
-    status?: number;
-  }[];
+  errors?: AniListGraphQLError[];
+}
+
+export interface MediaListPaginationMetadata {
+  chunk: number;
+  perChunk: number;
+  hasNextChunk: boolean;
 }
 
 export interface MutationResponse {
@@ -123,10 +147,7 @@ export interface MutationResponse {
       hiddenFromStatusLists: boolean;
     };
   };
-  errors?: {
-    message: string;
-    status?: number;
-  }[];
+  errors?: AniListGraphQLError[];
 }
 
 // Types for Custom List Manager
@@ -149,13 +170,100 @@ export interface OptionGroup {
 
 export interface CustomListApiResponse {
   data: {
-    User: {
+    User?: {
       mediaListOptions: {
         [key: string]: {
           customLists: string[];
           sectionOrder: string[];
         };
       };
-    };
+    } | null;
   };
 }
+
+export type NarrowMediaListCollectionData = {
+  MediaListCollection: NonNullable<
+    MediaListResponse["data"]["MediaListCollection"]
+  >;
+};
+
+export type NarrowPagedMediaListCollectionData = {
+  MediaListCollection: NarrowMediaListCollectionData["MediaListCollection"] & {
+    hasNextChunk: boolean;
+  };
+};
+
+export type NarrowCustomListOptionsData = {
+  User: {
+    mediaListOptions: Record<
+      string,
+      {
+        customLists: string[];
+        sectionOrder: string[];
+      }
+    >;
+  };
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const isStringArray = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((item) => typeof item === "string");
+
+export const hasMediaListCollectionData = (
+  data: unknown,
+): data is NarrowMediaListCollectionData => {
+  if (!isRecord(data)) {
+    return false;
+  }
+
+  const mediaListCollection = data.MediaListCollection;
+  if (
+    !isRecord(mediaListCollection) ||
+    !Array.isArray(mediaListCollection.lists)
+  ) {
+    return false;
+  }
+
+  return true;
+};
+
+export const hasPagedMediaListCollectionData = (
+  data: unknown,
+): data is NarrowPagedMediaListCollectionData => {
+  if (!hasMediaListCollectionData(data)) {
+    return false;
+  }
+
+  return typeof data.MediaListCollection.hasNextChunk === "boolean";
+};
+
+export const hasCustomListOptionsData = (
+  data: unknown,
+  listKey: string,
+): data is NarrowCustomListOptionsData => {
+  if (!isRecord(data)) {
+    return false;
+  }
+
+  const user = data.User;
+  if (!isRecord(user)) {
+    return false;
+  }
+
+  const mediaListOptions = user.mediaListOptions;
+  if (!isRecord(mediaListOptions)) {
+    return false;
+  }
+
+  const listOptions = mediaListOptions[listKey];
+  if (!isRecord(listOptions)) {
+    return false;
+  }
+
+  return (
+    isStringArray(listOptions.customLists) &&
+    isStringArray(listOptions.sectionOrder)
+  );
+};
