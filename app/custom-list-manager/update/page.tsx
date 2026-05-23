@@ -102,7 +102,7 @@ type PendingAction = "pause" | "stop" | "complete" | null;
 const PRE_REQUEST_RENDER_DELAY_MS = 120;
 const REQUEST_INTERVAL_MS = 2000;
 const LOW_RATE_LIMIT_THRESHOLD = 5;
-const MEDIA_LIST_PAGE_SIZE = 50;
+const MEDIA_LIST_PAGE_SIZE = 500;
 
 const STATUS_REGEX = /^Status set to (.+)$/;
 const SCORE_REGEX = /^Score set to (\d+)$/;
