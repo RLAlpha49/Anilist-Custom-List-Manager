@@ -25,6 +25,10 @@ const VIEWER_QUERY = `
   }
 `;
 
+const REDIRECT_MIN_DISPLAY_MS = 5000;
+const VERIFY_STEP_MIN_DISPLAY_MS = 1500;
+const PROGRESS_FINISH_VISIBLE_MS = 450;
+
 function PageData() {
   const router = useRouter();
   const [progress, setProgress] = useState(0);
@@ -37,6 +41,8 @@ function PageData() {
 
   useEffect(() => {
     let cancelled = false;
+    let redirectTimeout: ReturnType<typeof setTimeout> | undefined;
+    const loginStartedAt = Date.now();
 
     const verifyLogin = async () => {
       try {
@@ -58,8 +64,21 @@ function PageData() {
 
         setProgress(48);
         setMessage("Verifying your AniList session...");
+        const verifyStepStartedAt = Date.now();
 
         const response = await fetchAniList(VIEWER_QUERY, {}, accessToken);
+        const verifyElapsedMs = Date.now() - verifyStepStartedAt;
+        const verifyRemainingDelayMs = Math.max(
+          0,
+          VERIFY_STEP_MIN_DISPLAY_MS - verifyElapsedMs,
+        );
+
+        if (verifyRemainingDelayMs > 0) {
+          await new Promise<void>((resolve) => {
+            setTimeout(resolve, verifyRemainingDelayMs);
+          });
+        }
+
         const viewer = response.data?.Viewer as
           | { id?: number; name?: string }
           | undefined;
@@ -74,6 +93,16 @@ function PageData() {
 
         saveToken(accessToken);
         setProgress(100);
+        setMessage("Finalizing your connection...");
+
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, PROGRESS_FINISH_VISIBLE_MS);
+        });
+
+        if (cancelled) {
+          return;
+        }
+
         setStatus("success");
         setMessage(
           <>
@@ -82,9 +111,19 @@ function PageData() {
           </>,
         );
 
-        setTimeout(() => {
+        const elapsedMs = Date.now() - loginStartedAt;
+        const remainingDelayMs = Math.max(
+          0,
+          REDIRECT_MIN_DISPLAY_MS - elapsedMs,
+        );
+
+        redirectTimeout = setTimeout(() => {
+          if (cancelled) {
+            return;
+          }
+
           router.replace("/anilist-login");
-        }, 1200);
+        }, remainingDelayMs);
       } catch (error) {
         if (cancelled) {
           return;
@@ -106,6 +145,9 @@ function PageData() {
 
     return () => {
       cancelled = true;
+      if (redirectTimeout) {
+        clearTimeout(redirectTimeout);
+      }
     };
   }, [router]);
 
