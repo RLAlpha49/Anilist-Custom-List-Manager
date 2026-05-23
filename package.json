@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
-    "start": "next start --turbopack",
+    "start": "next start",
     "check:unused": "bunx knip",
     "lint": "eslint . --fix",
     "lint:check": "eslint .",
