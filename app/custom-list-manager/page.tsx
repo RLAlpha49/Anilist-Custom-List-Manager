@@ -82,9 +82,12 @@ import {
   tags,
 } from "@/lib/options";
 import {
+  AniListRequestVariables,
   ApiError,
+  ApiResponse,
   CustomList,
   CustomListApiResponse,
+  hasCustomListOptionsData,
   ListCondition,
   OptionGroup,
 } from "@/lib/types";
@@ -124,6 +127,20 @@ interface CachedListState {
   originalSectionOrder: string[];
   dataLoaded: boolean;
   isListEmpty: boolean;
+}
+
+interface ListOptionsInputPayload {
+  customLists?: string[];
+  sectionOrder?: string[];
+}
+
+interface UpdateUserListOptionsVariables extends AniListRequestVariables {
+  animeListOptions?: ListOptionsInputPayload;
+  mangaListOptions?: ListOptionsInputPayload;
+}
+
+interface FetchUserCustomListsVariables extends AniListRequestVariables {
+  userId: number;
 }
 
 const EMPTY_LIST_STATE: CachedListState = {
@@ -293,6 +310,20 @@ const CustomListRow = memo(function CustomListRow({
 });
 
 function PageData() {
+  const buildListOptionsVariables = useCallback(
+    (
+      type: MediaType,
+      payload: ListOptionsInputPayload,
+    ): UpdateUserListOptionsVariables => {
+      if (type === "ANIME") {
+        return { animeListOptions: payload };
+      }
+
+      return { mangaListOptions: payload };
+    },
+    [],
+  );
+
   // State Hooks
   const [lists, setLists] = useState<CustomList[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
@@ -385,12 +416,10 @@ function PageData() {
       }
     `;
 
-    const variables = {
-      [`${listType.toLowerCase()}ListOptions`]: {
-        customLists: updatedCustomLists,
-        sectionOrder: filteredSectionOrder,
-      },
-    };
+    const variables = buildListOptionsVariables(listType, {
+      customLists: updatedCustomLists,
+      sectionOrder: filteredSectionOrder,
+    });
 
     try {
       await fetchAniListData(query, variables);
@@ -414,10 +443,13 @@ function PageData() {
   );
 
   const fetchAniListData = useCallback(
-    async (
+    async <
+      TData,
+      TVariables extends AniListRequestVariables = AniListRequestVariables,
+    >(
       query: string,
-      variables: Record<string, unknown>,
-    ): Promise<unknown> => {
+      variables: TVariables,
+    ): Promise<ApiResponse<TData>> => {
       const getAuthToken = (): string => {
         let authToken = token;
         if (!authToken) {
@@ -430,7 +462,7 @@ function PageData() {
       };
 
       const authToken = getAuthToken();
-      return await fetchAniList(query, variables, authToken);
+      return await fetchAniList<TData, TVariables>(query, variables, authToken);
     },
     [token],
   );
@@ -449,11 +481,9 @@ function PageData() {
 				}
 			`;
 
-      const variables = {
-        [`${listType.toLowerCase()}ListOptions`]: {
-          sectionOrder: updatedOrder,
-        },
-      };
+      const variables = buildListOptionsVariables(listType, {
+        sectionOrder: updatedOrder,
+      });
 
       try {
         await fetchAniListData(query, variables);
@@ -468,7 +498,7 @@ function PageData() {
         });
       }
     },
-    [listType, fetchAniListData, toast],
+    [buildListOptionsVariables, listType, fetchAniListData, toast],
   );
 
   useEffect(() => {
@@ -695,7 +725,14 @@ function PageData() {
 					}
 				}
 			`;
-      const variables = { userId };
+      const parsedUserId = Number.parseInt(String(userId), 10);
+      if (!Number.isFinite(parsedUserId)) {
+        throw new TypeError("Invalid AniList user ID.");
+      }
+
+      const variables: FetchUserCustomListsVariables = {
+        userId: parsedUserId,
+      };
 
       try {
         let authToken = token;
@@ -705,10 +742,18 @@ function PageData() {
             throw new Error("Anilist token not found");
           }
         }
-        const rawResponse = await fetchAniList(query, variables, authToken);
-        const response = rawResponse as CustomListApiResponse;
-        const listOptions =
-          response.data.User.mediaListOptions[`${type.toLowerCase()}List`];
+        const response = await fetchAniList<
+          CustomListApiResponse["data"],
+          FetchUserCustomListsVariables
+        >(query, variables, authToken);
+        const listKey = `${type.toLowerCase()}List`;
+        if (!hasCustomListOptionsData(response.data, listKey)) {
+          throw new Error(
+            "AniList returned an unexpected custom list payload.",
+          );
+        }
+
+        const listOptions = response.data.User.mediaListOptions[listKey];
         const fetchedCustomLists = listOptions.customLists;
         const fetchedSectionOrder = listOptions.sectionOrder;
 
@@ -848,16 +893,14 @@ function PageData() {
         }
       `;
 
-      const variables = {
-        [`${listType.toLowerCase()}ListOptions`]: {
-          customLists: lists.map((l) =>
-            l.name === list.name ? trimmedName : l.name,
-          ),
-          sectionOrder: originalSectionOrder.map((name) =>
-            name === list.name ? trimmedName : name,
-          ),
-        },
-      };
+      const variables = buildListOptionsVariables(listType, {
+        customLists: lists.map((l) =>
+          l.name === list.name ? trimmedName : l.name,
+        ),
+        sectionOrder: originalSectionOrder.map((name) =>
+          name === list.name ? trimmedName : name,
+        ),
+      });
 
       try {
         await fetchAniListData(query, variables);
@@ -874,7 +917,14 @@ function PageData() {
 
       setShowRenameModal(false);
     },
-    [lists, listType, fetchAniListData, toast, originalSectionOrder],
+    [
+      buildListOptionsVariables,
+      lists,
+      listType,
+      fetchAniListData,
+      toast,
+      originalSectionOrder,
+    ],
   );
 
   const addNewList = useCallback(() => {
@@ -919,14 +969,15 @@ function PageData() {
       }
     `;
 
-    const variables = {
-      [`${listType.toLowerCase()}ListOptions`]: {
-        customLists: updatedLists.map((list) => list.name),
-      },
-    };
+    const variables = buildListOptionsVariables(listType, {
+      customLists: updatedLists.map((list) => list.name),
+    });
 
     try {
-      await fetchAniListData(query, variables);
+      await fetchAniListData<
+        CustomListApiResponse["data"],
+        UpdateUserListOptionsVariables
+      >(query, variables);
       toast.success("Success", {
         description: `New list "${trimmedName}" added successfully.`,
       });
