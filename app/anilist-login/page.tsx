@@ -139,6 +139,12 @@ function PageData() {
     router.push("/");
   };
 
+  const primaryButtonClasses =
+    "flex w-full items-center justify-center gap-2 rounded-lg px-6 py-3.5 font-bold transition-all duration-200 ease-out transform-gpu hover:-translate-y-0.5 hover:brightness-110 hover:shadow-[0_10px_26px_rgba(245,158,11,0.24)] active:translate-y-0 active:scale-[0.98]";
+
+  const secondaryButtonClasses =
+    "flex w-full items-center justify-center gap-2 rounded-lg px-6 py-3.5 transition-all duration-200 ease-out transform-gpu hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(9,8,16,0.25)] active:translate-y-0 active:scale-[0.98]";
+
   const renderAccountStatus = () => {
     if (loadingUserData) {
       return (
@@ -274,11 +280,7 @@ function PageData() {
             {!isLoggedIn && (
               <button
                 onClick={handleLogin}
-                className="
-                  flex w-full items-center justify-center gap-2 rounded-lg px-6 py-3.5 font-bold
-                  transition-all duration-200
-                  hover:brightness-110
-                "
+                className={primaryButtonClasses}
                 style={{ backgroundColor: "var(--z-amber)", color: "#07060f" }}
                 aria-label="Login with AniList"
               >
@@ -291,11 +293,7 @@ function PageData() {
               <>
                 <button
                   onClick={handleNext}
-                  className="
-                    flex w-full items-center justify-center gap-2 rounded-lg px-6 py-3.5 font-bold
-                    transition-all duration-200
-                    hover:brightness-110
-                  "
+                  className={primaryButtonClasses}
                   style={{
                     backgroundColor: "var(--z-amber)",
                     color: "#07060f",
@@ -306,10 +304,7 @@ function PageData() {
                 </button>
                 <button
                   onClick={logout}
-                  className="
-                    flex w-full items-center justify-center gap-2 rounded-lg px-6 py-3.5
-                    transition-all duration-200
-                  "
+                  className={secondaryButtonClasses}
                   style={{
                     border: "1px solid var(--z-border-mid)",
                     color: "var(--z-muted)",
@@ -324,14 +319,11 @@ function PageData() {
 
             <button
               onClick={handleHome}
-              className="
-                flex w-full items-center justify-center gap-2 rounded-lg px-6 py-3.5 transition-all
-                duration-200
-                hover:text-(--z-text)
-              "
+              className={`${secondaryButtonClasses} hover:text-(--z-text)`}
               style={{
-                border: "1px solid var(--z-border)",
-                color: "var(--z-subtle)",
+                border: "1px solid var(--z-border-mid)",
+                backgroundColor: "var(--z-card-up)",
+                color: "var(--z-muted)",
               }}
               aria-label="Navigate to Home"
             >

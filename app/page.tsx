@@ -107,10 +107,14 @@ function PageData() {
             target="_blank"
             rel="noopener noreferrer"
             className="
-              inline-flex items-center gap-2 rounded-lg px-8 py-4 text-base transition-all
-              duration-200
-              hover:text-(--z-text)
-              active:scale-95
+              group inline-flex items-center gap-2 rounded-lg px-8 py-4 text-base
+              transition-[transform,color,background-color,border-color,box-shadow] duration-200
+              ease-out
+              hover:-translate-y-0.5 hover:border-(--z-border-mid) hover:bg-(--z-card-up)
+              hover:text-(--z-text) hover:shadow-[0_8px_18px_rgba(0,0,0,0.28)]
+              focus-visible:ring-2 focus-visible:ring-(--z-amber)/60 focus-visible:ring-offset-2
+              focus-visible:ring-offset-(--z-bg) focus-visible:outline-none
+              active:translate-y-px active:scale-95
             "
             style={{
               border: "1px solid var(--z-border)",
@@ -118,7 +122,14 @@ function PageData() {
             }}
             aria-label="View on GitHub"
           >
-            <FaGithub size={18} />
+            <FaGithub
+              size={18}
+              className="
+                transition-transform duration-200 ease-out
+                group-hover:-rotate-6
+                group-active:scale-95
+              "
+            />
             GitHub
           </Link>
         </motion.div>
