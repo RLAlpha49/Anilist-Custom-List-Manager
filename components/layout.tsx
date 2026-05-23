@@ -54,7 +54,18 @@ export default function Layout({ children }: Readonly<LayoutProps>) {
           <span className="text-sm text-z-subtle">
             &copy; 2025 Anilist Custom List Manager
           </span>
-          <span className="text-xs text-z-subtle">Powered by AniList API</span>
+          <div className="flex items-center gap-4 text-xs">
+            <span className="text-z-subtle">Powered by AniList API</span>
+            <Link
+              href="https://github.com/RLAlpha49/Anilist-Custom-List-Manager"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-z-muted transition-colors duration-200 hover:text-z-text"
+              aria-label="View project on GitHub"
+            >
+              GitHub
+            </Link>
+          </div>
         </div>
       </footer>
       <Toaster />
