@@ -2,15 +2,49 @@ name: Code Quality
 on:
   push:
     branches: [main]
+    paths:
+      - "**/*.js"
+      - "**/*.cjs"
+      - "**/*.mjs"
+      - "**/*.ts"
+      - "**/*.tsx"
+      - "**/*.jsx"
+      - "package.json"
+      - "bun.lock"
+      - "tsconfig.json"
+      - "next.config.js"
+      - ".github/workflows/code-quality.yml"
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "**/*.js"
+      - "**/*.cjs"
+      - "**/*.mjs"
+      - "**/*.ts"
+      - "**/*.tsx"
+      - "**/*.jsx"
+      - "package.json"
+      - "bun.lock"
+      - "tsconfig.json"
+      - "next.config.js"
+      - ".github/workflows/code-quality.yml"
   schedule:
     - cron: "0 0 * * 3"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: code-quality-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   analyze:
     name: Analyze
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     permissions:
       security-events: write
       actions: read

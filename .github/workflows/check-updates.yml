@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   discover-updates:
-    timeout-minutes: 60
+    timeout-minutes: 25
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -268,7 +268,16 @@ jobs:
 
           printf '%s\n' "$change_summary" >> "$GITHUB_STEP_SUMMARY"
 
-          bun run validate:ci
+          if [ "$manifest_changed" = "true" ]; then
+            echo "[INFO] Running dependency validation: typecheck + build (manifest updates detected)"
+            bun run typecheck
+            bun run build
+            printf '%s\n' "Validation profile: typecheck + build (manifest updates)." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "[INFO] Running dependency validation: typecheck only (lockfile-only refresh)"
+            bun run typecheck
+            printf '%s\n' "Validation profile: typecheck only (lockfile-only refresh)." >> "$GITHUB_STEP_SUMMARY"
+          fi
 
           {
             printf '%s\n' "has_changes=true"
@@ -331,7 +340,7 @@ jobs:
           retention-days: 7
 
   publish-updates:
-    timeout-minutes: 30
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     needs: [discover-updates]
     if: ${{ needs.discover-updates.outputs.should_apply == 'true' }}
