@@ -94,16 +94,25 @@ interface SaveEntryMutationVariables extends AniListRequestVariables {
   hiddenFromStatusLists: boolean;
 }
 
+type BatchedSaveEntryMutationData = Record<
+  string,
+  {
+    id: number;
+  }
+>;
+
 type QueueListGroup = NonNullable<
   MediaListResponse["data"]["MediaListCollection"]
 >["lists"][number];
 
 type PendingAction = "pause" | "stop" | "complete" | null;
 
-const PRE_REQUEST_RENDER_DELAY_MS = 120;
-const REQUEST_INTERVAL_MS = 2000;
 const LOW_RATE_LIMIT_THRESHOLD = 5;
 const MEDIA_LIST_PAGE_SIZE = 500;
+const DEFAULT_MUTATION_BATCH_SIZE = 6;
+const MAX_MUTATION_BATCH_SIZE = 12;
+const MIN_MUTATION_BATCH_SIZE = 1;
+const RATE_LIMIT_SAFETY_RESERVE = 2;
 
 const STATUS_REGEX = /^Status set to (.+)$/;
 const SCORE_REGEX = /^Score set to (\d+)$/;
@@ -239,15 +248,95 @@ function computeNewCustomLists(
   return { newLists: [...newLists], changed, shouldHide };
 }
 
-const wait = (ms: number) =>
-  new Promise<void>((resolve) => setTimeout(resolve, ms));
-
 const waitForUiCommit = () =>
   new Promise<void>((resolve) => {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => resolve());
     });
   });
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const getAdaptiveBatchSize = (
+  rateLimitInfo: RateLimitInfo | null,
+  pendingCount: number,
+): number => {
+  if (pendingCount <= 0) {
+    return 0;
+  }
+
+  if (!rateLimitInfo?.remaining || rateLimitInfo.remaining <= 0) {
+    return Math.min(DEFAULT_MUTATION_BATCH_SIZE, pendingCount);
+  }
+
+  const availableRequestBudget = Math.max(
+    MIN_MUTATION_BATCH_SIZE,
+    rateLimitInfo.remaining - RATE_LIMIT_SAFETY_RESERVE,
+  );
+
+  return Math.min(
+    Math.max(MIN_MUTATION_BATCH_SIZE, availableRequestBudget),
+    MAX_MUTATION_BATCH_SIZE,
+    pendingCount,
+  );
+};
+
+const buildBatchedSaveEntryMutation = (
+  entries: TrackedEntry[],
+): {
+  mutation: string;
+  variables: AniListRequestVariables;
+  aliases: string[];
+} => {
+  const variableDefinitions: string[] = [];
+  const mutationFields: string[] = [];
+  const variables: AniListRequestVariables = {};
+  const aliases: string[] = [];
+
+  for (const [index, entry] of entries.entries()) {
+    const idVariable = `id${index}`;
+    const customListsVariable = `customLists${index}`;
+    const hiddenVariable = `hiddenFromStatusLists${index}`;
+    const alias = `entry${index}`;
+
+    aliases.push(alias);
+    variableDefinitions.push(
+      `$${idVariable}: Int`,
+      `$${customListsVariable}: [String]`,
+      `$${hiddenVariable}: Boolean`,
+    );
+
+    mutationFields.push(
+      `${alias}: SaveMediaListEntry(id: $${idVariable}, customLists: $${customListsVariable}, hiddenFromStatusLists: $${hiddenVariable}) { id }`,
+    );
+
+    variables[idVariable] = entry.entry.id;
+    variables[customListsVariable] = entry.newCustomLists;
+    variables[hiddenVariable] = entry.shouldHide;
+  }
+
+  return {
+    mutation: `mutation (${variableDefinitions.join(", ")}) { ${mutationFields.join(" ")} }`,
+    variables,
+    aliases,
+  };
+};
+
+const hasSuccessfulBatchedSaveResponse = (
+  data: unknown,
+  aliases: string[],
+): data is BatchedSaveEntryMutationData => {
+  if (!isRecord(data)) {
+    return false;
+  }
+
+  return aliases.every((alias) => {
+    const entryResult = data[alias];
+
+    return isRecord(entryResult) && typeof entryResult.id === "number";
+  });
+};
 
 const getEntryTitle = (entry: MediaEntry): string =>
   entry.media.title.userPreferred ||
@@ -1126,6 +1215,7 @@ export default function UpdatePage() {
   const stopRequestedRef = useRef(false);
   const completeRequestedRef = useRef(false);
   const navigationStopRequestedRef = useRef(false);
+  const rateLimitInfoRef = useRef<RateLimitInfo | null>(null);
   const storageFallbackWarnedRef = useRef(false);
 
   const getAuthToken = (): string | null =>
@@ -1155,8 +1245,9 @@ export default function UpdatePage() {
     setRetryStatus({ ...retryContext, startedAt: Date.now() });
   };
 
-  const updateRateLimitState = (nextRateLimit: RateLimitInfo | undefined) => {
-    setRateLimitInfo(nextRateLimit ?? null);
+  const updateRateLimitState = (nextRateLimit: RateLimitInfo | null = null) => {
+    rateLimitInfoRef.current = nextRateLimit;
+    setRateLimitInfo(nextRateLimit);
     setRetryStatus(null);
   };
 
@@ -1204,6 +1295,7 @@ export default function UpdatePage() {
     setProcessedCount(0);
     setFetchError(null);
     setQueuedAction(null);
+    rateLimitInfoRef.current = null;
     setRateLimitInfo(null);
     setRetryStatus(null);
     setPhase("scanning");
@@ -1261,7 +1353,7 @@ export default function UpdatePage() {
             handleRetryState,
           );
 
-          updateRateLimitState(response.rateLimit);
+          updateRateLimitState(response.rateLimit ?? null);
 
           if (cancelled) {
             return;
@@ -1375,17 +1467,112 @@ export default function UpdatePage() {
     setQueuedAction(null);
     setPhase("processing");
 
+    const runSingleEntryMutation = async (
+      entry: TrackedEntry,
+    ): Promise<TrackedEntry> => {
+      const response = await fetchAniList<
+        MutationResponse["data"],
+        SaveEntryMutationVariables
+      >(
+        SAVE_ENTRY_MUTATION,
+        {
+          id: entry.entry.id,
+          customLists: entry.newCustomLists,
+          hiddenFromStatusLists: entry.shouldHide,
+        },
+        authToken,
+        handleRetryState,
+      );
+
+      updateRateLimitState(response.rateLimit ?? null);
+      return { ...entry, state: "done" };
+    };
+
+    const runMutationBatch = async (
+      entries: TrackedEntry[],
+    ): Promise<{
+      doneEntriesBatch: TrackedEntry[];
+      erroredEntriesBatch: TrackedEntry[];
+    }> => {
+      const doneEntriesBatch: TrackedEntry[] = [];
+      const erroredEntriesBatch: TrackedEntry[] = [];
+
+      try {
+        const { mutation, variables, aliases } =
+          buildBatchedSaveEntryMutation(entries);
+        const response = await fetchAniList<
+          BatchedSaveEntryMutationData,
+          AniListRequestVariables
+        >(mutation, variables, authToken, handleRetryState);
+
+        updateRateLimitState(response.rateLimit ?? null);
+
+        if (!hasSuccessfulBatchedSaveResponse(response.data, aliases)) {
+          throw new Error(
+            "AniList batch mutation response was missing one or more updated entries.",
+          );
+        }
+
+        doneEntriesBatch.push(
+          ...entries.map((entry) => ({ ...entry, state: "done" as const })),
+        );
+      } catch (batchError) {
+        console.warn(
+          "Batch update failed, falling back to single-entry updates.",
+          batchError,
+        );
+
+        for (const [index, entry] of entries.entries()) {
+          if (index > 0) {
+            setCurrentUpdating({ ...entry, state: "updating" });
+            await waitForUiCommit();
+          }
+
+          if (navigationStopRequestedRef.current || stopRequestedRef.current) {
+            break;
+          }
+
+          try {
+            const doneEntry = await runSingleEntryMutation(entry);
+            doneEntriesBatch.push(doneEntry);
+          } catch (err) {
+            console.error("Failed to update entry", entry.entry.id, err);
+
+            toast.error("Update Failed", {
+              description: `Skipping "${getEntryTitle(entry.entry)}".`,
+            });
+
+            erroredEntriesBatch.push({
+              ...entry,
+              state: "error",
+              errorMessage:
+                err instanceof Error ? err.message : "Unknown error",
+            });
+          }
+        }
+      }
+
+      return { doneEntriesBatch, erroredEntriesBatch };
+    };
+
     try {
       while (pendingQueueRef.current.length > 0) {
-        const [nextEntry, ...rest] = pendingQueueRef.current;
+        const batchSize = getAdaptiveBatchSize(
+          rateLimitInfoRef.current,
+          pendingQueueRef.current.length,
+        );
+        const entriesToProcess = pendingQueueRef.current.slice(0, batchSize);
+        const rest = pendingQueueRef.current.slice(entriesToProcess.length);
+
+        if (entriesToProcess.length === 0) {
+          break;
+        }
+
         pendingQueueRef.current = rest;
         setPendingEntries(rest);
-        setCurrentUpdating({ ...nextEntry, state: "updating" });
-        let completedEntry: TrackedEntry | null = null;
+        setCurrentUpdating({ ...entriesToProcess[0], state: "updating" });
 
-        const visibleAt = Date.now();
         await waitForUiCommit();
-        await wait(PRE_REQUEST_RENDER_DELAY_MS);
 
         if (navigationStopRequestedRef.current || stopRequestedRef.current) {
           setCurrentUpdating(null);
@@ -1398,55 +1585,23 @@ export default function UpdatePage() {
           return;
         }
 
-        try {
-          const response = await fetchAniList<
-            MutationResponse["data"],
-            SaveEntryMutationVariables
-          >(
-            SAVE_ENTRY_MUTATION,
-            {
-              id: nextEntry.entry.id,
-              customLists: nextEntry.newCustomLists,
-              hiddenFromStatusLists: nextEntry.shouldHide,
-            },
-            authToken,
-            handleRetryState,
-          );
-          updateRateLimitState(response.rateLimit);
-          updatedCountRef.current += 1;
-          completedEntry = { ...nextEntry, state: "done" };
-        } catch (err) {
-          console.error("Failed to update entry", nextEntry.entry.id, err);
-          errorCountRef.current += 1;
+        const { doneEntriesBatch, erroredEntriesBatch } =
+          await runMutationBatch(entriesToProcess);
 
-          toast.error("Update Failed", {
-            description: `Skipping "${getEntryTitle(nextEntry.entry)}".`,
-          });
+        updatedCountRef.current += doneEntriesBatch.length;
+        errorCountRef.current += erroredEntriesBatch.length;
 
-          setErroredEntries((prev) => [
-            ...prev,
-            {
-              ...nextEntry,
-              state: "error",
-              errorMessage:
-                err instanceof Error ? err.message : "Unknown error",
-            },
-          ]);
-        } finally {
-          const elapsedVisibleMs = Date.now() - visibleAt;
-          if (elapsedVisibleMs < REQUEST_INTERVAL_MS) {
-            await wait(REQUEST_INTERVAL_MS - elapsedVisibleMs);
-          }
+        setCurrentUpdating(null);
 
-          setCurrentUpdating(null);
-
-          if (completedEntry) {
-            const doneEntry = completedEntry;
-            setDoneEntries((prev) => [doneEntry, ...prev]);
-          }
-
-          setProcessedCount(updatedCountRef.current + errorCountRef.current);
+        if (doneEntriesBatch.length > 0) {
+          setDoneEntries((prev) => [...doneEntriesBatch.toReversed(), ...prev]);
         }
+
+        if (erroredEntriesBatch.length > 0) {
+          setErroredEntries((prev) => [...prev, ...erroredEntriesBatch]);
+        }
+
+        setProcessedCount(updatedCountRef.current + errorCountRef.current);
 
         if (stopRequestedRef.current) {
           if (navigationStopRequestedRef.current) {
