@@ -187,9 +187,11 @@ function PageData() {
             />
             <input
               type="text"
+              name="faqSearch"
               placeholder="Search questions..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              autoComplete="off"
               className="
                 w-full rounded-xl border border-(--z-border-mid) bg-z-card py-3.5 pr-4 pl-10
                 text-z-text transition-colors

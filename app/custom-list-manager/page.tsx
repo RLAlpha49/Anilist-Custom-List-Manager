@@ -219,6 +219,35 @@ function ActionIconButton({
   );
 }
 
+function useDesktopAutoFocus(isOpen: boolean): boolean {
+  const [shouldAutoFocus, setShouldAutoFocus] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen || globalThis.window === undefined) {
+      setShouldAutoFocus(false);
+      return;
+    }
+
+    const mediaQuery = globalThis.window.matchMedia(
+      "(min-width: 768px) and (pointer: fine)",
+    );
+
+    const updateShouldAutoFocus = () => {
+      setShouldAutoFocus(mediaQuery.matches);
+    };
+
+    updateShouldAutoFocus();
+
+    mediaQuery.addEventListener("change", updateShouldAutoFocus);
+
+    return () => {
+      mediaQuery.removeEventListener("change", updateShouldAutoFocus);
+    };
+  }, [isOpen]);
+
+  return shouldAutoFocus;
+}
+
 function CustomListManagerHelpSheet() {
   return (
     <SheetContent
@@ -502,6 +531,7 @@ function PageData() {
         [],
       ),
     );
+  const shouldAutoFocusAddListInput = useDesktopAutoFocus(showAddModal);
 
   // Ref Hooks
   const updateSectionOrderRef =
@@ -1787,6 +1817,7 @@ function PageData() {
         <div className="space-y-4">
           <input
             type="text"
+            name="newCustomListName"
             className="w-full rounded-lg px-3 py-2 focus:outline-none"
             style={{
               backgroundColor: "var(--z-surface)",
@@ -1799,7 +1830,8 @@ function PageData() {
               setNewListName(e.target.value);
               setAddListError("");
             }}
-            autoFocus
+            autoComplete="off"
+            autoFocus={shouldAutoFocusAddListInput}
             maxLength={50}
             aria-label="New list name"
           />

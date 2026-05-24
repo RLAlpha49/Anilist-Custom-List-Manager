@@ -10,9 +10,38 @@ interface RenameModalProps {
   onRename: (newName: string) => void;
 }
 
+function useDesktopAutoFocus(isOpen: boolean): boolean {
+  const [shouldAutoFocus, setShouldAutoFocus] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen || globalThis.window === undefined) {
+      setShouldAutoFocus(false);
+      return;
+    }
+
+    const mediaQuery = globalThis.window.matchMedia(
+      "(min-width: 768px) and (pointer: fine)",
+    );
+
+    const updateShouldAutoFocus = () => {
+      setShouldAutoFocus(mediaQuery.matches);
+    };
+
+    updateShouldAutoFocus();
+    mediaQuery.addEventListener("change", updateShouldAutoFocus);
+
+    return () => {
+      mediaQuery.removeEventListener("change", updateShouldAutoFocus);
+    };
+  }, [isOpen]);
+
+  return shouldAutoFocus;
+}
+
 const RenameModal = React.memo(
   ({ isOpen, onClose, currentListName, onRename }: RenameModalProps) => {
     const [newListName, setNewListName] = useState<string>(currentListName);
+    const shouldAutoFocus = useDesktopAutoFocus(isOpen);
 
     useEffect(() => {
       setNewListName(currentListName);
@@ -54,6 +83,7 @@ const RenameModal = React.memo(
             <input
               type="text"
               id="newListName"
+              name="renameCustomListName"
               value={newListName}
               onChange={(e) => setNewListName(e.target.value)}
               className="
@@ -64,7 +94,8 @@ const RenameModal = React.memo(
               "
               placeholder="Enter new list name"
               aria-label="New list name"
-              autoFocus
+              autoComplete="off"
+              autoFocus={shouldAutoFocus}
             />
           </div>
         </div>
