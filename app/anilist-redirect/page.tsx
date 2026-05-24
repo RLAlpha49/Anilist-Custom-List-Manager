@@ -187,17 +187,23 @@ function PageData() {
         }
 
         console.error("Failed to process redirect:", error);
-        const normalizedMessage =
-          error instanceof Error
-            ? error.message
-            : "An error occurred during login. Please try again.";
+        const userFacingError = getUserFacingApiError(
+          error,
+          "An error occurred during login. Please try again.",
+        );
+        const normalizedMessage = userFacingError.message;
         const normalizedFailureKind = classifyFallbackFailure({
           message: normalizedMessage,
         });
+        const safeFailureDetail = userFacingError.requestId
+          ? `${normalizedMessage} (Reference ID: ${userFacingError.requestId})`
+          : normalizedMessage;
 
         setFailureKind(normalizedFailureKind);
-        setFailureDetail(normalizedMessage);
+        setFailureDetail(safeFailureDetail);
         removeItemWithExpiry(STORAGE_KEYS.authToken);
+        removeItemWithExpiry(STORAGE_KEYS.authUserId);
+        removeItemWithExpiry(STORAGE_KEYS.authSessionIssuedAt);
         setProgress(100);
         setStatus("error");
         setMessage(getFallbackCopy(normalizedFailureKind).description);

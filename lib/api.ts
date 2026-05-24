@@ -58,6 +58,52 @@ interface RetryHandlers {
   onFailure?: (error: ApiError) => void;
 }
 
+type UserFacingApiErrorCode =
+  | "AUTH_REQUIRED"
+  | "RATE_LIMITED"
+  | "NETWORK_FAILURE"
+  | "REQUEST_TIMEOUT"
+  | "UPSTREAM_UNAVAILABLE"
+  | "REQUEST_FAILED";
+
+interface UserFacingApiErrorDefinition {
+  message: string;
+}
+
+const USER_FACING_API_ERROR_CATALOG: Record<
+  UserFacingApiErrorCode,
+  UserFacingApiErrorDefinition
+> = {
+  AUTH_REQUIRED: {
+    message:
+      "Your AniList session could not be verified. Please sign in again.",
+  },
+  RATE_LIMITED: {
+    message:
+      "AniList is currently rate-limiting requests. Please try again shortly.",
+  },
+  NETWORK_FAILURE: {
+    message:
+      "A network issue prevented contacting AniList. Check your connection and retry.",
+  },
+  REQUEST_TIMEOUT: {
+    message: "AniList took too long to respond. Please try again.",
+  },
+  UPSTREAM_UNAVAILABLE: {
+    message:
+      "AniList is temporarily unavailable right now. Please retry in a moment.",
+  },
+  REQUEST_FAILED: {
+    message: "We could not complete the AniList request. Please try again.",
+  },
+};
+
+export interface UserFacingApiError {
+  code: UserFacingApiErrorCode;
+  message: string;
+  requestId: string | null;
+}
+
 const inFlightRequests = new Map<string, InFlightRequestEntry>();
 const readRequestCache = new Map<string, ReadCacheEntry>();
 
@@ -692,6 +738,64 @@ const isNetworkError = (apiError: ApiError): boolean =>
   apiError.kind === "network" ||
   apiError.message === "Network Error" ||
   apiError.message.includes("NetworkError");
+
+const resolveUserFacingApiErrorCode = (
+  apiError: ApiError,
+): UserFacingApiErrorCode => {
+  const statusCode = apiError.status ?? apiError.response?.status ?? null;
+  const normalizedMessage = apiError.messages.join(" ").toLowerCase();
+
+  if (
+    statusCode === 401 ||
+    statusCode === 403 ||
+    normalizedMessage.includes("unauthorized") ||
+    normalizedMessage.includes("forbidden") ||
+    normalizedMessage.includes("invalid token") ||
+    normalizedMessage.includes("token")
+  ) {
+    return "AUTH_REQUIRED";
+  }
+
+  if (statusCode === 429) {
+    return "RATE_LIMITED";
+  }
+
+  if (apiError.kind === "timeout") {
+    return "REQUEST_TIMEOUT";
+  }
+
+  if (apiError.kind === "network") {
+    return "NETWORK_FAILURE";
+  }
+
+  if (statusCode !== null && statusCode >= 500) {
+    return "UPSTREAM_UNAVAILABLE";
+  }
+
+  return "REQUEST_FAILED";
+};
+
+export const getUserFacingApiError = (
+  error: unknown,
+  fallbackMessage?: string,
+): UserFacingApiError => {
+  const normalizedError = normalizeUnknownError(error);
+  const code = resolveUserFacingApiErrorCode(normalizedError);
+  const message =
+    USER_FACING_API_ERROR_CATALOG[code]?.message ??
+    fallbackMessage ??
+    USER_FACING_API_ERROR_CATALOG.REQUEST_FAILED.message;
+  const requestId =
+    typeof normalizedError.metadata?.requestId === "string"
+      ? normalizedError.metadata.requestId
+      : null;
+
+  return {
+    code,
+    message,
+    requestId,
+  };
+};
 
 interface RetryTelemetryContext {
   requestId: string;
