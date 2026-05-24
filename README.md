@@ -1,135 +1,66 @@
-# Anilist Custom List Manager
+# AniList Custom List Manager
 
-## Table of Contents
+A Next.js web app for people who want finer control over how AniList custom lists are organized and applied across anime and manga entries.
 
-- [Introduction](#introduction)
-- [Features](#features)
-- [Prerequisites](#prerequisites)
-- [Project Structure](#project-structure)
-- [Installation](#installation)
-- [Usage](#usage)
-- [Demo](#demo)
-- [Contributing](#contributing)
-- [License](#license)
+## Why this exists
 
-## Introduction
+AniList gives you custom lists, but keeping them tidy at scale can get repetitive. This project adds a guided workflow to:
 
-**Anilist Custom List Manager** is a tool designed to enhance your Anilist experience by allowing you to manage your anime and manga lists effortlessly. It's built with [Next.js](https://nextjs.org/), [Tailwind CSS](https://tailwindcss.com/), and [Radix UI](https://www.radix-ui.com/). Learn more about the [Anilist API](https://docs.anilist.co/).
+- connect your AniList account,
+- define list rules,
+- preview queued changes,
+- and apply updates in bulk.
 
-## Features
+It focuses on reducing manual list cleanup while keeping the process visible and reversible from the UI.
 
-| Feature                     | Description                                                                                                        |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Fetch Anime and Manga Lists | Easily retrieve your existing lists from Anilist.                                                                  |
-| Custom List Management      | Organize your entries into personalized lists for better tracking and organization.                                |
-| Sort Entries                | Sort your entries based on status, score, rereads, genres, tags, and type to quickly find what you're looking for. |
-| Automatic Updates           | Automatically update entries based on the conditions you set, ensuring your lists are up-to-date.                  |
-| User-Friendly Interface     | Clean and intuitive UI using Next.js, Tailwind CSS, and Radix UI components.                                       |
+## Key features
 
-## Prerequisites
+- **Fetch anime and manga custom lists** directly from AniList
+- **Drag-and-drop list ordering** with persisted section order updates
+- **List operations in-app**: add, rename, delete, and mark lists to remove from all entries
+- **Condition-based assignment** (status, score, format, genres, tags, tag categories, misc flags)
+- **Batch updater with queue controls** (start, pause, stop, complete)
 
-- Node.js v16 or newer
-- npm v8+ or Yarn v1.22+
+## Who it is for
 
-## Project Structure
+- AniList users with medium-to-large libraries
+- People who rely on many custom lists for filtering/organization
+- Users who want a visual workflow instead of manual per-entry edits
 
-```
-app/                 # Next.js App Router routes and layouts
-components/          # Reusable React UI components
-context/             # React Context providers and hooks for global state
-lib/                 # Shared utility functions and modules
-public/              # Static assets served at root
-tailwind.config.ts   # Tailwind CSS configuration
-tsconfig.json        # TypeScript compiler options
-next.config.js       # Next.js custom configuration
-.eslint.config.mjs   # ESLint linting rules
-```
+## Getting started
 
-## Installation
+### Prerequisites
 
-1. Clone the repository:
+- Node.js (current LTS recommended)
+- Bun (recommended in this repo because scripts use `bun run` in CI helpers)
 
-   ```bash
-   git clone https://github.com/RLAlpha49/anilist-custom-list-manager.git
-   cd anilist-custom-list-manager
-   ```
-
-2. Install dependencies:
-
-   ```bash
-   # npm
-   npm install
-
-   # or Yarn
-   yarn install
-   ```
-
-3. Configure environment variables:
-
-   Create a `.env` file in the root directory and add your Anilist API credentials:
-
-   ```env
-   NEXT_PUBLIC_ANILIST_CLIENT_ID=your_client_id
-   ```
-
-## Usage
-
-- Start development server:
-
-  ```bash
-  npm run dev
-  # or yarn dev
-  ```
-
-- Build for production:
-
-  ```bash
-  npm run build
-  # or yarn build
-  ```
-
-- Start production server:
-
-  ```bash
-  npm run start
-  # or yarn start
-  ```
-
-- Run linting:
-
-  ```bash
-  npm run lint
-  ```
-
-- Check code formatting:
-
-  ```bash
-  npm run format
-  ```
-
-- Fix code formatting:
-
-  ```bash
-  npm run format:write
-  ```
-
-- Update dependencies (excluding Tailwind CSS):
-
-  ```bash
-  npm run update
-  ```
-
-## Demo
-
-## Contributing
-
-Contributions are welcome! Please open issues and PRs via [GitHub Issues](https://github.com/RLAlpha49/anilist-custom-list-manager/issues).  
-Make sure to follow the existing code style by running lint and format scripts before submitting:
+### 1) Install dependencies
 
 ```bash
-npm run lint
-npm run format:write
+bun install
 ```
+
+### 2) Configure environment variables
+
+Create a `.env` file in the project root (or update the existing one):
+
+```env
+NEXT_PUBLIC_ANILIST_CLIENT_ID=your_anilist_client_id
+```
+
+### 3) Run the app
+
+```bash
+bun run dev
+```
+
+Open `http://localhost:3000`.
+
+## Security & data notes
+
+- Access tokens are stored locally in the browser via app storage helpers.
+- Requests are sent to AniList GraphQL over HTTPS.
+- This project does not include a backend service for token storage.
 
 ## License
 
