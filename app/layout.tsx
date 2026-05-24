@@ -1,5 +1,6 @@
 import "./globals.css";
 
+import type { Metadata } from "next";
 import { DM_Sans, Syne } from "next/font/google";
 import React from "react";
 
@@ -20,9 +21,54 @@ const dmSans = DM_Sans({
   display: "swap",
 });
 
-export const metadata = {
-  title: "Anilist Custom List Manager",
-  description: "Manage your anime and manga lists with ease",
+const DEFAULT_SITE_URL = "https://anilist-custom-list-manager.vercel.app";
+const configuredSiteUrl =
+  process.env.NEXT_PUBLIC_SITE_URL ??
+  process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL ??
+  process.env.NEXT_PUBLIC_VERCEL_URL;
+let normalizedSiteUrl = DEFAULT_SITE_URL;
+
+if (configuredSiteUrl) {
+  normalizedSiteUrl = configuredSiteUrl.startsWith("http")
+    ? configuredSiteUrl
+    : `https://${configuredSiteUrl}`;
+}
+
+export const metadata: Metadata = {
+  metadataBase: new URL(normalizedSiteUrl),
+  title: {
+    default: "AniList Custom List Manager",
+    template: "%s | AniList Custom List Manager",
+  },
+  description:
+    "Create and manage AniList custom lists with rule-based conditions, safer updates, and a guided workflow.",
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    siteName: "AniList Custom List Manager",
+    title: "AniList Custom List Manager",
+    description:
+      "Create and manage AniList custom lists with rule-based conditions and guided updates.",
+    url: "/",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "AniList Custom List Manager",
+    description:
+      "Manage AniList custom lists with flexible conditions and a step-by-step update flow.",
+  },
+  robots: {
+    index: false,
+    follow: false,
+    googleBot: {
+      index: false,
+      follow: false,
+      noimageindex: true,
+    },
+  },
 };
 
 const telemetryEnvironment =
