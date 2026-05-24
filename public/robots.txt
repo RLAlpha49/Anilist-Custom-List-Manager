@@ -1,9 +1,9 @@
 User-agent: *
-Disallow: /
-Allow: /$
-Allow: /_not-found
-Allow: /anilist-login
-Allow: /anilist-redirect
-Allow: /completed
-Allow: /custom-list-manager
-Allow: /custom-list-manager/update
+Allow: /
+Disallow: /anilist-login
+Disallow: /anilist-redirect
+Disallow: /custom-list-manager
+Disallow: /custom-list-manager/update
+Disallow: /completed
+
+Sitemap: /sitemap.xml
