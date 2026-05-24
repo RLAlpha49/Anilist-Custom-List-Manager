@@ -1,6 +1,5 @@
 "use client";
 
-import { motion } from "framer-motion";
 import React, { useEffect } from "react";
 
 export interface MediaCardProps {
@@ -60,29 +59,12 @@ export function MediaCard({
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{
+    <div
+      className="transition-[opacity,transform] duration-200 ease-out"
+      style={{
         opacity: 1,
-        y: 0,
-        scale: isUpdated ? [1, 1.03, 1] : 1,
-        transition: {
-          opacity: { duration: 0.4 },
-          y: { duration: 0.4, type: "spring", stiffness: 100 },
-          scale: isUpdated
-            ? {
-                duration: 0.6,
-                times: [0, 0.5, 1],
-              }
-            : undefined,
-        },
+        transform: isUpdated ? "scale(1.01)" : "scale(1)",
       }}
-      exit={{
-        opacity: 0,
-        y: -10,
-        transition: { duration: 0.2, ease: "easeOut" },
-      }}
-      transition={{ duration: 0.15 }}
     >
       <div className="
         group flex gap-3 rounded-lg border border-(--z-border) bg-z-card p-3 transition-all
@@ -163,6 +145,6 @@ export function MediaCard({
           )}
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }
