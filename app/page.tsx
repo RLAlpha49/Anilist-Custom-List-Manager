@@ -1,51 +1,26 @@
-"use client";
-
-import { motion } from "framer-motion";
 import Link from "next/link";
-import { Suspense } from "react";
 import { FaExclamationTriangle, FaGithub } from "react-icons/fa";
 import { HiOutlineSparkles } from "react-icons/hi";
-import { toast } from "sonner";
 
 import Breadcrumbs from "@/components/breadcrumbs";
+import { HomeCacheResetButton } from "@/components/home-cache-reset-button";
 import Layout from "@/components/layout";
-import LoadingIndicator from "@/components/loading-indicator";
-import { clearAppStorage } from "@/lib/local-storage";
 
-function PageData() {
-  const clearCache = () => {
-    clearAppStorage();
-    toast.success("Cache cleared!", {
-      description:
-        "Saved AniList session data, fetched lists, and local setup were cleared from this browser.",
-    });
-  };
-
+export default function Page() {
   const breadcrumbs = [{ name: "Home", href: "/" }];
 
   return (
     <Layout>
       <Breadcrumbs breadcrumbs={breadcrumbs} />
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.6 }}
-        className="mx-auto w-full max-w-5xl px-6 py-16"
-      >
-        <motion.p
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
+      <div className="mx-auto w-full max-w-5xl px-6 py-16">
+        <p
           className="mb-4 text-xs font-semibold tracking-widest uppercase"
           style={{ color: "var(--z-amber)" }}
         >
           Powered by AniList API
-        </motion.p>
+        </p>
 
-        <motion.h1
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2, duration: 0.6 }}
+        <h1
           className="mb-6 text-6xl/tight font-black md:text-7xl"
           style={{ fontFamily: "var(--font-syne-var)", color: "var(--z-text)" }}
         >
@@ -53,26 +28,18 @@ function PageData() {
           <br />
           <span style={{ color: "var(--z-amber)" }}>Lists.</span>{" "}
           <span style={{ color: "var(--z-pink)" }}>Your Way.</span>
-        </motion.h1>
+        </h1>
 
-        <motion.p
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
+        <p
           className="mb-10 max-w-2xl text-lg/relaxed"
           style={{ color: "var(--z-muted)" }}
         >
           Take full control of your AniList experience. Create custom lists, set
           smart conditions, and automate how your anime and manga entries are
           organized.
-        </motion.p>
+        </p>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="mb-20 flex flex-wrap gap-4"
-        >
+        <div className="mb-20 flex flex-wrap gap-4">
           <Link
             href="/anilist-login"
             className="
@@ -126,14 +93,9 @@ function PageData() {
             <FaGithub size={18} className="group-active:scale-95" />
             GitHub
           </Link>
-        </motion.div>
+        </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5, duration: 0.6 }}
-          className="mb-16 grid grid-cols-1 gap-4 md:grid-cols-3"
-        >
+        <div className="mb-16 grid grid-cols-1 gap-4 md:grid-cols-3">
           {[
             {
               step: "01",
@@ -153,12 +115,9 @@ function PageData() {
               desc: "Apply changes to all your anime and manga entries automatically.",
               accent: "var(--z-frost)",
             },
-          ].map((feat, i) => (
-            <motion.div
+          ].map((feat) => (
+            <div
               key={feat.step}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5 + i * 0.1 }}
               className="rounded-xl p-5 transition-all duration-200"
               style={{
                 backgroundColor: "var(--z-card)",
@@ -189,9 +148,9 @@ function PageData() {
               >
                 {feat.desc}
               </p>
-            </motion.div>
+            </div>
           ))}
-        </motion.div>
+        </div>
 
         <div
           className="space-y-4 pt-8"
@@ -210,21 +169,7 @@ function PageData() {
                 results, and setup data from this browser.
               </p>
             </div>
-            <button
-              onClick={clearCache}
-              className="
-                rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200
-                active:scale-95
-              "
-              style={{
-                border: "1px solid rgba(248,113,113,0.24)",
-                color: "var(--z-red)",
-                backgroundColor: "rgba(248,113,113,0.06)",
-              }}
-              aria-label="Clear Cache"
-            >
-              Clear Cache
-            </button>
+            <HomeCacheResetButton />
           </div>
           <div
             className="flex items-start gap-3 rounded-xl p-3"
@@ -244,15 +189,7 @@ function PageData() {
             </p>
           </div>
         </div>
-      </motion.div>
+      </div>
     </Layout>
-  );
-}
-
-export default function Page() {
-  return (
-    <Suspense fallback={<LoadingIndicator />}>
-      <PageData />
-    </Suspense>
   );
 }
