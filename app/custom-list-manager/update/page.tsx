@@ -24,6 +24,7 @@ import Layout from "@/components/layout";
 import LoadingIndicator from "@/components/loading-indicator";
 import { useAuth } from "@/context/auth-context";
 import { AniListRetryContext, fetchAniList } from "@/lib/api";
+import { classifyFallbackFailure, getFallbackCopy } from "@/lib/fallback-ux";
 import {
   getBooleanItemWithExpiry,
   getItemWithExpiry,
@@ -120,6 +121,25 @@ const MIN_MUTATION_BATCH_SIZE = 3;
 const RATE_LIMIT_SAFETY_RESERVE = 2;
 const VIRTUAL_ROW_GAP_PX = 12;
 const CARD_ANIMATION_DURATION_SECONDS = 0.38;
+const DEFAULT_CONSECUTIVE_FAILURE_THRESHOLD = 5;
+
+const resolveConsecutiveFailureThreshold = (): number => {
+  const rawThreshold = process.env.NEXT_PUBLIC_UPDATER_FAIL_FAST_THRESHOLD;
+
+  if (!rawThreshold) {
+    return DEFAULT_CONSECUTIVE_FAILURE_THRESHOLD;
+  }
+
+  const parsedThreshold = Number.parseInt(rawThreshold, 10);
+
+  if (!Number.isFinite(parsedThreshold) || parsedThreshold <= 0) {
+    return DEFAULT_CONSECUTIVE_FAILURE_THRESHOLD;
+  }
+
+  return parsedThreshold;
+};
+
+const CONSECUTIVE_FAILURE_THRESHOLD = resolveConsecutiveFailureThreshold();
 
 const STATUS_REGEX = /^Status set to (.+)$/;
 const SCORE_REGEX = /^Score set to (\d+)$/;
@@ -1384,10 +1404,14 @@ export default function UpdatePage() {
   );
   const [retryStatus, setRetryStatus] = useState<RetryStatus | null>(null);
   const [retryClock, setRetryClock] = useState(Date.now());
+  const [circuitBreakerMessage, setCircuitBreakerMessage] = useState<
+    string | null
+  >(null);
   const startTimeRef = useRef(0);
   const pendingQueueRef = useRef<TrackedEntry[]>([]);
   const updatedCountRef = useRef(0);
   const errorCountRef = useRef(0);
+  const consecutiveFailureCountRef = useRef(0);
   const isProcessingRef = useRef(false);
   const pauseRequestedRef = useRef(false);
   const stopRequestedRef = useRef(false);
@@ -1486,6 +1510,7 @@ export default function UpdatePage() {
     pendingQueueRef.current = [];
     updatedCountRef.current = 0;
     errorCountRef.current = 0;
+    consecutiveFailureCountRef.current = 0;
     startTimeRef.current = 0;
     completeRequestedRef.current = false;
 
@@ -1496,6 +1521,7 @@ export default function UpdatePage() {
     setTotalCount(0);
     setProcessedCount(0);
     setFetchError(null);
+    setCircuitBreakerMessage(null);
     setQueuedAction(null);
     rateLimitInfoRef.current = null;
     setRateLimitInfo(null);
@@ -1669,8 +1695,10 @@ export default function UpdatePage() {
     stopRequestedRef.current = false;
     completeRequestedRef.current = false;
     navigationStopRequestedRef.current = false;
+    consecutiveFailureCountRef.current = 0;
     isProcessingRef.current = true;
     setQueuedAction(null);
+    setCircuitBreakerMessage(null);
     setPhase("processing");
 
     const runSingleEntryMutation = async (
@@ -1816,6 +1844,14 @@ export default function UpdatePage() {
         const { doneEntriesBatch, erroredEntriesBatch } =
           await runMutationBatch(entriesToProcess);
 
+        if (doneEntriesBatch.length > 0) {
+          consecutiveFailureCountRef.current = 0;
+        }
+
+        if (erroredEntriesBatch.length > 0) {
+          consecutiveFailureCountRef.current += erroredEntriesBatch.length;
+        }
+
         updatedCountRef.current += doneEntriesBatch.length;
         errorCountRef.current += erroredEntriesBatch.length;
 
@@ -1828,6 +1864,28 @@ export default function UpdatePage() {
         }
 
         setProcessedCount(updatedCountRef.current + errorCountRef.current);
+
+        if (
+          consecutiveFailureCountRef.current >= CONSECUTIVE_FAILURE_THRESHOLD &&
+          pendingQueueRef.current.length > 0
+        ) {
+          const circuitBreakerNotice =
+            `${consecutiveFailureCountRef.current} consecutive updates failed. ` +
+            "The updater is paused to avoid repeated failed requests. " +
+            "Resume when AniList stabilizes; your queue and progress are preserved.";
+
+          pauseRequestedRef.current = true;
+          setUpdatingEntries([]);
+          setQueuedAction(null);
+          setCircuitBreakerMessage(circuitBreakerNotice);
+          setPhase("paused");
+
+          toast.warning("Updater paused after repeated failures", {
+            description: circuitBreakerNotice,
+          });
+
+          return;
+        }
 
         if (stopRequestedRef.current) {
           if (navigationStopRequestedRef.current) {
@@ -1910,6 +1968,11 @@ export default function UpdatePage() {
     retryStatus?.reason === "rateLimit" ||
     (rateLimitRemaining ?? Number.POSITIVE_INFINITY) <=
       LOW_RATE_LIMIT_THRESHOLD;
+  const updateFailureKind = classifyFallbackFailure({
+    message: fetchError,
+    retryReason: retryStatus?.reason,
+  });
+  const updateFallbackCopy = getFallbackCopy(updateFailureKind);
 
   const progress = totalCount > 0 ? (processedCount / totalCount) * 100 : 0;
   const queuedCount = pendingEntries.length;
@@ -1952,7 +2015,8 @@ export default function UpdatePage() {
               ? "The current entry will finish, then the run will stop."
               : "Entries are currently being updated."
         : phase === "paused"
-          ? "Your place is saved. Resume when you want to continue."
+          ? (circuitBreakerMessage ??
+            "Your place is saved. Resume when you want to continue.")
           : phase === "stopped"
             ? "The run was stopped. You can go back or continue the remaining queue."
             : "We are calculating the queue before anything changes on AniList.";
@@ -2049,11 +2113,19 @@ export default function UpdatePage() {
                     color: "var(--z-text)",
                   }}
                 >
-                  Something went wrong
+                  {updateFallbackCopy.title}
                 </h2>
                 <p className="mb-7 text-sm" style={{ color: "var(--z-muted)" }}>
-                  {fetchError}
+                  {updateFallbackCopy.description}
                 </p>
+                {fetchError && (
+                  <p
+                    className="mb-7 text-sm"
+                    style={{ color: "var(--z-text)" }}
+                  >
+                    {fetchError}
+                  </p>
+                )}
                 <div className="flex justify-center gap-3">
                   <button
                     onClick={() => router.push("/custom-list-manager")}
@@ -2069,7 +2141,7 @@ export default function UpdatePage() {
                   >
                     <span className="flex items-center gap-2">
                       <FaChevronLeft size={9} />
-                      Go Back
+                      Back to Manager
                     </span>
                   </button>
                   <button
@@ -2273,9 +2345,7 @@ export default function UpdatePage() {
                             style={{ color: "var(--z-text)" }}
                           >
                             {retryStatus
-                              ? retryStatus.reason === "serverError"
-                                ? `AniList returned a server error, so the next retry starts in ${formatDurationLabel(remainingRetrySeconds ?? retryStatus.retryAfterSeconds)}.`
-                                : `AniList is rate limiting requests, so updates are paused for ${formatDurationLabel(remainingRetrySeconds ?? retryStatus.retryAfterSeconds)} before retry ${retryStatus.retryAttempt}.`
+                              ? `${getFallbackCopy(classifyFallbackFailure({ retryReason: retryStatus.reason })).description} Next retry in ${formatDurationLabel(remainingRetrySeconds ?? retryStatus.retryAfterSeconds)} (attempt ${retryStatus.retryAttempt}).`
                               : rateLimitRemaining !== null &&
                                   rateLimitLimit !== null
                                 ? `Requests remaining: ${rateLimitRemaining} of ${rateLimitLimit}.`

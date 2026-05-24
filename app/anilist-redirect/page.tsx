@@ -15,6 +15,11 @@ import Layout from "@/components/layout";
 import LoadingIndicator from "@/components/loading-indicator";
 import { fetchAniList } from "@/lib/api";
 import {
+  classifyFallbackFailure,
+  type FallbackFailureKind,
+  getFallbackCopy,
+} from "@/lib/fallback-ux";
+import {
   removeItemWithExpiry,
   setItemWithExpiry,
   STORAGE_KEYS,
@@ -41,6 +46,9 @@ function PageData() {
   const [status, setStatus] = useState<"loading" | "success" | "error">(
     "loading",
   );
+  const [failureKind, setFailureKind] =
+    useState<FallbackFailureKind>("unknown");
+  const [failureDetail, setFailureDetail] = useState<string | null>(null);
   const [message, setMessage] = useState<React.ReactNode>(
     "Processing login...",
   );
@@ -63,8 +71,10 @@ function PageData() {
 
         if (!accessToken) {
           console.error("No access token found in URL hash");
+          setFailureKind("auth");
+          setFailureDetail("No access token was found in the redirect URL.");
           setStatus("error");
-          setMessage("No access token found. Please try again.");
+          setMessage(getFallbackCopy("auth").description);
           return;
         }
 
@@ -144,14 +154,20 @@ function PageData() {
         }
 
         console.error("Failed to process redirect:", error);
+        const normalizedMessage =
+          error instanceof Error
+            ? error.message
+            : "An error occurred during login. Please try again.";
+        const normalizedFailureKind = classifyFallbackFailure({
+          message: normalizedMessage,
+        });
+
+        setFailureKind(normalizedFailureKind);
+        setFailureDetail(normalizedMessage);
         removeItemWithExpiry(STORAGE_KEYS.authToken);
         setProgress(100);
         setStatus("error");
-        setMessage(
-          error instanceof Error
-            ? error.message
-            : "An error occurred during login. Please try again.",
-        );
+        setMessage(getFallbackCopy(normalizedFailureKind).description);
       }
     };
 
@@ -166,16 +182,16 @@ function PageData() {
   }, [router]);
 
   const saveToken = (accessToken: string): void => {
-    try {
-      setItemWithExpiry(
-        STORAGE_KEYS.authToken,
-        accessToken,
-        STORAGE_TTLS.authSession,
+    const persistenceResult = setItemWithExpiry(
+      STORAGE_KEYS.authToken,
+      accessToken,
+      STORAGE_TTLS.authSession,
+    );
+
+    if (persistenceResult !== "stored") {
+      throw new Error(
+        "We could not persist your AniList token in secure browser storage.",
       );
-    } catch (error) {
-      console.error("Failed to save token:", error);
-      setStatus("error");
-      setMessage("Failed to save token. Please try again.");
     }
   };
 
@@ -214,7 +230,7 @@ function PageData() {
 
   const getStatusHeading = () => {
     if (status === "success") return "Connected!";
-    if (status === "error") return "Authentication Failed";
+    if (status === "error") return getFallbackCopy(failureKind).title;
     return "Authenticating...";
   };
 
@@ -320,7 +336,7 @@ function PageData() {
                   }}
                 >
                   <FaArrowLeft size={12} />
-                  Back to Login
+                  {status === "error" ? "Try Again" : "Back to Login"}
                 </button>
                 <button
                   type="button"
@@ -335,9 +351,14 @@ function PageData() {
                   }}
                 >
                   <FaHome size={12} />
-                  Home
+                  Go to Home
                 </button>
               </motion.div>
+            )}
+            {status === "error" && failureDetail && (
+              <p className="mt-3 text-xs" style={{ color: "var(--z-subtle)" }}>
+                Details: {failureDetail}
+              </p>
             )}
           </motion.div>
         </AnimatePresence>

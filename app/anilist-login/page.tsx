@@ -18,6 +18,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/context/auth-context";
 import { fetchAniList } from "@/lib/api";
+import { classifyFallbackFailure, getFallbackCopy } from "@/lib/fallback-ux";
 import {
   getItemWithExpiry,
   removeItemWithExpiry,
@@ -151,6 +152,8 @@ function PageData() {
 
   const secondaryButtonClasses =
     "flex w-full items-center justify-center gap-2 rounded-lg px-6 py-3.5 transition-all duration-200 ease-out transform-gpu hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(9,8,16,0.25)] active:translate-y-0 active:scale-[0.98]";
+  const loginFailureKind = classifyFallbackFailure({ message: loginError });
+  const loginFallbackCopy = getFallbackCopy(loginFailureKind);
 
   const renderAccountStatus = () => {
     if (loadingUserData) {
@@ -271,7 +274,13 @@ function PageData() {
                 className="text-sm font-medium"
                 style={{ color: "var(--z-red)" }}
               >
-                Couldn&apos;t connect to AniList.
+                {loginFallbackCopy.title}
+              </p>
+              <p
+                className="mt-1 text-sm/relaxed"
+                style={{ color: "var(--z-muted)" }}
+              >
+                {loginFallbackCopy.description}
               </p>
               <p
                 className="mt-1 text-sm/relaxed"
