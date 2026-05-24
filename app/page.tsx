@@ -10,10 +10,11 @@ import { toast } from "sonner";
 import Breadcrumbs from "@/components/breadcrumbs";
 import Layout from "@/components/layout";
 import LoadingIndicator from "@/components/loading-indicator";
+import { clearAppStorage } from "@/lib/local-storage";
 
 function PageData() {
   const clearCache = () => {
-    localStorage.clear();
+    clearAppStorage();
     toast.success("Cache cleared!", {
       description:
         "Saved AniList session data, fetched lists, and local setup were cleared from this browser.",
