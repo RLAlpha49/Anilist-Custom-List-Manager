@@ -1,4 +1,9 @@
-export type ApiErrorKind = "http" | "graphql" | "network" | "unknown";
+export type ApiErrorKind =
+  | "http"
+  | "graphql"
+  | "network"
+  | "timeout"
+  | "unknown";
 
 export interface AniListGraphQLError {
   message: string;
@@ -16,8 +21,10 @@ export interface ApiError extends Error {
   message: string;
   messages: string[];
   status: number | null;
+  statusCode?: number | null;
   retryable: boolean;
   graphQLErrors?: AniListGraphQLError[];
+  metadata?: Record<string, unknown>;
   response?: {
     status: number;
   };

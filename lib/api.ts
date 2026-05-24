@@ -21,11 +21,19 @@ export const ANILIST_API_CONTRACT_VERSION = "2026-05-23.v1";
 const ANILIST_GRAPHQL_ENDPOINT = "https://graphql.anilist.co";
 const NETWORK_RETRY_DELAY_SECONDS = 2;
 const SERVER_RETRY_DELAY_SECONDS = 2;
+const TIMEOUT_RETRY_DELAY_SECONDS = 2;
 const FALLBACK_RATE_LIMIT_DELAY_SECONDS = 1;
+const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
+const TRANSIENT_HTTP_STATUS_CODES = new Set([408, 500, 502, 503, 504]);
 
 interface RetryMetadata {
   retryAfterSeconds?: number;
   rateLimitResetAt?: number;
+}
+
+export interface FetchAniListOptions {
+  timeoutMs?: number;
+  signal?: AbortSignal;
 }
 
 interface InFlightRequestSubscriber {
@@ -41,7 +49,7 @@ interface InFlightRequestEntry {
 const inFlightRequests = new Map<string, InFlightRequestEntry>();
 
 export interface AniListRetryContext {
-  reason: "networkError" | "rateLimit" | "serverError";
+  reason: "networkError" | "rateLimit" | "serverError" | "timeout";
   retryAfterSeconds: number;
   retryAttempt: number;
 }
@@ -81,6 +89,7 @@ const createApiError = ({
   messages,
   retryable,
   graphQLErrors,
+  metadata,
   cause,
 }: {
   kind: ApiError["kind"];
@@ -88,6 +97,7 @@ const createApiError = ({
   messages: string[];
   retryable: boolean;
   graphQLErrors?: AniListGraphQLError[];
+  metadata?: Record<string, unknown>;
   cause?: unknown;
 }): ApiError => {
   const safeMessages = messages.filter(Boolean);
@@ -98,9 +108,11 @@ const createApiError = ({
 
   apiError.kind = kind;
   apiError.status = status;
+  apiError.statusCode = status;
   apiError.messages = safeMessages;
   apiError.retryable = retryable;
   apiError.graphQLErrors = graphQLErrors;
+  apiError.metadata = metadata;
   apiError.response = status ? { status } : undefined;
   apiError.cause = cause;
 
@@ -219,6 +231,29 @@ const normalizeUnknownError = (error: unknown): ApiError => {
     return error;
   }
 
+  if (isRecord(error) && error.kind === "timeout") {
+    const timeoutMs =
+      typeof error.timeoutMs === "number" && Number.isFinite(error.timeoutMs)
+        ? error.timeoutMs
+        : null;
+    const hasTimeoutMs = timeoutMs !== null;
+
+    return createApiError({
+      kind: "timeout",
+      status: null,
+      messages: [
+        hasTimeoutMs
+          ? `AniList request timed out after ${timeoutMs}ms.`
+          : "AniList request timed out.",
+      ],
+      retryable: true,
+      metadata: {
+        timeoutMs,
+      },
+      cause: error,
+    });
+  }
+
   if (error instanceof TypeError) {
     return createApiError({
       kind: "network",
@@ -230,6 +265,19 @@ const normalizeUnknownError = (error: unknown): ApiError => {
   }
 
   if (error instanceof Error) {
+    if (error.name === "AbortError") {
+      return createApiError({
+        kind: "network",
+        status: null,
+        messages: ["AniList request was cancelled."],
+        retryable: false,
+        metadata: {
+          cancelled: true,
+        },
+        cause: error,
+      });
+    }
+
     return createApiError({
       kind: "unknown",
       status: null,
@@ -297,9 +345,74 @@ const getRetryDelaySeconds = (
     );
   }
 
-  return reason === "networkError"
-    ? NETWORK_RETRY_DELAY_SECONDS
-    : SERVER_RETRY_DELAY_SECONDS;
+  if (reason === "networkError") {
+    return NETWORK_RETRY_DELAY_SECONDS;
+  }
+
+  if (reason === "timeout") {
+    return TIMEOUT_RETRY_DELAY_SECONDS;
+  }
+
+  return SERVER_RETRY_DELAY_SECONDS;
+};
+
+const isTransientHttpStatus = (statusCode: number | null): boolean =>
+  statusCode != null && TRANSIENT_HTTP_STATUS_CODES.has(statusCode);
+
+const resolveTimeoutMs = (timeoutMs?: number): number => {
+  if (
+    typeof timeoutMs !== "number" ||
+    !Number.isFinite(timeoutMs) ||
+    timeoutMs <= 0
+  ) {
+    return DEFAULT_REQUEST_TIMEOUT_MS;
+  }
+
+  return Math.ceil(timeoutMs);
+};
+
+const createRequestAbortController = (
+  timeoutMs: number,
+  externalSignal?: AbortSignal,
+): {
+  signal: AbortSignal;
+  didTimeout: () => boolean;
+  wasCancelled: () => boolean;
+  cleanup: () => void;
+} => {
+  const controller = new AbortController();
+  let didTimeout = false;
+  let wasCancelled = false;
+
+  const onExternalAbort = () => {
+    wasCancelled = true;
+    controller.abort(externalSignal?.reason);
+  };
+
+  if (externalSignal) {
+    if (externalSignal.aborted) {
+      onExternalAbort();
+    } else {
+      externalSignal.addEventListener("abort", onExternalAbort);
+    }
+  }
+
+  const timeoutId = setTimeout(() => {
+    didTimeout = true;
+    controller.abort(
+      new Error(`AniList request timed out after ${timeoutMs}ms.`),
+    );
+  }, timeoutMs);
+
+  return {
+    signal: controller.signal,
+    didTimeout: () => didTimeout,
+    wasCancelled: () => wasCancelled,
+    cleanup: () => {
+      clearTimeout(timeoutId);
+      externalSignal?.removeEventListener("abort", onExternalAbort);
+    },
+  };
 };
 
 const normalizeRequestValue = (value: unknown): unknown => {
@@ -351,17 +464,23 @@ const notifyRetry = (
   retryContext: AniListRetryContext,
   onRetry?: (retryContext: AniListRetryContext) => void,
 ) => {
+  const baseDescription = `Retrying request in ${retryContext.retryAfterSeconds} seconds... Attempt ${retryContext.retryAttempt}`;
+
   if (retryContext.reason === "serverError") {
     toast.warning("Server Error", {
-      description: `Retrying request in ${retryContext.retryAfterSeconds} seconds... Attempt ${retryContext.retryAttempt}`,
+      description: baseDescription,
     });
   } else if (retryContext.reason === "networkError") {
     toast.warning("Network Error", {
-      description: `Retrying request in ${retryContext.retryAfterSeconds} seconds... Attempt ${retryContext.retryAttempt}`,
+      description: baseDescription,
+    });
+  } else if (retryContext.reason === "timeout") {
+    toast.warning("Request Timed Out", {
+      description: baseDescription,
     });
   } else {
     toast.warning("Rate Limit Exceeded", {
-      description: `Retrying request in ${retryContext.retryAfterSeconds} seconds... Attempt ${retryContext.retryAttempt}`,
+      description: baseDescription,
     });
   }
 
@@ -455,7 +574,19 @@ const handleRateLimit = async <TData>(
       );
     }
 
-    if (statusCode === 500 && retryCount < maxRetries) {
+    if (apiError.kind === "timeout") {
+      return retryRequest(
+        apiCall,
+        retryCount,
+        maxRetries,
+        "timeout",
+        null,
+        onRetry,
+        onFailure,
+      );
+    }
+
+    if (isTransientHttpStatus(statusCode) && retryCount < maxRetries) {
       return retryRequest(
         apiCall,
         retryCount,
@@ -505,8 +636,14 @@ const parseAniListResponse = async <TData>(
       kind: "http",
       status: response.status,
       messages: [getResponseErrorMessage(response.status, parsedBody)],
-      retryable: response.status === 429 || response.status >= 500,
+      retryable:
+        response.status === 429 || isTransientHttpStatus(response.status),
       graphQLErrors,
+      metadata: {
+        statusCode: response.status,
+        retryAfterSeconds: retryMetadata.retryAfterSeconds ?? null,
+        rateLimitResetAt: retryMetadata.rateLimitResetAt ?? null,
+      },
       cause: retryMetadata,
     });
     throw apiError;
@@ -519,6 +656,10 @@ const parseAniListResponse = async <TData>(
       messages: graphQLErrors.map((error) => error.message),
       retryable: false,
       graphQLErrors,
+      metadata: {
+        statusCode: response.status,
+        graphQLErrorCount: graphQLErrors.length,
+      },
     });
   }
 
@@ -580,6 +721,7 @@ export const fetchAniList = async <
   onRetry?: (retryContext: AniListRetryContext) => void,
   onFailure?: (error: ApiError) => void,
   validation?: AniListResponseValidation<TData>,
+  requestOptions?: FetchAniListOptions,
 ): Promise<ApiResponse<TData>> => {
   const normalizedVariables: AniListRequestVariables = variables ?? {};
 
@@ -602,10 +744,52 @@ export const fetchAniList = async <
     failureHandler?: (error: ApiError) => void,
   ): Promise<ApiResponse<TData>> =>
     handleRateLimit(
-      () =>
-        fetch(ANILIST_GRAPHQL_ENDPOINT, options).then((response) =>
-          parseAniListResponse<TData>(response, validation),
-        ),
+      async () => {
+        const timeoutMs = resolveTimeoutMs(requestOptions?.timeoutMs);
+        const requestController = createRequestAbortController(
+          timeoutMs,
+          requestOptions?.signal,
+        );
+
+        try {
+          const response = await fetch(ANILIST_GRAPHQL_ENDPOINT, {
+            ...options,
+            signal: requestController.signal,
+          });
+
+          return await parseAniListResponse<TData>(response, validation);
+        } catch (error) {
+          if (requestController.didTimeout()) {
+            throw createApiError({
+              kind: "timeout",
+              status: null,
+              messages: [`AniList request timed out after ${timeoutMs}ms.`],
+              retryable: true,
+              metadata: {
+                timeoutMs,
+              },
+              cause: error,
+            });
+          }
+
+          if (requestController.wasCancelled()) {
+            throw createApiError({
+              kind: "network",
+              status: null,
+              messages: ["AniList request was cancelled."],
+              retryable: false,
+              metadata: {
+                cancelled: true,
+              },
+              cause: error,
+            });
+          }
+
+          throw error;
+        } finally {
+          requestController.cleanup();
+        }
+      },
       0,
       5,
       retryHandler,
