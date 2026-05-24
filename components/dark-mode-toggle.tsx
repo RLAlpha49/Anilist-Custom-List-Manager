@@ -1,48 +1,19 @@
+import { useTheme } from "next-themes";
 import { FC, useEffect, useState } from "react";
 import { FaMoon, FaSun } from "react-icons/fa";
 
 const DarkModeToggle: FC = () => {
-  const [isDark, setIsDark] = useState<boolean>(false);
   const [mounted, setMounted] = useState<boolean>(false);
+  const { resolvedTheme, setTheme } = useTheme();
+
+  const isDark = resolvedTheme === "dark";
 
   useEffect(() => {
-    const storedTheme = localStorage.getItem("theme");
-    if (storedTheme) {
-      setIsDark(storedTheme === "dark");
-      if (storedTheme === "dark") {
-        document.documentElement.classList.remove("light");
-        document.documentElement.classList.add("dark");
-      } else {
-        document.documentElement.classList.add("light");
-        document.documentElement.classList.remove("dark");
-      }
-    } else {
-      const prefersDark = globalThis.matchMedia(
-        "(prefers-color-scheme: dark)",
-      ).matches;
-      setIsDark(prefersDark);
-      if (prefersDark) {
-        document.documentElement.classList.add("dark");
-      } else {
-        document.documentElement.classList.add("light");
-        document.documentElement.classList.remove("dark");
-      }
-    }
     setMounted(true);
   }, []);
 
   const toggleDarkMode = () => {
-    const newIsDark = !isDark;
-    setIsDark(newIsDark);
-    if (newIsDark) {
-      document.documentElement.classList.remove("light");
-      document.documentElement.classList.add("dark");
-      localStorage.setItem("theme", "dark");
-    } else {
-      document.documentElement.classList.add("light");
-      document.documentElement.classList.remove("dark");
-      localStorage.setItem("theme", "light");
-    }
+    setTheme(isDark ? "light" : "dark");
   };
 
   return (
