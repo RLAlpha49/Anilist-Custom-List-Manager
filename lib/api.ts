@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import {
   type AniListGraphQLError,
   type AniListRequestVariables,
+  type ApiDataGuard,
   type ApiError,
   type ApiResponse,
   type RateLimitInfo,
@@ -477,8 +478,14 @@ interface AniListResponse<TData> {
   errors?: AniListGraphQLError[];
 }
 
+export interface AniListResponseValidation<TData> {
+  dataGuard: ApiDataGuard<TData>;
+  operationName: string;
+}
+
 const parseAniListResponse = async <TData>(
   response: Response,
+  validation?: AniListResponseValidation<TData>,
 ): Promise<ApiResponse<TData>> => {
   const rawBody = await response.text();
   const parsedBody = parseResponseBody(rawBody);
@@ -524,8 +531,8 @@ const parseAniListResponse = async <TData>(
     });
   }
 
-  const data = parsedBody as AniListResponse<TData>;
-  if (data.data == null) {
+  const aniListResponse = parsedBody as AniListResponse<unknown>;
+  if (aniListResponse.data == null) {
     throw createApiError({
       kind: "unknown",
       status: response.status,
@@ -534,9 +541,22 @@ const parseAniListResponse = async <TData>(
     });
   }
 
+  const responseData = aniListResponse.data;
+  if (validation && !validation.dataGuard(responseData)) {
+    throw createApiError({
+      kind: "unknown",
+      status: response.status,
+      messages: [
+        `AniList returned an unexpected ${validation.operationName} payload.`,
+      ],
+      retryable: false,
+      cause: responseData,
+    });
+  }
+
   return {
-    data: data.data,
-    errors: data.errors,
+    data: responseData as TData,
+    errors: aniListResponse.errors,
     rateLimit: getRateLimitInfo(response.headers),
   };
 };
@@ -551,7 +571,7 @@ const parseAniListResponse = async <TData>(
  * @returns The data returned from the AniList API.
  */
 export const fetchAniList = async <
-  TData = Record<string, unknown>,
+  TData = unknown,
   TVariables extends AniListRequestVariables = AniListRequestVariables,
 >(
   query: string,
@@ -559,6 +579,7 @@ export const fetchAniList = async <
   token: string,
   onRetry?: (retryContext: AniListRetryContext) => void,
   onFailure?: (error: ApiError) => void,
+  validation?: AniListResponseValidation<TData>,
 ): Promise<ApiResponse<TData>> => {
   const normalizedVariables: AniListRequestVariables = variables ?? {};
 
@@ -583,7 +604,7 @@ export const fetchAniList = async <
     handleRateLimit(
       () =>
         fetch(ANILIST_GRAPHQL_ENDPOINT, options).then((response) =>
-          parseAniListResponse<TData>(response),
+          parseAniListResponse<TData>(response, validation),
         ),
       0,
       5,

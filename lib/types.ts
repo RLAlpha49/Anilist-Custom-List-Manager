@@ -25,6 +25,57 @@ export interface ApiError extends Error {
 }
 
 export type AniListRequestVariables = Record<string, unknown>;
+export type ApiDataGuard<TData> = (data: unknown) => data is TData;
+
+export const ANILIST_MEDIA_TYPES = ["ANIME", "MANGA"] as const;
+export type AniListMediaType = (typeof ANILIST_MEDIA_TYPES)[number];
+
+export const ANILIST_MEDIA_FORMATS = [
+  "TV",
+  "TV_SHORT",
+  "MOVIE",
+  "SPECIAL",
+  "OVA",
+  "ONA",
+  "MUSIC",
+  "MANGA",
+  "NOVEL",
+  "ONE_SHOT",
+  "MANHWA",
+  "MANHUA",
+] as const;
+export type AniListMediaFormat = (typeof ANILIST_MEDIA_FORMATS)[number];
+
+export const ANILIST_MEDIA_LIST_STATUSES = [
+  "CURRENT",
+  "PLANNING",
+  "COMPLETED",
+  "DROPPED",
+  "PAUSED",
+  "REPEATING",
+] as const;
+export type AniListMediaListStatus =
+  (typeof ANILIST_MEDIA_LIST_STATUSES)[number];
+
+export type AniListListOptionsKey = `${Lowercase<AniListMediaType>}List`;
+
+interface MediaTitle {
+  romaji: string;
+  english: string | null;
+  native: string;
+  userPreferred: string;
+}
+
+interface MediaCoverImage {
+  extraLarge: string | null;
+  large: string | null;
+  medium: string | null;
+}
+
+interface MediaTag {
+  name: string;
+  category: string;
+}
 
 export interface RateLimitInfo {
   remaining: number | null;
@@ -32,72 +83,26 @@ export interface RateLimitInfo {
   resetAt: number | null;
 }
 
-interface Media {
+export interface Media {
   id: number;
-  title: {
-    romaji: string;
-    english: string | null;
-    native: string;
-    userPreferred: string;
-  };
-  coverImage: {
-    extraLarge: string | null;
-    large: string | null;
-    medium: string | null;
-  };
-  startDate: { year: number | null; month: number | null; day: number | null };
-  endDate: { year: number | null; month: number | null; day: number | null };
-  bannerImage: string | null;
-  season: string | null;
-  seasonYear: number | null;
-  description: string | null;
-  type: string | null;
-  format: string | null;
-  status: string | null;
-  episodes: number | null;
-  duration: number | null;
-  chapters: number | null;
-  volumes: number | null;
+  title: MediaTitle;
+  coverImage: MediaCoverImage;
+  type: AniListMediaType | null;
+  format: AniListMediaFormat | null;
   genres: string[] | null;
   isAdult: boolean | null;
-  averageScore: number | null;
-  popularity: number | null;
-  studios: {
-    nodes: {
-      id: number;
-      name: string;
-    }[];
-  } | null;
-  tags:
-    | {
-        name: string;
-        category: string;
-      }[]
-    | null;
+  tags: MediaTag[] | null;
   countryOfOrigin: string | null;
 }
 
 export interface MediaEntry {
   id: number;
-  status: string;
+  status: AniListMediaListStatus;
   score: number;
   progress: number;
   repeat: number;
-  priority: number;
-  private: boolean;
-  notes: string;
   hiddenFromStatusLists: boolean;
   customLists: Record<string, boolean>;
-  lists?: Record<string, boolean>;
-  advancedScores: Record<string, number>;
-  startedAt: { year: number | null; month: number | null; day: number | null };
-  completedAt: {
-    year: number | null;
-    month: number | null;
-    day: number | null;
-  };
-  updatedAt: number;
-  createdAt: number;
   tags?: string[];
   genres?: string[];
   tagCategories?: string[];
@@ -110,7 +115,7 @@ interface MediaList {
   isCustomList: boolean;
   entries: MediaEntry[];
   name: string;
-  status: string;
+  status: AniListMediaListStatus;
 }
 
 interface MediaListCollection {
@@ -171,12 +176,25 @@ export interface OptionGroup {
 export interface CustomListApiResponse {
   data: {
     User?: {
-      mediaListOptions: {
-        [key: string]: {
-          customLists: string[];
-          sectionOrder: string[];
-        };
-      };
+      mediaListOptions: Partial<
+        Record<
+          AniListListOptionsKey,
+          {
+            customLists: string[];
+            sectionOrder: string[];
+          }
+        >
+      >;
+    } | null;
+  };
+}
+
+export interface ViewerResponseData {
+  Viewer: {
+    id: number;
+    name: string;
+    avatar?: {
+      medium?: string | null;
     } | null;
   };
 }
@@ -195,21 +213,161 @@ export type NarrowPagedMediaListCollectionData = {
 
 export type NarrowCustomListOptionsData = {
   User: {
-    mediaListOptions: Record<
-      string,
-      {
-        customLists: string[];
-        sectionOrder: string[];
-      }
-    >;
+    mediaListOptions: Partial<
+      Record<
+        AniListListOptionsKey,
+        {
+          customLists: string[];
+          sectionOrder: string[];
+        }
+      >
+    > &
+      Record<
+        string,
+        {
+          customLists: string[];
+          sectionOrder: string[];
+        }
+      >;
   };
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
+const isNullableString = (value: unknown): value is string | null =>
+  value === null || typeof value === "string";
+
+const isNullableBoolean = (value: unknown): value is boolean | null =>
+  value === null || typeof value === "boolean";
+
+const isFiniteNumber = (value: unknown): value is number =>
+  typeof value === "number" && Number.isFinite(value);
+
 const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every((item) => typeof item === "string");
+
+const isBooleanRecord = (value: unknown): value is Record<string, boolean> =>
+  isRecord(value) &&
+  Object.values(value).every((item) => typeof item === "boolean");
+
+const isEnumValue = <TValue extends string>(
+  value: unknown,
+  allowedValues: readonly TValue[],
+): value is TValue =>
+  typeof value === "string" && allowedValues.includes(value as TValue);
+
+const isNullableEnumValue = <TValue extends string>(
+  value: unknown,
+  allowedValues: readonly TValue[],
+): value is TValue | null =>
+  value === null || isEnumValue(value, allowedValues);
+
+const isMediaTitle = (value: unknown): value is MediaTitle => {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.romaji === "string" &&
+    isNullableString(value.english) &&
+    typeof value.native === "string" &&
+    typeof value.userPreferred === "string"
+  );
+};
+
+const isMediaCoverImage = (value: unknown): value is MediaCoverImage => {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    isNullableString(value.extraLarge) &&
+    isNullableString(value.large) &&
+    isNullableString(value.medium)
+  );
+};
+
+const isMediaTag = (value: unknown): value is MediaTag => {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return typeof value.name === "string" && typeof value.category === "string";
+};
+
+const isMedia = (value: unknown): value is Media => {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    isFiniteNumber(value.id) &&
+    isNullableEnumValue(value.type, ANILIST_MEDIA_TYPES) &&
+    isMediaTitle(value.title) &&
+    isMediaCoverImage(value.coverImage) &&
+    isNullableEnumValue(value.format, ANILIST_MEDIA_FORMATS) &&
+    isNullableString(value.countryOfOrigin) &&
+    isNullableBoolean(value.isAdult) &&
+    (value.genres === null || isStringArray(value.genres)) &&
+    (value.tags === null ||
+      (Array.isArray(value.tags) && value.tags.every((tag) => isMediaTag(tag))))
+  );
+};
+
+const isMediaEntry = (value: unknown): value is MediaEntry => {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    isFiniteNumber(value.id) &&
+    isEnumValue(value.status, ANILIST_MEDIA_LIST_STATUSES) &&
+    isFiniteNumber(value.score) &&
+    isFiniteNumber(value.progress) &&
+    isFiniteNumber(value.repeat) &&
+    typeof value.hiddenFromStatusLists === "boolean" &&
+    isBooleanRecord(value.customLists) &&
+    isMedia(value.media)
+  );
+};
+
+const isMediaList = (value: unknown): value is MediaList => {
+  if (!isRecord(value) || !Array.isArray(value.entries)) {
+    return false;
+  }
+
+  return (
+    typeof value.isCustomList === "boolean" &&
+    typeof value.name === "string" &&
+    isEnumValue(value.status, ANILIST_MEDIA_LIST_STATUSES) &&
+    value.entries.every((entry) => isMediaEntry(entry))
+  );
+};
+
+const isViewer = (value: unknown): value is ViewerResponseData["Viewer"] => {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  const avatar = value.avatar;
+
+  return (
+    isFiniteNumber(value.id) &&
+    typeof value.name === "string" &&
+    (avatar === undefined ||
+      avatar === null ||
+      (isRecord(avatar) && isNullableString(avatar.medium)))
+  );
+};
+
+export const hasViewerData = (data: unknown): data is ViewerResponseData => {
+  if (!isRecord(data)) {
+    return false;
+  }
+
+  return isViewer(data.Viewer);
+};
 
 export const hasMediaListCollectionData = (
   data: unknown,
@@ -226,7 +384,7 @@ export const hasMediaListCollectionData = (
     return false;
   }
 
-  return true;
+  return mediaListCollection.lists.every((list) => isMediaList(list));
 };
 
 export const hasPagedMediaListCollectionData = (

@@ -18,18 +18,15 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/context/auth-context";
 import { fetchAniList } from "@/lib/api";
-import { getItemWithExpiry, removeItemWithExpiry } from "@/lib/local-storage";
+import {
+  getItemWithExpiry,
+  removeItemWithExpiry,
+  STORAGE_KEYS,
+} from "@/lib/local-storage";
+import { hasViewerData, type ViewerResponseData } from "@/lib/types";
 
 const ANILIST_AUTH_URL = "https://anilist.co/api/v2/oauth/authorize";
 const CLIENT_ID = process.env.NEXT_PUBLIC_ANILIST_CLIENT_ID;
-
-interface ViewerData {
-  id: number;
-  name: string;
-  avatar?: {
-    medium?: string;
-  };
-}
 
 function PageData() {
   const { isLoggedIn, login, logout } = useAuth();
@@ -55,8 +52,18 @@ function PageData() {
       `;
       try {
         setLoadingUserData(true);
-        const response = await fetchAniList(query, {}, token);
-        const userData = response.data?.Viewer as ViewerData;
+        const response = await fetchAniList<ViewerResponseData>(
+          query,
+          {},
+          token,
+          undefined,
+          undefined,
+          {
+            dataGuard: hasViewerData,
+            operationName: "viewer query",
+          },
+        );
+        const userData = response.data.Viewer;
 
         if (!userData?.id) {
           throw new Error("Invalid user data received");
@@ -65,7 +72,7 @@ function PageData() {
         setLoginError("");
         setUsername(userData.name || "");
         setAvatarUrl(userData.avatar?.medium || "");
-        login(token, userData.id.toString());
+        login(token, userData.id);
 
         // Don't show toast on page reload, only when explicitly logging in
         const isPageReload = document.referrer.includes(
@@ -86,7 +93,7 @@ function PageData() {
             ? error.message
             : "Failed to fetch your AniList data.";
 
-        removeItemWithExpiry("anilistToken");
+        removeItemWithExpiry(STORAGE_KEYS.authToken);
         setUsername("");
         setAvatarUrl("");
         setLoginError(message);
@@ -103,14 +110,14 @@ function PageData() {
   );
 
   useEffect(() => {
-    const accessToken: string | null = getItemWithExpiry("anilistToken");
+    const accessToken = getItemWithExpiry<string>(STORAGE_KEYS.authToken);
 
     if (accessToken) {
       setIsProcessing(true);
       fetchViewerData(accessToken).finally(() => setIsProcessing(false));
     } else {
       setLoginError("");
-      removeItemWithExpiry("anilistToken");
+      removeItemWithExpiry(STORAGE_KEYS.authToken);
       logout();
     }
   }, [fetchViewerData, logout]);

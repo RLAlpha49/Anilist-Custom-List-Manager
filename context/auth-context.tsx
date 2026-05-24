@@ -1,66 +1,85 @@
 "use client";
 
-import React, {
+import {
   createContext,
-  ReactNode,
+  type ReactNode,
+  useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
 } from "react";
 
 import {
   getItemWithExpiry,
+  normalizeUserId,
   removeItemWithExpiry,
   setItemWithExpiry,
+  STORAGE_KEYS,
+  STORAGE_TTLS,
 } from "@/lib/local-storage";
 
 interface AuthContextType {
   isLoggedIn: boolean;
-  userId: string | null;
+  userId: number | null;
   token: string | null;
-  login: (token: string, userId: string) => void;
+  login: (token: string, userId: number) => void;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider: React.FC<{ children: ReactNode }> = ({
-  children,
-}) => {
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
-  const [userId, setUserId] = useState<string | null>(null);
+  const [userId, setUserId] = useState<number | null>(null);
   const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
-    const storedToken = getItemWithExpiry<string>("anilistToken");
-    const storedUserId = getItemWithExpiry<string>("userId");
-    if (storedToken && storedUserId) {
+    const storedToken = getItemWithExpiry<string>(STORAGE_KEYS.authToken);
+    const storedUserId = normalizeUserId(
+      getItemWithExpiry<number | string>(STORAGE_KEYS.authUserId),
+    );
+
+    if (storedToken && storedUserId !== null) {
       setToken(storedToken);
       setUserId(storedUserId);
       setIsLoggedIn(true);
     }
   }, []);
 
-  const login = (newToken: string, newUserId: string) => {
+  const login = useCallback((newToken: string, newUserId: number) => {
     setToken(newToken);
     setUserId(newUserId);
     setIsLoggedIn(true);
-    setItemWithExpiry("anilistToken", newToken, 60 * 60 * 24 * 7 * 1000);
-    setItemWithExpiry("userId", newUserId, 60 * 60 * 24 * 7 * 1000);
-  };
 
-  const logout = () => {
+    setItemWithExpiry(
+      STORAGE_KEYS.authToken,
+      newToken,
+      STORAGE_TTLS.authSession,
+    );
+    setItemWithExpiry(
+      STORAGE_KEYS.authUserId,
+      newUserId,
+      STORAGE_TTLS.authSession,
+    );
+  }, []);
+
+  const logout = useCallback(() => {
     setToken(null);
     setUserId(null);
     setIsLoggedIn(false);
-    removeItemWithExpiry("anilistToken");
-    removeItemWithExpiry("userId");
-  };
+
+    removeItemWithExpiry(STORAGE_KEYS.authToken);
+    removeItemWithExpiry(STORAGE_KEYS.authUserId);
+  }, []);
+
+  const contextValue = useMemo(
+    () => ({ isLoggedIn, userId, token, login, logout }),
+    [isLoggedIn, login, logout, token, userId],
+  );
 
   return (
-    <AuthContext.Provider value={{ isLoggedIn, userId, token, login, logout }}>
-      {children}
-    </AuthContext.Provider>
+    <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>
   );
 };
 

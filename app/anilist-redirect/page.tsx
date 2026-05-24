@@ -14,7 +14,13 @@ import {
 import Layout from "@/components/layout";
 import LoadingIndicator from "@/components/loading-indicator";
 import { fetchAniList } from "@/lib/api";
-import { removeItemWithExpiry, setItemWithExpiry } from "@/lib/local-storage";
+import {
+  removeItemWithExpiry,
+  setItemWithExpiry,
+  STORAGE_KEYS,
+  STORAGE_TTLS,
+} from "@/lib/local-storage";
+import { hasViewerData, type ViewerResponseData } from "@/lib/types";
 
 const VIEWER_QUERY = `
   query {
@@ -66,7 +72,17 @@ function PageData() {
         setMessage("Verifying your AniList session...");
         const verifyStepStartedAt = Date.now();
 
-        const response = await fetchAniList(VIEWER_QUERY, {}, accessToken);
+        const response = await fetchAniList<ViewerResponseData>(
+          VIEWER_QUERY,
+          {},
+          accessToken,
+          undefined,
+          undefined,
+          {
+            dataGuard: hasViewerData,
+            operationName: "viewer query",
+          },
+        );
         const verifyElapsedMs = Date.now() - verifyStepStartedAt;
         const verifyRemainingDelayMs = Math.max(
           0,
@@ -79,9 +95,7 @@ function PageData() {
           });
         }
 
-        const viewer = response.data?.Viewer as
-          | { id?: number; name?: string }
-          | undefined;
+        const viewer = response.data.Viewer;
 
         if (!viewer?.id) {
           throw new Error("AniList did not return a valid account.");
@@ -130,7 +144,7 @@ function PageData() {
         }
 
         console.error("Failed to process redirect:", error);
-        removeItemWithExpiry("anilistToken");
+        removeItemWithExpiry(STORAGE_KEYS.authToken);
         setProgress(100);
         setStatus("error");
         setMessage(
@@ -153,7 +167,11 @@ function PageData() {
 
   const saveToken = (accessToken: string): void => {
     try {
-      setItemWithExpiry("anilistToken", accessToken, 60 * 60 * 24 * 7 * 1000);
+      setItemWithExpiry(
+        STORAGE_KEYS.authToken,
+        accessToken,
+        STORAGE_TTLS.authSession,
+      );
     } catch (error) {
       console.error("Failed to save token:", error);
       setStatus("error");
