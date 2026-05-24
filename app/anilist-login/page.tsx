@@ -17,39 +17,34 @@ import LoadingIndicator from "@/components/loading-indicator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/context/auth-context";
-import { fetchAniList } from "@/lib/api";
+import { fetchAniList, getUserFacingApiError } from "@/lib/api";
 import { classifyFallbackFailure, getFallbackCopy } from "@/lib/fallback-ux";
 import {
+  AUTH_POLICY,
   getItemWithExpiry,
   removeItemWithExpiry,
+  setItemWithExpiry,
   STORAGE_KEYS,
 } from "@/lib/local-storage";
-import {
-  type ApiError,
-  hasViewerData,
-  type ViewerResponseData,
-} from "@/lib/types";
+import { hasViewerData, type ViewerResponseData } from "@/lib/types";
 
 const ANILIST_AUTH_URL = "https://anilist.co/api/v2/oauth/authorize";
 const CLIENT_ID = process.env.NEXT_PUBLIC_ANILIST_CLIENT_ID;
+const ANILIST_RESPONSE_TYPE = "token";
 
-const getApiErrorMessageWithRequestId = (
-  error: unknown,
-  fallbackMessage: string,
-): string => {
-  const normalizedError = error as ApiError;
-  const baseMessage =
-    error instanceof Error && error.message ? error.message : fallbackMessage;
-  const requestId =
-    typeof normalizedError.metadata?.requestId === "string"
-      ? normalizedError.metadata.requestId
-      : null;
-
-  if (!requestId) {
-    return baseMessage;
+const generateOAuthState = (): string => {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.getRandomValues === "function"
+  ) {
+    const randomBytes = new Uint8Array(16);
+    crypto.getRandomValues(randomBytes);
+    return Array.from(randomBytes, (byte) =>
+      byte.toString(16).padStart(2, "0"),
+    ).join("");
   }
 
-  return `${baseMessage} (Request ID: ${requestId})`;
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`;
 };
 
 function PageData() {
@@ -102,20 +97,20 @@ function PageData() {
         const isPageReload = document.referrer.includes(
           globalThis.location.host,
         );
-        const isFromCallback =
-          globalThis.location.hash.includes("access_token");
 
-        // Only show toast when coming from AniList oauth callback, not on regular page loads
-        if (isFromCallback && !isPageReload) {
+        if (!isPageReload) {
           toast.success("Success", {
             description: "Successfully connected to AniList!",
           });
         }
       } catch (error) {
-        const message = getApiErrorMessageWithRequestId(
+        const userFacingError = getUserFacingApiError(
           error,
           "Failed to fetch your AniList data.",
         );
+        const message = userFacingError.requestId
+          ? `${userFacingError.message} (Reference ID: ${userFacingError.requestId})`
+          : userFacingError.message;
 
         removeItemWithExpiry(STORAGE_KEYS.authToken);
         setUsername("");
@@ -155,8 +150,28 @@ function PageData() {
       });
       return;
     }
-    const responseType: string = "token";
-    const authUrl: string = `${ANILIST_AUTH_URL}?client_id=${CLIENT_ID}&response_type=${responseType}`;
+
+    const oauthState = generateOAuthState();
+    const persistenceResult = setItemWithExpiry(
+      STORAGE_KEYS.oauthState,
+      oauthState,
+      AUTH_POLICY.oauthStateTtlMs,
+    );
+
+    if (persistenceResult !== "stored") {
+      toast.error("Error", {
+        description:
+          "Could not initialize a secure login session. Please enable storage and try again.",
+      });
+      return;
+    }
+
+    const authParams = new URLSearchParams({
+      client_id: CLIENT_ID,
+      response_type: ANILIST_RESPONSE_TYPE,
+      state: oauthState,
+    });
+    const authUrl: string = `${ANILIST_AUTH_URL}?${authParams.toString()}`;
     globalThis.location.href = authUrl;
   };
 

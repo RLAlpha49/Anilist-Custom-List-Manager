@@ -13,13 +13,15 @@ import {
 
 import Layout from "@/components/layout";
 import LoadingIndicator from "@/components/loading-indicator";
-import { fetchAniList } from "@/lib/api";
+import { fetchAniList, getUserFacingApiError } from "@/lib/api";
 import {
   classifyFallbackFailure,
   type FallbackFailureKind,
   getFallbackCopy,
 } from "@/lib/fallback-ux";
 import {
+  AUTH_POLICY,
+  getItemWithExpiry,
   removeItemWithExpiry,
   setItemWithExpiry,
   STORAGE_KEYS,
@@ -39,6 +41,11 @@ const VIEWER_QUERY = `
 const REDIRECT_MIN_DISPLAY_MS = 5000;
 const VERIFY_STEP_MIN_DISPLAY_MS = 1500;
 const PROGRESS_FINISH_VISIBLE_MS = 450;
+
+const scrubOAuthResponseFromUrl = (): void => {
+  const sanitizedPath = globalThis.location.pathname;
+  globalThis.history.replaceState({}, document.title, sanitizedPath);
+};
 
 function PageData() {
   const router = useRouter();
@@ -63,11 +70,37 @@ function PageData() {
         setProgress(12);
         setMessage("Checking your AniList response...");
 
-        const urlHash: string = new URL(globalThis.location.href).hash;
-        const params: URLSearchParams = new URLSearchParams(
-          urlHash.substring(1),
+        const currentUrl = new URL(globalThis.location.href);
+        const hashParams: URLSearchParams = new URLSearchParams(
+          currentUrl.hash.substring(1),
         );
-        const accessToken: string | null = params.get("access_token");
+        const searchParams = currentUrl.searchParams;
+        const accessToken: string | null = hashParams.get("access_token");
+        const returnedState: string | null =
+          hashParams.get("state") ?? searchParams.get("state");
+        const expectedState = getItemWithExpiry<string>(
+          STORAGE_KEYS.oauthState,
+        );
+
+        scrubOAuthResponseFromUrl();
+        removeItemWithExpiry(STORAGE_KEYS.oauthState);
+
+        if (
+          !returnedState ||
+          !expectedState ||
+          returnedState !== expectedState
+        ) {
+          setFailureKind("auth");
+          setFailureDetail(
+            "Login session validation failed. Please restart authentication.",
+          );
+          setStatus("error");
+          setMessage(getFallbackCopy("auth").description);
+          removeItemWithExpiry(STORAGE_KEYS.authToken);
+          removeItemWithExpiry(STORAGE_KEYS.authUserId);
+          removeItemWithExpiry(STORAGE_KEYS.authSessionIssuedAt);
+          return;
+        }
 
         if (!accessToken) {
           console.error("No access token found in URL hash");

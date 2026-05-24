@@ -1,8 +1,19 @@
 const DEFAULT_EXPIRY = 60 * 60 * 24 * 1000;
 const MAX_LOCAL_STORAGE_ITEM_BYTES = 256 * 1024;
+const MINUTE_MS = 60 * 1000;
+const HOUR_MS = 60 * MINUTE_MS;
+
+export const AUTH_POLICY = {
+  tokenAbsoluteTtlMs: 24 * HOUR_MS,
+  tokenInactivityTtlMs: 1 * HOUR_MS,
+  oauthStateTtlMs: 10 * MINUTE_MS,
+  activityRefreshThrottleMs: 60 * 1000,
+} as const;
 
 export const STORAGE_TTLS = {
-  authSession: 60 * 60 * 24 * 7 * 1000,
+  authSession: AUTH_POLICY.tokenInactivityTtlMs,
+  authSessionIssuedAt: AUTH_POLICY.tokenAbsoluteTtlMs,
+  oauthState: AUTH_POLICY.oauthStateTtlMs,
   workflowCache: DEFAULT_EXPIRY,
   updateSummary: 60 * 60 * 1000,
 } as const;
@@ -10,6 +21,8 @@ export const STORAGE_TTLS = {
 export const STORAGE_KEYS = {
   authToken: "aclm:auth:token",
   authUserId: "aclm:auth:user-id",
+  authSessionIssuedAt: "aclm:auth:session-issued-at",
+  oauthState: "aclm:auth:oauth-state",
   workflowConditionsAnime: "aclm:workflow:conditions:anime",
   workflowConditionsManga: "aclm:workflow:conditions:manga",
   workflowHideDefaultStatusLists: "aclm:workflow:hide-default-status-lists",
@@ -41,6 +54,18 @@ export const STORAGE_KEY_REGISTRY: Record<StorageKey, StorageKeyMetadata> = {
     ttl: STORAGE_TTLS.authSession,
     description: "AniList user ID normalized to a number at the auth boundary.",
     legacyKeys: ["userId"],
+  },
+  [STORAGE_KEYS.authSessionIssuedAt]: {
+    owner: "context/auth-context.tsx",
+    ttl: STORAGE_TTLS.authSessionIssuedAt,
+    description:
+      "Unix timestamp (ms) for auth-session creation used to enforce absolute token lifetime.",
+  },
+  [STORAGE_KEYS.oauthState]: {
+    owner: "app/anilist-login/page.tsx",
+    ttl: STORAGE_TTLS.oauthState,
+    description:
+      "Single-use OAuth state value persisted for redirect CSRF verification.",
   },
   [STORAGE_KEYS.workflowConditionsAnime]: {
     owner: "app/custom-list-manager/page.tsx",
