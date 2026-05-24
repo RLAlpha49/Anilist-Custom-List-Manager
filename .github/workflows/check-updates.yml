@@ -41,7 +41,7 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Enforce dependency vulnerability gate (high+)
+      - name: Enforce dependency vulnerability gate
         run: bun audit --audit-level=high
 
       - name: Determine update automation mode
