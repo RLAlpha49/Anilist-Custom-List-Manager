@@ -32,6 +32,16 @@ export default function Layout({ children }: Readonly<LayoutProps>) {
           </Link>
           <div className="flex items-center space-x-4">
             <Link
+              href="/"
+              className="
+                text-sm text-z-muted transition-colors duration-200
+                hover:text-z-text
+                active:opacity-70
+              "
+            >
+              Home
+            </Link>
+            <Link
               href="/faq"
               className="
                 text-sm text-z-muted transition-colors duration-200
@@ -57,7 +67,23 @@ export default function Layout({ children }: Readonly<LayoutProps>) {
             &copy; 2025 Anilist Custom List Manager
           </span>
           <div className="flex items-center gap-4 text-xs">
-            <span className="text-z-subtle">Powered by AniList API</span>
+            <div className="flex items-center gap-3">
+              <span className="text-z-subtle">Public pages:</span>
+              <Link
+                href="/"
+                className="text-z-muted transition-colors duration-200 hover:text-z-text"
+                aria-label="Visit home page"
+              >
+                Home
+              </Link>
+              <Link
+                href="/faq"
+                className="text-z-muted transition-colors duration-200 hover:text-z-text"
+                aria-label="Visit FAQ page"
+              >
+                FAQ
+              </Link>
+            </div>
             <Link
               href="https://github.com/RLAlpha49/Anilist-Custom-List-Manager"
               target="_blank"
