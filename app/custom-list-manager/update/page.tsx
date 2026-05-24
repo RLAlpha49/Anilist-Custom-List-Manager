@@ -544,7 +544,13 @@ function buildTrackedEntries(
         ...rawEntry,
         genres: rawEntry.media.genres ?? [],
         tags: mediaTags.map((tag) => tag.name),
-        tagCategories: [...new Set(mediaTags.map((tag) => tag.category))],
+        tagCategories: [
+          ...new Set(
+            mediaTags
+              .map((tag) => tag.category)
+              .filter((category): category is string => Boolean(category)),
+          ),
+        ],
         isAdult: rawEntry.media.isAdult ?? false,
       });
     }

@@ -67,10 +67,10 @@ export type AniListMediaListStatus =
 export type AniListListOptionsKey = `${Lowercase<AniListMediaType>}List`;
 
 interface MediaTitle {
-  romaji: string;
+  romaji: string | null;
   english: string | null;
-  native: string;
-  userPreferred: string;
+  native: string | null;
+  userPreferred: string | null;
 }
 
 interface MediaCoverImage {
@@ -81,7 +81,7 @@ interface MediaCoverImage {
 
 interface MediaTag {
   name: string;
-  category: string;
+  category: string | null;
 }
 
 export interface RateLimitInfo {
@@ -122,7 +122,7 @@ interface MediaList {
   isCustomList: boolean;
   entries: MediaEntry[];
   name: string;
-  status: AniListMediaListStatus;
+  status: AniListMediaListStatus | null;
 }
 
 interface MediaListCollection {
@@ -276,10 +276,10 @@ const isMediaTitle = (value: unknown): value is MediaTitle => {
   }
 
   return (
-    typeof value.romaji === "string" &&
+    isNullableString(value.romaji) &&
     isNullableString(value.english) &&
-    typeof value.native === "string" &&
-    typeof value.userPreferred === "string"
+    isNullableString(value.native) &&
+    isNullableString(value.userPreferred)
   );
 };
 
@@ -300,7 +300,7 @@ const isMediaTag = (value: unknown): value is MediaTag => {
     return false;
   }
 
-  return typeof value.name === "string" && typeof value.category === "string";
+  return typeof value.name === "string" && isNullableString(value.category);
 };
 
 const isMedia = (value: unknown): value is Media => {
@@ -347,7 +347,7 @@ const isMediaList = (value: unknown): value is MediaList => {
   return (
     typeof value.isCustomList === "boolean" &&
     typeof value.name === "string" &&
-    isEnumValue(value.status, ANILIST_MEDIA_LIST_STATUSES) &&
+    isNullableEnumValue(value.status, ANILIST_MEDIA_LIST_STATUSES) &&
     value.entries.every((entry) => isMediaEntry(entry))
   );
 };
