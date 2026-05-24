@@ -5,6 +5,7 @@ import React, {
   forwardRef,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -68,19 +69,34 @@ export const DynamicSelect = forwardRef<HTMLButtonElement, DynamicSelectProps>(
       [ref],
     );
 
-    const filteredOptions =
-      searchQuery.trim() === ""
-        ? options
-        : options
-            .map((group) => ({
-              label: group.label,
-              items: group.items.filter((item) =>
-                item.label.toLowerCase().includes(searchQuery.toLowerCase()),
-              ),
-            }))
-            .filter((group) => group.items.length > 0);
+    const filteredOptions = useMemo(() => {
+      if (searchQuery.trim() === "") {
+        return options;
+      }
 
-    const allFlatItems = filteredOptions.flatMap((g) => g.items);
+      const query = searchQuery.toLowerCase();
+      return options
+        .map((group) => ({
+          label: group.label,
+          items: group.items.filter((item) =>
+            item.label.toLowerCase().includes(query),
+          ),
+        }))
+        .filter((group) => group.items.length > 0);
+    }, [options, searchQuery]);
+
+    const allFlatItems = useMemo(
+      () => filteredOptions.flatMap((group) => group.items),
+      [filteredOptions],
+    );
+
+    const itemIndexByValue = useMemo(() => {
+      const map = new Map<string, number>();
+      allFlatItems.forEach((item, idx) => {
+        map.set(item.value, idx);
+      });
+      return map;
+    }, [allFlatItems]);
 
     const getItemBg = (isSelected: boolean, isHighlighted: boolean) => {
       if (isSelected) return "var(--z-amber-dim)";
@@ -99,23 +115,35 @@ export const DynamicSelect = forwardRef<HTMLButtonElement, DynamicSelectProps>(
       const panelHeight = Math.min(380, viewportHeight * 0.45);
       const spaceBelow = viewportHeight - rect.bottom;
 
-      if (spaceBelow >= panelHeight || spaceBelow >= rect.top) {
-        setDropdownStyle({
-          position: "absolute",
-          top: rect.bottom + window.scrollY + 4,
-          left: rect.left + window.scrollX,
-          width: Math.max(rect.width, 280),
-          maxHeight: Math.min(panelHeight, spaceBelow - 8),
-        });
-      } else {
-        setDropdownStyle({
-          position: "absolute",
-          top: rect.top + window.scrollY - panelHeight - 4,
-          left: rect.left + window.scrollX,
-          width: Math.max(rect.width, 280),
-          maxHeight: Math.min(panelHeight, rect.top - 8),
-        });
-      }
+      const nextStyle: React.CSSProperties =
+        spaceBelow >= panelHeight || spaceBelow >= rect.top
+          ? {
+              position: "absolute",
+              top: rect.bottom + window.scrollY + 4,
+              left: rect.left + window.scrollX,
+              width: Math.max(rect.width, 280),
+              maxHeight: Math.min(panelHeight, spaceBelow - 8),
+            }
+          : {
+              position: "absolute",
+              top: rect.top + window.scrollY - panelHeight - 4,
+              left: rect.left + window.scrollX,
+              width: Math.max(rect.width, 280),
+              maxHeight: Math.min(panelHeight, rect.top - 8),
+            };
+
+      setDropdownStyle((prev) => {
+        if (
+          prev.position === nextStyle.position &&
+          prev.top === nextStyle.top &&
+          prev.left === nextStyle.left &&
+          prev.width === nextStyle.width &&
+          prev.maxHeight === nextStyle.maxHeight
+        ) {
+          return prev;
+        }
+        return nextStyle;
+      });
     }, []);
 
     const openDropdown = useCallback(() => {
@@ -160,12 +188,29 @@ export const DynamicSelect = forwardRef<HTMLButtonElement, DynamicSelectProps>(
     // Scroll position tracking
     useEffect(() => {
       if (!isOpen) return;
-      const update = () => computePosition();
-      window.addEventListener("scroll", update, true);
-      window.addEventListener("resize", update);
+      let rafId: number | null = null;
+
+      const scheduleUpdate = () => {
+        if (rafId !== null) return;
+        rafId = globalThis.requestAnimationFrame(() => {
+          rafId = null;
+          computePosition();
+        });
+      };
+
+      scheduleUpdate();
+      window.addEventListener("scroll", scheduleUpdate, {
+        capture: true,
+        passive: true,
+      });
+      window.addEventListener("resize", scheduleUpdate);
+
       return () => {
-        window.removeEventListener("scroll", update, true);
-        window.removeEventListener("resize", update);
+        if (rafId !== null) {
+          globalThis.cancelAnimationFrame(rafId);
+        }
+        window.removeEventListener("scroll", scheduleUpdate, true);
+        window.removeEventListener("resize", scheduleUpdate);
       };
     }, [isOpen, computePosition]);
 
@@ -373,9 +418,8 @@ export const DynamicSelect = forwardRef<HTMLButtonElement, DynamicSelectProps>(
                             {group.label}
                           </div>
                           {group.items.map((item) => {
-                            const globalIdx = allFlatItems.findIndex(
-                              (i) => i.value === item.value,
-                            );
+                            const globalIdx =
+                              itemIndexByValue.get(item.value) ?? -1;
                             const isHighlighted =
                               globalIdx === highlightedIndex;
                             const isSelected = item.value === value;
