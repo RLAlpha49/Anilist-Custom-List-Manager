@@ -147,6 +147,23 @@ interface FetchUserCustomListsVariables extends AniListRequestVariables {
   userId: number;
 }
 
+const getApiErrorMessageWithRequestId = (
+  error: ApiError,
+  fallbackMessage: string,
+): string => {
+  const baseMessage = error.message || fallbackMessage;
+  const requestId =
+    typeof error.metadata?.requestId === "string"
+      ? error.metadata.requestId
+      : null;
+
+  if (!requestId) {
+    return baseMessage;
+  }
+
+  return `${baseMessage} (Request ID: ${requestId})`;
+};
+
 const HELP_STEPS = [
   {
     step: "1",
@@ -598,7 +615,10 @@ function PageData() {
       const apiError = error as ApiError;
       console.error("Error deleting list:", apiError);
       toast.error("Error", {
-        description: apiError.message || "Failed to delete list.",
+        description: getApiErrorMessageWithRequestId(
+          apiError,
+          "Failed to delete list.",
+        ),
       });
     }
   };
@@ -662,7 +682,10 @@ function PageData() {
         const apiError = error as ApiError;
         console.error("Error updating sectionOrder:", apiError.message);
         toast.error("Error", {
-          description: apiError.message || "Failed to update list order.",
+          description: getApiErrorMessageWithRequestId(
+            apiError,
+            "Failed to update list order.",
+          ),
         });
       }
     },
@@ -952,7 +975,10 @@ function PageData() {
         const apiError = error as ApiError;
         console.error("Error in fetchLists:", apiError.message);
         toast.error("Error", {
-          description: apiError.message || "Failed to fetch lists.",
+          description: getApiErrorMessageWithRequestId(
+            apiError,
+            "Failed to fetch lists.",
+          ),
         });
         setLoading(false);
       }
@@ -1093,7 +1119,10 @@ function PageData() {
         const apiError = error as ApiError;
         console.error("Error updating list names:", apiError.message);
         toast.error("Error", {
-          description: apiError.message || "Failed to update list names.",
+          description: getApiErrorMessageWithRequestId(
+            apiError,
+            "Failed to update list names.",
+          ),
         });
       }
 

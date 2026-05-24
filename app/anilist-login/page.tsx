@@ -24,10 +24,33 @@ import {
   removeItemWithExpiry,
   STORAGE_KEYS,
 } from "@/lib/local-storage";
-import { hasViewerData, type ViewerResponseData } from "@/lib/types";
+import {
+  type ApiError,
+  hasViewerData,
+  type ViewerResponseData,
+} from "@/lib/types";
 
 const ANILIST_AUTH_URL = "https://anilist.co/api/v2/oauth/authorize";
 const CLIENT_ID = process.env.NEXT_PUBLIC_ANILIST_CLIENT_ID;
+
+const getApiErrorMessageWithRequestId = (
+  error: unknown,
+  fallbackMessage: string,
+): string => {
+  const normalizedError = error as ApiError;
+  const baseMessage =
+    error instanceof Error && error.message ? error.message : fallbackMessage;
+  const requestId =
+    typeof normalizedError.metadata?.requestId === "string"
+      ? normalizedError.metadata.requestId
+      : null;
+
+  if (!requestId) {
+    return baseMessage;
+  }
+
+  return `${baseMessage} (Request ID: ${requestId})`;
+};
 
 function PageData() {
   const { isLoggedIn, login, logout } = useAuth();
@@ -89,10 +112,10 @@ function PageData() {
           });
         }
       } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : "Failed to fetch your AniList data.";
+        const message = getApiErrorMessageWithRequestId(
+          error,
+          "Failed to fetch your AniList data.",
+        );
 
         removeItemWithExpiry(STORAGE_KEYS.authToken);
         setUsername("");
