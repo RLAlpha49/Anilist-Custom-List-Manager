@@ -1,5 +1,6 @@
 "use client";
 
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { AnimatePresence, motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { type CSSProperties, useEffect, useRef, useState } from "react";
@@ -109,10 +110,13 @@ type PendingAction = "pause" | "stop" | "complete" | null;
 
 const LOW_RATE_LIMIT_THRESHOLD = 5;
 const MEDIA_LIST_PAGE_SIZE = 500;
+const REQUEST_INTERVAL_MS = 3000;
 const DEFAULT_MUTATION_BATCH_SIZE = 6;
-const MAX_MUTATION_BATCH_SIZE = 12;
-const MIN_MUTATION_BATCH_SIZE = 1;
+const MAX_MUTATION_BATCH_SIZE = 9;
+const MIN_MUTATION_BATCH_SIZE = 3;
 const RATE_LIMIT_SAFETY_RESERVE = 2;
+const VIRTUAL_ROW_GAP_PX = 12;
+const CARD_ANIMATION_DURATION_SECONDS = 0.38;
 
 const STATUS_REGEX = /^Status set to (.+)$/;
 const SCORE_REGEX = /^Score set to (\d+)$/;
@@ -255,10 +259,15 @@ const waitForUiCommit = () =>
     });
   });
 
+const wait = (milliseconds: number) =>
+  new Promise<void>((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
-const getAdaptiveBatchSize = (
+const getProcessingBatchSize = (
   rateLimitInfo: RateLimitInfo | null,
   pendingCount: number,
 ): number => {
@@ -345,10 +354,10 @@ const getEntryTitle = (entry: MediaEntry): string =>
   "Unknown";
 
 const TITLE_CLAMP_STYLE: CSSProperties = {
-  display: "-webkit-box",
+  display: "block",
   overflow: "hidden",
-  WebkitBoxOrient: "vertical",
-  WebkitLineClamp: 2,
+  whiteSpace: "nowrap",
+  textOverflow: "ellipsis",
 };
 
 const getEntryChangeSummary = (entry: TrackedEntry): EntryChangeSummary => {
@@ -721,7 +730,10 @@ function AniListEntryLink({
   );
 }
 
-function PendingCard({ entry }: Readonly<{ entry: TrackedEntry }>) {
+function PendingCard({
+  entry,
+  animated = true,
+}: Readonly<{ entry: TrackedEntry; animated?: boolean }>) {
   const title = getEntryTitle(entry.entry);
   const changeSummary = getEntryChangeSummary(entry);
   const cover =
@@ -737,16 +749,19 @@ function PendingCard({ entry }: Readonly<{ entry: TrackedEntry }>) {
   if (changeSummary.hideChanged) {
     visibilitySummary = changeSummary.willHideFromStatusLists
       ? " • will hide from status lists"
-      : " • will stay visible in status lists";
+      : " • will be visible in status lists";
   }
 
   return (
     <motion.div
-      layout
-      initial={{ opacity: 0, scale: 0.98, y: -8 }}
+      layout="position"
+      initial={animated ? { opacity: 0, scale: 0.995, y: 8 } : false}
       animate={{ opacity: 1, scale: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20, scale: 0.98 }}
-      transition={{ type: "spring", stiffness: 280, damping: 28 }}
+      exit={animated ? { opacity: 0, y: -8, scale: 0.995 } : undefined}
+      transition={{
+        duration: CARD_ANIMATION_DURATION_SECONDS,
+        ease: [0.22, 1, 0.36, 1],
+      }}
       className="relative overflow-hidden rounded-xl"
       style={{
         backgroundColor: "var(--z-card)",
@@ -775,6 +790,9 @@ function PendingCard({ entry }: Readonly<{ entry: TrackedEntry }>) {
             >
               Queued Next
             </span>
+            <span className="ml-auto">
+              <AniListEntryLink entry={entry.entry} compact />
+            </span>
           </div>
 
           <p
@@ -802,17 +820,13 @@ function PendingCard({ entry }: Readonly<{ entry: TrackedEntry }>) {
                 label={
                   changeSummary.willHideFromStatusLists
                     ? "Will hide from status lists"
-                    : "Will stay visible in status lists"
+                    : "Will be visible in status lists"
                 }
                 tone={changeSummary.willHideFromStatusLists ? "pink" : "green"}
               />
             ) : (
               <MetaPill label={`${changeCount} queued changes`} tone="amber" />
             )}
-          </div>
-
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <AniListEntryLink entry={entry.entry} />
           </div>
 
           <p className="mb-3 text-sm" style={{ color: "var(--z-muted)" }}>
@@ -874,7 +888,10 @@ function PendingCard({ entry }: Readonly<{ entry: TrackedEntry }>) {
   );
 }
 
-function UpdatingCard({ entry }: Readonly<{ entry: TrackedEntry }>) {
+function UpdatingCard({
+  entry,
+  compact = false,
+}: Readonly<{ entry: TrackedEntry; compact?: boolean }>) {
   const title = getEntryTitle(entry.entry);
   const changeSummary = getEntryChangeSummary(entry);
   const cover =
@@ -888,12 +905,166 @@ function UpdatingCard({ entry }: Readonly<{ entry: TrackedEntry }>) {
       : " • showing in status lists";
   }
 
+  if (compact) {
+    const addedPreview = changeSummary.added.slice(0, 2);
+    const removedPreview = changeSummary.removed.slice(0, 2);
+    const keptPreview = changeSummary.kept.slice(0, 2);
+
+    return (
+      <motion.div
+        layout="position"
+        initial={false}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{
+          duration: 0.22,
+          ease: "easeOut",
+        }}
+        className="relative overflow-hidden rounded-xl p-3"
+        style={{
+          backgroundColor: "var(--z-card)",
+          border: "1px solid rgba(232,121,249,0.35)",
+          boxShadow: "0 0 0 1px rgba(232,121,249,0.18) inset",
+        }}
+      >
+        <div className="flex items-start gap-3">
+          <CoverImage src={cover} alt={title} width={56} height={80} />
+          <div className="min-w-0 flex-1">
+            <div className="mb-1.5 flex items-center gap-2">
+              <FaSpinner
+                className="shrink-0 animate-spin"
+                size={11}
+                style={{ color: "var(--z-pink)" }}
+              />
+              <span
+                className="text-[9px] font-black tracking-widest uppercase"
+                style={{ color: "var(--z-pink)" }}
+              >
+                Updating
+              </span>
+              <span className="ml-auto">
+                <AniListEntryLink entry={entry.entry} compact />
+              </span>
+            </div>
+
+            <p
+              className="mb-2 text-sm/5 font-bold"
+              style={{
+                color: "var(--z-text)",
+                fontFamily: "var(--font-syne)",
+                ...TITLE_CLAMP_STYLE,
+              }}
+            >
+              {title}
+            </p>
+
+            <div className="mb-2 flex flex-wrap gap-1.5">
+              <MetaPill
+                label={formatStatusLabel(entry.entry.status)}
+                tone={getStatusTone(entry.entry.status)}
+              />
+              <MetaPill
+                label={formatLabel(entry.entry.media.format)}
+                tone="frost"
+              />
+              <MetaPill
+                label={`${changeSummary.added.length + changeSummary.removed.length} changes`}
+                tone="pink"
+              />
+            </div>
+
+            <p className="mb-2 text-xs" style={{ color: "var(--z-muted)" }}>
+              {changeSummary.added.length} add • {changeSummary.removed.length}{" "}
+              remove
+              {visibilitySummary}
+            </p>
+
+            <div className="space-y-1.5">
+              {addedPreview.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {addedPreview.map((listName) => (
+                    <ListPill key={listName} name={listName} variant="added" />
+                  ))}
+                  {changeSummary.added.length > addedPreview.length && (
+                    <span
+                      className="
+                        inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold
+                      "
+                      style={{
+                        backgroundColor: "var(--z-card-up)",
+                        color: "var(--z-muted)",
+                        border: "1px solid var(--z-border)",
+                      }}
+                    >
+                      +{changeSummary.added.length - addedPreview.length}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {removedPreview.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {removedPreview.map((listName) => (
+                    <ListPill
+                      key={listName}
+                      name={listName}
+                      variant="removed"
+                    />
+                  ))}
+                  {changeSummary.removed.length > removedPreview.length && (
+                    <span
+                      className="
+                        inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold
+                      "
+                      style={{
+                        backgroundColor: "var(--z-card-up)",
+                        color: "var(--z-muted)",
+                        border: "1px solid var(--z-border)",
+                      }}
+                    >
+                      +{changeSummary.removed.length - removedPreview.length}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {keptPreview.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {keptPreview.map((listName) => (
+                    <ListPill key={listName} name={listName} variant="kept" />
+                  ))}
+                  {changeSummary.kept.length > keptPreview.length && (
+                    <span
+                      className="
+                        inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold
+                      "
+                      style={{
+                        backgroundColor: "var(--z-card-up)",
+                        color: "var(--z-muted)",
+                        border: "1px solid var(--z-border)",
+                      }}
+                    >
+                      +{changeSummary.kept.length - keptPreview.length}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    );
+  }
+
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.96, y: 40 }}
+      layout="position"
+      initial={{ opacity: 0, scale: 0.995, y: 8 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.96, y: 36 }}
-      transition={{ type: "spring", stiffness: 320, damping: 28 }}
+      exit={{ opacity: 0, scale: 0.995, y: -8 }}
+      transition={{
+        duration: CARD_ANIMATION_DURATION_SECONDS,
+        ease: [0.22, 1, 0.36, 1],
+      }}
       className="relative overflow-hidden rounded-xl"
       style={{
         backgroundColor: "var(--z-card)",
@@ -952,7 +1123,7 @@ function UpdatingCard({ entry }: Readonly<{ entry: TrackedEntry }>) {
                 label={
                   changeSummary.willHideFromStatusLists
                     ? "Will hide from status lists"
-                    : "Will stay visible in status lists"
+                    : "Will be visible in status lists"
                 }
                 tone={changeSummary.willHideFromStatusLists ? "pink" : "green"}
               />
@@ -1029,7 +1200,10 @@ function UpdatingCard({ entry }: Readonly<{ entry: TrackedEntry }>) {
   );
 }
 
-function DoneCard({ entry }: Readonly<{ entry: TrackedEntry }>) {
+function DoneCard({
+  entry,
+  animated = true,
+}: Readonly<{ entry: TrackedEntry; animated?: boolean }>) {
   const title = getEntryTitle(entry.entry);
   const changeSummary = getEntryChangeSummary(entry);
   const cover =
@@ -1046,11 +1220,14 @@ function DoneCard({ entry }: Readonly<{ entry: TrackedEntry }>) {
 
   return (
     <motion.div
-      layout
-      initial={{ opacity: 0, y: -12, scale: 0.98 }}
+      layout="position"
+      initial={animated ? { opacity: 0, y: -8, scale: 0.995 } : false}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: 18, scale: 0.96 }}
-      transition={{ duration: 0.24, ease: "easeOut" }}
+      exit={animated ? { opacity: 0, y: 8, scale: 0.995 } : undefined}
+      transition={{
+        duration: CARD_ANIMATION_DURATION_SECONDS,
+        ease: [0.22, 1, 0.36, 1],
+      }}
       className="relative overflow-hidden rounded-xl"
       style={{
         backgroundColor: "var(--z-card)",
@@ -1076,6 +1253,9 @@ function DoneCard({ entry }: Readonly<{ entry: TrackedEntry }>) {
               style={{ color: "var(--z-green)" }}
             >
               Done
+            </span>
+            <span className="ml-auto">
+              <AniListEntryLink entry={entry.entry} compact />
             </span>
           </div>
 
@@ -1118,10 +1298,6 @@ function DoneCard({ entry }: Readonly<{ entry: TrackedEntry }>) {
                 tone="green"
               />
             )}
-          </div>
-
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <AniListEntryLink entry={entry.entry} />
           </div>
 
           <p className="mb-3 text-sm" style={{ color: "var(--z-muted)" }}>
@@ -1192,9 +1368,8 @@ export default function UpdatePage() {
   const [phase, setPhase] = useState<Phase>("scanning");
   const [pendingEntries, setPendingEntries] = useState<TrackedEntry[]>([]);
   const [erroredEntries, setErroredEntries] = useState<TrackedEntry[]>([]);
-  const [currentUpdating, setCurrentUpdating] = useState<TrackedEntry | null>(
-    null,
-  );
+  const [currentUpdating, setCurrentUpdating] = useState<TrackedEntry[]>([]);
+  const [updatingBatchVersion, setUpdatingBatchVersion] = useState(0);
   const [doneEntries, setDoneEntries] = useState<TrackedEntry[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [processedCount, setProcessedCount] = useState(0);
@@ -1217,9 +1392,33 @@ export default function UpdatePage() {
   const navigationStopRequestedRef = useRef(false);
   const rateLimitInfoRef = useRef<RateLimitInfo | null>(null);
   const storageFallbackWarnedRef = useRef(false);
+  const queueScrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const doneScrollContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const queueVirtualizer = useVirtualizer({
+    count: pendingEntries.length,
+    getScrollElement: () => queueScrollContainerRef.current,
+    estimateSize: () => 300,
+    overscan: 6,
+  });
+
+  const doneVirtualizer = useVirtualizer({
+    count: doneEntries.length,
+    getScrollElement: () => doneScrollContainerRef.current,
+    estimateSize: () => 300,
+    overscan: 6,
+  });
 
   const getAuthToken = (): string | null =>
     token ?? getItemWithExpiry<string>("anilistToken");
+
+  const setUpdatingEntries = (entries: TrackedEntry[]) => {
+    setCurrentUpdating(entries);
+
+    if (entries.length > 0) {
+      setUpdatingBatchVersion((previous) => previous + 1);
+    }
+  };
 
   const persistUpdateStats = (stats: {
     totalUpdated: number;
@@ -1289,7 +1488,7 @@ export default function UpdatePage() {
 
     setPendingEntries([]);
     setErroredEntries([]);
-    setCurrentUpdating(null);
+    setUpdatingEntries([]);
     setDoneEntries([]);
     setTotalCount(0);
     setProcessedCount(0);
@@ -1524,7 +1723,7 @@ export default function UpdatePage() {
 
         for (const [index, entry] of entries.entries()) {
           if (index > 0) {
-            setCurrentUpdating({ ...entry, state: "updating" });
+            setUpdatingEntries([{ ...entry, state: "updating" }]);
             await waitForUiCommit();
           }
 
@@ -1557,7 +1756,7 @@ export default function UpdatePage() {
 
     try {
       while (pendingQueueRef.current.length > 0) {
-        const batchSize = getAdaptiveBatchSize(
+        const batchSize = getProcessingBatchSize(
           rateLimitInfoRef.current,
           pendingQueueRef.current.length,
         );
@@ -1570,12 +1769,14 @@ export default function UpdatePage() {
 
         pendingQueueRef.current = rest;
         setPendingEntries(rest);
-        setCurrentUpdating({ ...entriesToProcess[0], state: "updating" });
+        setUpdatingEntries(
+          entriesToProcess.map((entry) => ({ ...entry, state: "updating" })),
+        );
 
         await waitForUiCommit();
 
         if (navigationStopRequestedRef.current || stopRequestedRef.current) {
-          setCurrentUpdating(null);
+          setUpdatingEntries([]);
 
           if (!navigationStopRequestedRef.current) {
             setQueuedAction(null);
@@ -1585,13 +1786,31 @@ export default function UpdatePage() {
           return;
         }
 
+        await wait(REQUEST_INTERVAL_MS);
+
+        if (navigationStopRequestedRef.current || stopRequestedRef.current) {
+          setUpdatingEntries([]);
+
+          if (!navigationStopRequestedRef.current) {
+            setQueuedAction(null);
+            setPhase("stopped");
+          }
+
+          return;
+        }
+
+        if (pauseRequestedRef.current) {
+          setUpdatingEntries([]);
+          setQueuedAction(null);
+          setPhase("paused");
+          return;
+        }
+
         const { doneEntriesBatch, erroredEntriesBatch } =
           await runMutationBatch(entriesToProcess);
 
         updatedCountRef.current += doneEntriesBatch.length;
         errorCountRef.current += erroredEntriesBatch.length;
-
-        setCurrentUpdating(null);
 
         if (doneEntriesBatch.length > 0) {
           setDoneEntries((prev) => [...doneEntriesBatch.toReversed(), ...prev]);
@@ -1608,23 +1827,27 @@ export default function UpdatePage() {
             return;
           }
 
+          setUpdatingEntries([]);
           setQueuedAction(null);
           setPhase("stopped");
           return;
         }
 
         if (completeRequestedRef.current) {
+          setUpdatingEntries([]);
           completeRun(true);
           return;
         }
 
         if (pauseRequestedRef.current) {
+          setUpdatingEntries([]);
           setQueuedAction(null);
           setPhase("paused");
           return;
         }
       }
 
+      setUpdatingEntries([]);
       completeRun(completeRequestedRef.current);
     } finally {
       isProcessingRef.current = false;
@@ -1738,6 +1961,14 @@ export default function UpdatePage() {
     donePlaceholderMessage =
       "The run is stopped, so no new completed entries will be added here.";
   }
+  const queueVirtualItems = queueVirtualizer.getVirtualItems();
+  const queuePaddingTop =
+    queueVirtualItems.length > 0 ? queueVirtualItems[0].start : 0;
+  const queuePaddingBottom =
+    queueVirtualItems.length > 0
+      ? queueVirtualizer.getTotalSize() -
+        queueVirtualItems[queueVirtualItems.length - 1].end
+      : 0;
   const breadcrumbs = [
     { name: "Home", href: "/" },
     { name: "Custom List Manager", href: "/custom-list-manager" },
@@ -2384,38 +2615,68 @@ export default function UpdatePage() {
                 >
                   Updating Now
                 </h2>
-              </div>
-
-              <AnimatePresence mode="wait">
-                {currentUpdating ? (
-                  <UpdatingCard
-                    key={currentUpdating.entry.id}
-                    entry={currentUpdating}
-                  />
-                ) : (
-                  <motion.div
-                    key="idle"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="
-                      flex min-h-40 items-center justify-center rounded-xl p-6 text-center text-sm
-                    "
+                {currentUpdating.length > 0 && (
+                  <span
+                    className="ml-auto rounded-full px-2 py-0.5 text-xs font-bold tabular-nums"
                     style={{
-                      color: "var(--z-muted)",
-                      border: "1px dashed var(--z-border)",
+                      backgroundColor: "rgba(232,121,249,0.14)",
+                      color: "var(--z-pink)",
                     }}
                   >
-                    {phase === "ready"
-                      ? "Everything is queued. Press Start when you want to begin."
-                      : phase === "paused"
-                        ? "Paused right here. Resume when you are ready for the next entry."
-                        : phase === "stopped"
-                          ? "The run was stopped before the next request."
-                          : "Waiting for next entry…"}
-                  </motion.div>
+                    {currentUpdating.length}
+                  </span>
                 )}
-              </AnimatePresence>
+              </div>
+
+              <div className="min-h-56">
+                <AnimatePresence mode="wait" initial={false}>
+                  {currentUpdating.length > 0 ? (
+                    <motion.div
+                      key={`updating-batch-${updatingBatchVersion}`}
+                      layout
+                      initial={{ opacity: 0.9, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0.65, y: -6 }}
+                      transition={{ duration: 0.24, ease: "easeOut" }}
+                      className="grid grid-cols-1 items-start gap-3 md:grid-cols-2 xl:grid-cols-3"
+                    >
+                      {currentUpdating.map((entry) => (
+                        <UpdatingCard
+                          key={entry.entry.id}
+                          entry={entry}
+                          compact
+                        />
+                      ))}
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="idle"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{
+                        duration: CARD_ANIMATION_DURATION_SECONDS,
+                        ease: "easeOut",
+                      }}
+                      className="
+                        flex min-h-56 items-center justify-center rounded-xl p-6 text-center text-sm
+                      "
+                      style={{
+                        color: "var(--z-muted)",
+                        border: "1px dashed var(--z-border)",
+                      }}
+                    >
+                      {phase === "ready"
+                        ? "Everything is queued. Press Start when you want to begin."
+                        : phase === "paused"
+                          ? "Paused right here. Resume when you are ready for the next entry."
+                          : phase === "stopped"
+                            ? "The run was stopped before the next request."
+                            : "Waiting for next entry…"}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             </div>
 
             {/* Queue + Done */}
@@ -2448,15 +2709,55 @@ export default function UpdatePage() {
                     border: "1px solid var(--z-border)",
                   }}
                 >
-                  <div className="max-h-168 overflow-y-auto pr-1 sm:pr-2">
+                  <div
+                    ref={queueScrollContainerRef}
+                    className="max-h-168 overflow-y-auto pr-1 sm:pr-2"
+                  >
                     <div className="space-y-3">
-                      <AnimatePresence mode="popLayout" initial={false}>
-                        <motion.div layout className="space-y-3">
-                          {pendingEntries.map((entry) => (
-                            <PendingCard key={entry.entry.id} entry={entry} />
-                          ))}
-                        </motion.div>
-                      </AnimatePresence>
+                      {pendingEntries.length > 0 && (
+                        <div
+                          style={{
+                            paddingTop: `${queuePaddingTop}px`,
+                            paddingBottom: `${queuePaddingBottom}px`,
+                          }}
+                        >
+                          {queueVirtualItems.map((virtualItem) => {
+                            const entry = pendingEntries[virtualItem.index];
+
+                            if (!entry) {
+                              return null;
+                            }
+
+                            return (
+                              <motion.div
+                                key={entry.entry.id}
+                                ref={queueVirtualizer.measureElement}
+                                data-index={virtualItem.index}
+                                layout="position"
+                                initial={false}
+                                animate={{ opacity: 1 }}
+                                transition={{
+                                  duration: 0.26,
+                                  ease: [0.22, 1, 0.36, 1],
+                                }}
+                                style={{
+                                  width: "100%",
+                                  willChange: "transform, opacity",
+                                  transition:
+                                    "transform 260ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease-out",
+                                  paddingBottom:
+                                    virtualItem.index <
+                                    pendingEntries.length - 1
+                                      ? `${VIRTUAL_ROW_GAP_PX}px`
+                                      : undefined,
+                                }}
+                              >
+                                <PendingCard entry={entry} animated />
+                              </motion.div>
+                            );
+                          })}
+                        </div>
+                      )}
 
                       {pendingEntries.length === 0 && (
                         <div
@@ -2508,19 +2809,51 @@ export default function UpdatePage() {
                       border: "1px solid var(--z-border)",
                     }}
                   >
-                    <div className="max-h-168 overflow-y-auto pr-1 sm:pr-2">
+                    <div
+                      ref={doneScrollContainerRef}
+                      className="max-h-168 overflow-y-auto pr-1 sm:pr-2"
+                    >
                       {doneEntries.length > 0 ? (
-                        <div className="space-y-3">
-                          <AnimatePresence mode="popLayout" initial={false}>
-                            <motion.div layout className="space-y-3">
-                              {doneEntries.map((entry) => (
-                                <DoneCard
+                        <div
+                          style={{
+                            height: `${doneVirtualizer.getTotalSize()}px`,
+                            position: "relative",
+                            width: "100%",
+                          }}
+                        >
+                          {doneVirtualizer
+                            .getVirtualItems()
+                            .map((virtualItem) => {
+                              const entry = doneEntries[virtualItem.index];
+
+                              if (!entry) {
+                                return null;
+                              }
+
+                              return (
+                                <div
                                   key={`done-${entry.entry.id}`}
-                                  entry={entry}
-                                />
-                              ))}
-                            </motion.div>
-                          </AnimatePresence>
+                                  ref={doneVirtualizer.measureElement}
+                                  data-index={virtualItem.index}
+                                  style={{
+                                    position: "absolute",
+                                    top: 0,
+                                    left: 0,
+                                    width: "100%",
+                                    transform: `translateY(${virtualItem.start}px)`,
+                                    willChange: "transform, opacity",
+                                    transition:
+                                      "transform 260ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease-out",
+                                    paddingBottom:
+                                      virtualItem.index < doneEntries.length - 1
+                                        ? `${VIRTUAL_ROW_GAP_PX}px`
+                                        : undefined,
+                                  }}
+                                >
+                                  <DoneCard entry={entry} animated />
+                                </div>
+                              );
+                            })}
                         </div>
                       ) : (
                         <div
