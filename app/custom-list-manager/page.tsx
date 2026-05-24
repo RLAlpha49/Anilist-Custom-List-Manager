@@ -68,6 +68,7 @@ import { fetchAniList } from "@/lib/api";
 import {
   getItemWithExpiry,
   getJsonItemWithExpiry,
+  isStorageFallbackResult,
   setItemWithExpiry,
 } from "@/lib/local-storage";
 import {
@@ -523,7 +524,7 @@ function PageData() {
       }));
       setItemWithExpiry(
         listType === "ANIME" ? "conditionsAnime" : "conditionsManga",
-        JSON.stringify(newConditions),
+        newConditions,
         60 * 60 * 24 * 1000,
       );
     }
@@ -820,26 +821,40 @@ function PageData() {
 
   const proceedToNextStep = (): void => {
     setShowPopup(false);
-    setItemWithExpiry(
-      "lists",
-      lists.map((list) => ({
-        name: list.name,
-        selectedOption: list.selectedOption,
-      })),
-      60 * 60 * 24 * 1000,
-    );
-    setItemWithExpiry(
-      "listsToRemoveFromAllEntries",
-      listsToRemoveFromAllEntries,
-      60 * 60 * 24 * 1000,
-    );
-    setItemWithExpiry("listType", listType, 60 * 60 * 24 * 1000);
-    setItemWithExpiry("userId", userId?.toString() || "", 60 * 60 * 24 * 1000);
-    setItemWithExpiry(
-      "hideDefaultStatusLists",
-      hideDefaultStatusLists,
-      60 * 60 * 24 * 1000,
-    );
+    const writeResults = [
+      setItemWithExpiry(
+        "lists",
+        lists.map((list) => ({
+          name: list.name,
+          selectedOption: list.selectedOption,
+        })),
+        60 * 60 * 24 * 1000,
+      ),
+      setItemWithExpiry(
+        "listsToRemoveFromAllEntries",
+        listsToRemoveFromAllEntries,
+        60 * 60 * 24 * 1000,
+      ),
+      setItemWithExpiry("listType", listType, 60 * 60 * 24 * 1000),
+      setItemWithExpiry(
+        "userId",
+        userId?.toString() || "",
+        60 * 60 * 24 * 1000,
+      ),
+      setItemWithExpiry(
+        "hideDefaultStatusLists",
+        hideDefaultStatusLists,
+        60 * 60 * 24 * 1000,
+      ),
+    ];
+
+    if (writeResults.some(isStorageFallbackResult)) {
+      toast.warning("Using temporary storage fallback", {
+        description:
+          "Some data could not be persisted to browser storage. Continuing with in-memory fallback for this tab.",
+      });
+    }
+
     router.push("/custom-list-manager/update");
   };
 

@@ -27,6 +27,7 @@ import {
   getBooleanItemWithExpiry,
   getItemWithExpiry,
   getJsonItemWithExpiry,
+  isStorageFallbackResult,
   setItemWithExpiry,
 } from "@/lib/local-storage";
 import {
@@ -1125,9 +1126,30 @@ export default function UpdatePage() {
   const stopRequestedRef = useRef(false);
   const completeRequestedRef = useRef(false);
   const navigationStopRequestedRef = useRef(false);
+  const storageFallbackWarnedRef = useRef(false);
 
   const getAuthToken = (): string | null =>
     token ?? getItemWithExpiry<string>("anilistToken");
+
+  const persistUpdateStats = (stats: {
+    totalUpdated: number;
+    errorCount: number;
+    timeTaken: number;
+  }) => {
+    const result = setItemWithExpiry(
+      "updateStats",
+      JSON.stringify(stats),
+      60 * 60 * 1000,
+    );
+
+    if (isStorageFallbackResult(result) && !storageFallbackWarnedRef.current) {
+      storageFallbackWarnedRef.current = true;
+      toast.warning("Using temporary storage fallback", {
+        description:
+          "Update summary is stored in-memory for this tab because browser storage is constrained.",
+      });
+    }
+  };
 
   const handleRetryState = (retryContext: AniListRetryContext) => {
     setRetryStatus({ ...retryContext, startedAt: Date.now() });
@@ -1275,11 +1297,7 @@ export default function UpdatePage() {
         const trackedEntries = [...trackedEntryMap.values()];
 
         if (trackedEntries.length === 0) {
-          setItemWithExpiry(
-            "updateStats",
-            JSON.stringify({ totalUpdated: 0, errorCount: 0, timeTaken: 0 }),
-            60 * 60 * 1000,
-          );
+          persistUpdateStats({ totalUpdated: 0, errorCount: 0, timeTaken: 0 });
           setPhase("complete");
           return;
         }
@@ -1314,15 +1332,11 @@ export default function UpdatePage() {
         ? Math.round((Date.now() - startTimeRef.current) / 1000)
         : 0;
 
-    setItemWithExpiry(
-      "updateStats",
-      JSON.stringify({
-        totalUpdated: updatedCountRef.current,
-        errorCount: errorCountRef.current,
-        timeTaken,
-      }),
-      60 * 60 * 1000,
-    );
+    persistUpdateStats({
+      totalUpdated: updatedCountRef.current,
+      errorCount: errorCountRef.current,
+      timeTaken,
+    });
     setQueuedAction(null);
     setPhase("complete");
 
