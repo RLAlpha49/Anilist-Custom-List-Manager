@@ -226,8 +226,13 @@ function PageData() {
       accessToken,
       STORAGE_TTLS.authSession,
     );
+    const issuedAtResult = setItemWithExpiry(
+      STORAGE_KEYS.authSessionIssuedAt,
+      Date.now(),
+      AUTH_POLICY.tokenAbsoluteTtlMs,
+    );
 
-    if (persistenceResult !== "stored") {
+    if (persistenceResult !== "stored" || issuedAtResult !== "stored") {
       throw new Error(
         "We could not persist your AniList token in secure browser storage.",
       );
