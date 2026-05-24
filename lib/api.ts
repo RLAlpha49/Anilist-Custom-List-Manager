@@ -24,6 +24,9 @@ const SERVER_RETRY_DELAY_SECONDS = 2;
 const TIMEOUT_RETRY_DELAY_SECONDS = 2;
 const FALLBACK_RATE_LIMIT_DELAY_SECONDS = 1;
 const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
+const READ_CACHE_TTL_MS = 5_000;
+const MAX_READ_CACHE_ENTRIES = 100;
+const RETRY_TOAST_COOLDOWN_MS = 1_000;
 const TRANSIENT_HTTP_STATUS_CODES = new Set([408, 500, 502, 503, 504]);
 
 interface RetryMetadata {
@@ -46,7 +49,24 @@ interface InFlightRequestEntry {
   subscribers: Set<InFlightRequestSubscriber>;
 }
 
+interface ReadCacheEntry {
+  response: ApiResponse<unknown>;
+  expiresAt: number;
+}
+
+interface RetryToastState {
+  toastId: string;
+  lastNotifiedAt: number;
+}
+
+interface RetryHandlers {
+  onRetry?: (retryContext: AniListRetryContext) => void;
+  onFailure?: (error: ApiError) => void;
+}
+
 const inFlightRequests = new Map<string, InFlightRequestEntry>();
+const readRequestCache = new Map<string, ReadCacheEntry>();
+const retryToastState = new Map<string, RetryToastState>();
 
 export interface AniListRetryContext {
   reason: "networkError" | "rateLimit" | "serverError" | "timeout";
@@ -452,6 +472,130 @@ const shouldDedupeRequest = (query: string): boolean => {
   return !normalizedQuery.toLowerCase().startsWith("mutation");
 };
 
+const cloneRequestValue = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    return value.map((entry) => cloneRequestValue(entry));
+  }
+
+  if (isRecord(value)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, nestedValue]) => [
+        key,
+        cloneRequestValue(nestedValue),
+      ]),
+    );
+  }
+
+  return value;
+};
+
+const cloneApiResponse = <TData>(
+  response: ApiResponse<TData>,
+): ApiResponse<TData> => {
+  if (typeof structuredClone === "function") {
+    return structuredClone(response);
+  }
+
+  return cloneRequestValue(response) as ApiResponse<TData>;
+};
+
+const pruneReadCache = () => {
+  const now = Date.now();
+
+  for (const [cacheKey, entry] of readRequestCache.entries()) {
+    if (entry.expiresAt <= now) {
+      readRequestCache.delete(cacheKey);
+    }
+  }
+
+  while (readRequestCache.size > MAX_READ_CACHE_ENTRIES) {
+    const oldestCacheKey = readRequestCache.keys().next().value;
+    if (!oldestCacheKey) {
+      break;
+    }
+
+    readRequestCache.delete(oldestCacheKey);
+  }
+};
+
+const getCachedReadResponse = <TData>(
+  cacheKey: string,
+): ApiResponse<TData> | null => {
+  const cachedEntry = readRequestCache.get(cacheKey);
+  if (!cachedEntry) {
+    return null;
+  }
+
+  if (cachedEntry.expiresAt <= Date.now()) {
+    readRequestCache.delete(cacheKey);
+    return null;
+  }
+
+  return cloneApiResponse(cachedEntry.response as ApiResponse<TData>);
+};
+
+const setCachedReadResponse = <TData>(
+  cacheKey: string,
+  response: ApiResponse<TData>,
+) => {
+  pruneReadCache();
+
+  readRequestCache.set(cacheKey, {
+    response: cloneApiResponse(response),
+    expiresAt: Date.now() + READ_CACHE_TTL_MS,
+  });
+
+  pruneReadCache();
+};
+
+export const invalidateAniListReadCache = (params?: {
+  query?: string;
+  variables?: AniListRequestVariables;
+  token?: string;
+}): void => {
+  if (!params || (!params.query && !params.variables && !params.token)) {
+    readRequestCache.clear();
+    return;
+  }
+
+  if (params.query && params.token) {
+    const cacheKey = buildRequestDedupKey(
+      params.query,
+      params.variables ?? {},
+      params.token,
+    );
+    readRequestCache.delete(cacheKey);
+    return;
+  }
+
+  const normalizedVariables =
+    params.variables == null
+      ? null
+      : JSON.stringify(normalizeRequestValue(params.variables));
+
+  for (const cacheKey of readRequestCache.keys()) {
+    const parsedKey = parseResponseBody(cacheKey);
+    if (!isRecord(parsedKey)) {
+      continue;
+    }
+
+    const queryMatches =
+      params.query == null ||
+      (typeof parsedKey.query === "string" &&
+        parsedKey.query === params.query.trim());
+    const tokenMatches =
+      params.token == null ||
+      (typeof parsedKey.token === "string" && parsedKey.token === params.token);
+    const variablesMatches =
+      normalizedVariables == null ||
+      JSON.stringify(parsedKey.variables ?? null) === normalizedVariables;
+
+    if (queryMatches && tokenMatches && variablesMatches) {
+      readRequestCache.delete(cacheKey);
+    }
+  }
+};
+
 const getFailureDescription = (error: ApiError): string =>
   error.message || "An error occurred while fetching data.";
 
@@ -462,29 +606,60 @@ const isNetworkError = (apiError: ApiError): boolean =>
 
 const notifyRetry = (
   retryContext: AniListRetryContext,
+  operationKey: string,
   onRetry?: (retryContext: AniListRetryContext) => void,
 ) => {
+  const now = Date.now();
+  const currentToastState = retryToastState.get(operationKey);
+  if (
+    currentToastState &&
+    now - currentToastState.lastNotifiedAt < RETRY_TOAST_COOLDOWN_MS
+  ) {
+    onRetry?.(retryContext);
+    return;
+  }
+
   const baseDescription = `Retrying request in ${retryContext.retryAfterSeconds} seconds... Attempt ${retryContext.retryAttempt}`;
+  const toastId = currentToastState?.toastId ?? `retry:${operationKey}`;
 
   if (retryContext.reason === "serverError") {
     toast.warning("Server Error", {
+      id: toastId,
       description: baseDescription,
     });
   } else if (retryContext.reason === "networkError") {
     toast.warning("Network Error", {
+      id: toastId,
       description: baseDescription,
     });
   } else if (retryContext.reason === "timeout") {
     toast.warning("Request Timed Out", {
+      id: toastId,
       description: baseDescription,
     });
   } else {
     toast.warning("Rate Limit Exceeded", {
+      id: toastId,
       description: baseDescription,
     });
   }
 
+  retryToastState.set(operationKey, {
+    toastId,
+    lastNotifiedAt: now,
+  });
+
   onRetry?.(retryContext);
+};
+
+const clearRetryToastForOperation = (operationKey: string) => {
+  const currentToastState = retryToastState.get(operationKey);
+  if (!currentToastState) {
+    return;
+  }
+
+  toast.dismiss(currentToastState.toastId);
+  retryToastState.delete(operationKey);
 };
 
 const retryRequest = async <TData>(
@@ -493,8 +668,8 @@ const retryRequest = async <TData>(
   maxRetries: number,
   reason: AniListRetryContext["reason"],
   retryMetadata: RetryMetadata | null,
-  onRetry?: (retryContext: AniListRetryContext) => void,
-  onFailure?: (error: ApiError) => void,
+  operationKey: string,
+  handlers?: RetryHandlers,
 ): Promise<ApiResponse<TData>> => {
   if (retryCount >= maxRetries) {
     console.error("Max retries reached for AniList requests.");
@@ -504,7 +679,7 @@ const retryRequest = async <TData>(
       messages: ["Max retries reached for AniList requests."],
       retryable: false,
     });
-    onFailure?.(maxRetryError);
+    handlers?.onFailure?.(maxRetryError);
     throw maxRetryError;
   }
 
@@ -520,10 +695,16 @@ const retryRequest = async <TData>(
   console.warn(
     `AniList request will retry after ${retryAfterSeconds} seconds due to ${reason}.`,
   );
-  notifyRetry(retryContext, onRetry);
+  notifyRetry(retryContext, operationKey, handlers?.onRetry);
   await delay(retryAfterSeconds * 1000);
 
-  return handleRateLimit(apiCall, retryAttempt, maxRetries, onRetry, onFailure);
+  return handleRateLimit(
+    apiCall,
+    operationKey,
+    retryAttempt,
+    maxRetries,
+    handlers,
+  );
 };
 
 /**
@@ -539,10 +720,10 @@ const retryRequest = async <TData>(
  */
 const handleRateLimit = async <TData>(
   apiCall: () => Promise<ApiResponse<TData>>,
+  operationKey: string,
   retryCount = 0,
   maxRetries = 5,
-  onRetry?: (retryContext: AniListRetryContext) => void,
-  onFailure?: (error: ApiError) => void,
+  handlers?: RetryHandlers,
 ): Promise<ApiResponse<TData>> => {
   try {
     return await apiCall();
@@ -557,8 +738,8 @@ const handleRateLimit = async <TData>(
         maxRetries,
         "rateLimit",
         getRetryMetadata(apiError),
-        onRetry,
-        onFailure,
+        operationKey,
+        handlers,
       );
     }
 
@@ -569,8 +750,8 @@ const handleRateLimit = async <TData>(
         maxRetries,
         "networkError",
         null,
-        onRetry,
-        onFailure,
+        operationKey,
+        handlers,
       );
     }
 
@@ -581,8 +762,8 @@ const handleRateLimit = async <TData>(
         maxRetries,
         "timeout",
         null,
-        onRetry,
-        onFailure,
+        operationKey,
+        handlers,
       );
     }
 
@@ -593,13 +774,13 @@ const handleRateLimit = async <TData>(
         maxRetries,
         "serverError",
         null,
-        onRetry,
-        onFailure,
+        operationKey,
+        handlers,
       );
     }
 
     console.error("API call failed:", apiError);
-    if (onFailure) onFailure(apiError);
+    handlers?.onFailure?.(apiError);
     throw apiError;
   }
 };
@@ -724,6 +905,7 @@ export const fetchAniList = async <
   requestOptions?: FetchAniListOptions,
 ): Promise<ApiResponse<TData>> => {
   const normalizedVariables: AniListRequestVariables = variables ?? {};
+  const operationKey = buildRequestDedupKey(query, normalizedVariables, token);
 
   const options = {
     method: "POST",
@@ -735,9 +917,14 @@ export const fetchAniList = async <
     body: JSON.stringify({ query, variables: normalizedVariables }),
   };
 
-  const dedupeKey = shouldDedupeRequest(query)
-    ? buildRequestDedupKey(query, normalizedVariables, token)
-    : null;
+  const dedupeKey = shouldDedupeRequest(query) ? operationKey : null;
+
+  if (dedupeKey) {
+    const cachedResponse = getCachedReadResponse<TData>(dedupeKey);
+    if (cachedResponse) {
+      return cachedResponse;
+    }
+  }
 
   const runRequest = (
     retryHandler?: (retryContext: AniListRetryContext) => void,
@@ -790,19 +977,29 @@ export const fetchAniList = async <
           requestController.cleanup();
         }
       },
+      operationKey,
       0,
       5,
-      retryHandler,
-      failureHandler,
+      {
+        onRetry: retryHandler,
+        onFailure: failureHandler,
+      },
     );
 
   if (!dedupeKey) {
-    return runRequest(onRetry, (error) => {
-      toast.error("Request Failed", {
-        description: getFailureDescription(error),
+    try {
+      const response = await runRequest(onRetry, (error) => {
+        toast.error("Request Failed", {
+          description: getFailureDescription(error),
+        });
+        if (onFailure) onFailure(error);
       });
-      if (onFailure) onFailure(error);
-    });
+      clearRetryToastForOperation(operationKey);
+      return response;
+    } catch (error) {
+      clearRetryToastForOperation(operationKey);
+      throw error;
+    }
   }
 
   const existingInFlight = inFlightRequests.get(dedupeKey);
@@ -842,10 +1039,14 @@ export const fetchAniList = async <
   });
 
   try {
-    return (await requestPromise) as ApiResponse<TData>;
+    const response = (await requestPromise) as ApiResponse<TData>;
+    setCachedReadResponse(dedupeKey, response);
+    clearRetryToastForOperation(operationKey);
+    return response;
   } finally {
     subscribers.delete(subscriber);
     inFlightRequests.delete(dedupeKey);
+    clearRetryToastForOperation(operationKey);
   }
 };
 
