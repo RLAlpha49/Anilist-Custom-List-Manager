@@ -18,9 +18,9 @@ import {
  */
 export const ANILIST_API_CONTRACT_VERSION = "2026-05-23.v1";
 const ANILIST_GRAPHQL_ENDPOINT = "https://graphql.anilist.co";
-const MAX_RETRY_DELAY_SECONDS = 30;
-const MAX_TOTAL_RETRY_DELAY_MS = 120_000;
-const RETRY_JITTER_FACTOR = 0.2;
+const NETWORK_RETRY_DELAY_SECONDS = 2;
+const SERVER_RETRY_DELAY_SECONDS = 2;
+const FALLBACK_RATE_LIMIT_DELAY_SECONDS = 1;
 
 interface RetryMetadata {
   retryAfterSeconds?: number;
@@ -35,11 +35,6 @@ interface InFlightRequestSubscriber {
 interface InFlightRequestEntry {
   promise: Promise<ApiResponse<unknown>>;
   subscribers: Set<InFlightRequestSubscriber>;
-}
-
-interface RetryRequestState {
-  retryMetadata: RetryMetadata | null;
-  totalRetryDelayMs: number;
 }
 
 const inFlightRequests = new Map<string, InFlightRequestEntry>();
@@ -280,44 +275,30 @@ const getRetryMetadata = (error: ApiError): RetryMetadata | null => {
   };
 };
 
-const computeRetryDelaySeconds = (
+const getRetryDelaySeconds = (
   reason: AniListRetryContext["reason"],
-  retryAttempt: number,
-  retryMetadata?: RetryMetadata | null,
+  retryMetadata: RetryMetadata | null,
 ): number => {
-  const baseDelayByReason: Record<AniListRetryContext["reason"], number> = {
-    rateLimit: 2,
-    networkError: 1,
-    serverError: 2,
-  };
+  if (reason === "rateLimit") {
+    let hintedDelay: number | null = null;
 
-  const backoffDelay = Math.min(
-    MAX_RETRY_DELAY_SECONDS,
-    baseDelayByReason[reason] * 2 ** Math.max(0, retryAttempt - 1),
-  );
-
-  let hintedDelay: number | null = null;
-  if (reason === "rateLimit" && retryMetadata) {
-    if (retryMetadata.retryAfterSeconds != null) {
+    if (retryMetadata?.retryAfterSeconds != null) {
       hintedDelay = retryMetadata.retryAfterSeconds;
-    } else if (retryMetadata.rateLimitResetAt != null) {
+    } else if (retryMetadata?.rateLimitResetAt != null) {
       const nowInSeconds = Math.floor(Date.now() / 1000);
       const untilReset = retryMetadata.rateLimitResetAt - nowInSeconds;
       hintedDelay = untilReset > 0 ? untilReset : null;
     }
+
+    return Math.max(
+      1,
+      Math.ceil(hintedDelay ?? FALLBACK_RATE_LIMIT_DELAY_SECONDS),
+    );
   }
 
-  const unclampedDelay = hintedDelay ?? backoffDelay;
-  const boundedDelay = Math.max(
-    1,
-    Math.min(MAX_RETRY_DELAY_SECONDS, unclampedDelay),
-  );
-
-  const jitterOffset =
-    boundedDelay * RETRY_JITTER_FACTOR * (Math.random() * 2 - 1);
-  const jitteredDelay = Math.round(boundedDelay + jitterOffset);
-
-  return Math.max(1, jitteredDelay);
+  return reason === "networkError"
+    ? NETWORK_RETRY_DELAY_SECONDS
+    : SERVER_RETRY_DELAY_SECONDS;
 };
 
 const normalizeRequestValue = (value: unknown): unknown => {
@@ -373,6 +354,10 @@ const notifyRetry = (
     toast.warning("Server Error", {
       description: `Retrying request in ${retryContext.retryAfterSeconds} seconds... Attempt ${retryContext.retryAttempt}`,
     });
+  } else if (retryContext.reason === "networkError") {
+    toast.warning("Network Error", {
+      description: `Retrying request in ${retryContext.retryAfterSeconds} seconds... Attempt ${retryContext.retryAttempt}`,
+    });
   } else {
     toast.warning("Rate Limit Exceeded", {
       description: `Retrying request in ${retryContext.retryAfterSeconds} seconds... Attempt ${retryContext.retryAttempt}`,
@@ -387,24 +372,16 @@ const retryRequest = async <TData>(
   retryCount: number,
   maxRetries: number,
   reason: AniListRetryContext["reason"],
-  retryState: RetryRequestState,
+  retryMetadata: RetryMetadata | null,
   onRetry?: (retryContext: AniListRetryContext) => void,
   onFailure?: (error: ApiError) => void,
 ): Promise<ApiResponse<TData>> => {
-  const { retryMetadata, totalRetryDelayMs } = retryState;
-
-  if (
-    retryCount >= maxRetries ||
-    totalRetryDelayMs >= MAX_TOTAL_RETRY_DELAY_MS
-  ) {
+  if (retryCount >= maxRetries) {
     console.error("Max retries reached for AniList requests.");
     const maxRetryError = createApiError({
       kind: "unknown",
       status: null,
-      messages: [
-        "Retry budget exhausted for AniList requests.",
-        "Please try again in a moment.",
-      ],
+      messages: ["Max retries reached for AniList requests."],
       retryable: false,
     });
     onFailure?.(maxRetryError);
@@ -412,32 +389,7 @@ const retryRequest = async <TData>(
   }
 
   const retryAttempt = retryCount + 1;
-  const computedDelaySeconds = computeRetryDelaySeconds(
-    reason,
-    retryAttempt,
-    retryMetadata,
-  );
-  const remainingRetryBudgetMs = Math.max(
-    0,
-    MAX_TOTAL_RETRY_DELAY_MS - totalRetryDelayMs,
-  );
-
-  if (remainingRetryBudgetMs <= 0) {
-    const retryBudgetError = createApiError({
-      kind: "unknown",
-      status: null,
-      messages: ["Retry budget exhausted for AniList requests."],
-      retryable: false,
-    });
-    onFailure?.(retryBudgetError);
-    throw retryBudgetError;
-  }
-
-  const boundedDelayMs = Math.min(
-    computedDelaySeconds * 1000,
-    remainingRetryBudgetMs,
-  );
-  const retryAfterSeconds = Math.max(1, Math.ceil(boundedDelayMs / 1000));
+  const retryAfterSeconds = getRetryDelaySeconds(reason, retryMetadata);
 
   const retryContext: AniListRetryContext = {
     reason,
@@ -451,14 +403,7 @@ const retryRequest = async <TData>(
   notifyRetry(retryContext, onRetry);
   await delay(retryAfterSeconds * 1000);
 
-  return handleRateLimit(
-    apiCall,
-    retryAttempt,
-    maxRetries,
-    totalRetryDelayMs + boundedDelayMs,
-    onRetry,
-    onFailure,
-  );
+  return handleRateLimit(apiCall, retryAttempt, maxRetries, onRetry, onFailure);
 };
 
 /**
@@ -476,7 +421,6 @@ const handleRateLimit = async <TData>(
   apiCall: () => Promise<ApiResponse<TData>>,
   retryCount = 0,
   maxRetries = 5,
-  totalRetryDelayMs = 0,
   onRetry?: (retryContext: AniListRetryContext) => void,
   onFailure?: (error: ApiError) => void,
 ): Promise<ApiResponse<TData>> => {
@@ -492,10 +436,7 @@ const handleRateLimit = async <TData>(
         retryCount,
         maxRetries,
         "rateLimit",
-        {
-          retryMetadata: getRetryMetadata(apiError),
-          totalRetryDelayMs,
-        },
+        getRetryMetadata(apiError),
         onRetry,
         onFailure,
       );
@@ -507,10 +448,7 @@ const handleRateLimit = async <TData>(
         retryCount,
         maxRetries,
         "networkError",
-        {
-          retryMetadata: null,
-          totalRetryDelayMs,
-        },
+        null,
         onRetry,
         onFailure,
       );
@@ -522,10 +460,7 @@ const handleRateLimit = async <TData>(
         retryCount,
         maxRetries,
         "serverError",
-        {
-          retryMetadata: null,
-          totalRetryDelayMs,
-        },
+        null,
         onRetry,
         onFailure,
       );
@@ -652,7 +587,6 @@ export const fetchAniList = async <
         ),
       0,
       5,
-      0,
       retryHandler,
       failureHandler,
     );
