@@ -115,6 +115,7 @@ type PendingAction = "pause" | "stop" | "complete" | null;
 const LOW_RATE_LIMIT_THRESHOLD = 5;
 const MEDIA_LIST_PAGE_SIZE = 500;
 const REQUEST_INTERVAL_MS = 3000;
+const REQUEST_DELAY_POLL_INTERVAL_MS = 60;
 const DEFAULT_MUTATION_BATCH_SIZE = 6;
 const MAX_MUTATION_BATCH_SIZE = 9;
 const MIN_MUTATION_BATCH_SIZE = 3;
@@ -2051,6 +2052,31 @@ export default function UpdatePage() {
       return { doneEntriesBatch, erroredEntriesBatch };
     };
 
+    const waitForCooldownWindow = async (): Promise<
+      "ready" | "paused" | "stopped" | "navigated"
+    > => {
+      const cooldownEndAt = Date.now() + REQUEST_INTERVAL_MS;
+
+      while (Date.now() < cooldownEndAt) {
+        if (navigationStopRequestedRef.current) {
+          return "navigated";
+        }
+
+        if (stopRequestedRef.current) {
+          return "stopped";
+        }
+
+        if (pauseRequestedRef.current) {
+          return "paused";
+        }
+
+        const remainingMs = cooldownEndAt - Date.now();
+        await wait(Math.min(REQUEST_DELAY_POLL_INTERVAL_MS, remainingMs));
+      }
+
+      return "ready";
+    };
+
     try {
       while (pendingQueueRef.current.length > 0) {
         const batchSize = getProcessingBatchSize(
@@ -2083,12 +2109,12 @@ export default function UpdatePage() {
           return;
         }
 
-        await wait(REQUEST_INTERVAL_MS);
+        const cooldownState = await waitForCooldownWindow();
 
-        if (navigationStopRequestedRef.current || stopRequestedRef.current) {
+        if (cooldownState === "navigated" || cooldownState === "stopped") {
           setUpdatingEntries([]);
 
-          if (!navigationStopRequestedRef.current) {
+          if (cooldownState !== "navigated") {
             setQueuedAction(null);
             setPhase("stopped");
           }
@@ -2096,7 +2122,7 @@ export default function UpdatePage() {
           return;
         }
 
-        if (pauseRequestedRef.current) {
+        if (cooldownState === "paused") {
           setUpdatingEntries([]);
           setQueuedAction(null);
           setPhase("paused");
