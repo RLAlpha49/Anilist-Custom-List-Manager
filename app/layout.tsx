@@ -25,6 +25,11 @@ export const metadata = {
   description: "Manage your anime and manga lists with ease",
 };
 
+const telemetryEnvironment =
+  process.env.NEXT_PUBLIC_VERCEL_ENV ?? process.env.NODE_ENV ?? "unknown";
+const telemetryRelease =
+  process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA ?? "local";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -32,7 +37,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${syne.variable} ${dmSans.variable}`}>
+      <body
+        className={`${syne.variable} ${dmSans.variable}`}
+        data-telemetry-env={telemetryEnvironment}
+        data-telemetry-release={telemetryRelease}
+      >
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <AuthProvider>{children}</AuthProvider>
         </ThemeProvider>
