@@ -1,5 +1,3 @@
-import { toast } from "sonner";
-
 import {
   type AniListGraphQLError,
   type AniListRequestVariables,
@@ -26,8 +24,8 @@ const FALLBACK_RATE_LIMIT_DELAY_SECONDS = 1;
 const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
 const READ_CACHE_TTL_MS = 5_000;
 const MAX_READ_CACHE_ENTRIES = 100;
-const RETRY_TOAST_COOLDOWN_MS = 1_000;
 const TRANSIENT_HTTP_STATUS_CODES = new Set([408, 500, 502, 503, 504]);
+const API_TELEMETRY_FEATURE = "anilist-api" as const;
 
 interface RetryMetadata {
   retryAfterSeconds?: number;
@@ -47,16 +45,12 @@ interface InFlightRequestSubscriber {
 interface InFlightRequestEntry {
   promise: Promise<ApiResponse<unknown>>;
   subscribers: Set<InFlightRequestSubscriber>;
+  requestId: string;
 }
 
 interface ReadCacheEntry {
   response: ApiResponse<unknown>;
   expiresAt: number;
-}
-
-interface RetryToastState {
-  toastId: string;
-  lastNotifiedAt: number;
 }
 
 interface RetryHandlers {
@@ -66,13 +60,111 @@ interface RetryHandlers {
 
 const inFlightRequests = new Map<string, InFlightRequestEntry>();
 const readRequestCache = new Map<string, ReadCacheEntry>();
-const retryToastState = new Map<string, RetryToastState>();
+
+type ApiTelemetrySeverity = "info" | "warn" | "error";
+
+interface ApiTelemetryEvent {
+  eventName: string;
+  severity: ApiTelemetrySeverity;
+  requestId: string;
+  operationKey: string;
+  operationType: "query" | "mutation";
+  retry?: {
+    attempt: number;
+    reason: AniListRetryContext["reason"];
+    retryAfterSeconds: number;
+    maxRetries: number;
+  };
+  error?: {
+    className: string;
+    message: string;
+    status: number | null;
+    kind: ApiError["kind"];
+  };
+  metadata?: Record<string, unknown>;
+}
 
 export interface AniListRetryContext {
   reason: "networkError" | "rateLimit" | "serverError" | "timeout";
   retryAfterSeconds: number;
   retryAttempt: number;
+  requestId: string;
 }
+
+const generateRequestId = (): string => {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
+    return crypto.randomUUID();
+  }
+
+  return `req_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+};
+
+const resolveOperationType = (query: string): "query" | "mutation" =>
+  shouldDedupeRequest(query) ? "query" : "mutation";
+
+const enrichApiErrorWithRequestId = (
+  error: ApiError,
+  requestId: string,
+): ApiError => {
+  error.metadata = error.metadata
+    ? {
+        ...error.metadata,
+        requestId,
+      }
+    : {
+        requestId,
+      };
+
+  return error;
+};
+
+const getErrorClassName = (error: ApiError): string => {
+  if (error.cause instanceof Error && error.cause.name) {
+    return error.cause.name;
+  }
+
+  return error.name || "Error";
+};
+
+const emitApiTelemetry = ({
+  eventName,
+  severity,
+  requestId,
+  operationKey,
+  operationType,
+  retry,
+  error,
+  metadata,
+}: ApiTelemetryEvent): void => {
+  const payload = {
+    eventName,
+    severity,
+    feature: API_TELEMETRY_FEATURE,
+    requestId,
+    operationKey,
+    operationType,
+    retry,
+    error,
+    ...(metadata ? { metadata } : {}),
+  };
+
+  const message = `[AniList API] ${eventName}`;
+
+  if (severity === "error") {
+    console.error(message, payload);
+    return;
+  }
+
+  if (severity === "warn") {
+    console.warn(message, payload);
+    return;
+  }
+
+  console.info(message, payload);
+};
 
 const parseResponseBody = (rawBody: string): unknown => {
   if (!rawBody) {
@@ -596,71 +688,16 @@ export const invalidateAniListReadCache = (params?: {
   }
 };
 
-const getFailureDescription = (error: ApiError): string =>
-  error.message || "An error occurred while fetching data.";
-
 const isNetworkError = (apiError: ApiError): boolean =>
   apiError.kind === "network" ||
   apiError.message === "Network Error" ||
   apiError.message.includes("NetworkError");
 
-const notifyRetry = (
-  retryContext: AniListRetryContext,
-  operationKey: string,
-  onRetry?: (retryContext: AniListRetryContext) => void,
-) => {
-  const now = Date.now();
-  const currentToastState = retryToastState.get(operationKey);
-  if (
-    currentToastState &&
-    now - currentToastState.lastNotifiedAt < RETRY_TOAST_COOLDOWN_MS
-  ) {
-    onRetry?.(retryContext);
-    return;
-  }
-
-  const baseDescription = `Retrying request in ${retryContext.retryAfterSeconds} seconds... Attempt ${retryContext.retryAttempt}`;
-  const toastId = currentToastState?.toastId ?? `retry:${operationKey}`;
-
-  if (retryContext.reason === "serverError") {
-    toast.warning("Server Error", {
-      id: toastId,
-      description: baseDescription,
-    });
-  } else if (retryContext.reason === "networkError") {
-    toast.warning("Network Error", {
-      id: toastId,
-      description: baseDescription,
-    });
-  } else if (retryContext.reason === "timeout") {
-    toast.warning("Request Timed Out", {
-      id: toastId,
-      description: baseDescription,
-    });
-  } else {
-    toast.warning("Rate Limit Exceeded", {
-      id: toastId,
-      description: baseDescription,
-    });
-  }
-
-  retryToastState.set(operationKey, {
-    toastId,
-    lastNotifiedAt: now,
-  });
-
-  onRetry?.(retryContext);
-};
-
-const clearRetryToastForOperation = (operationKey: string) => {
-  const currentToastState = retryToastState.get(operationKey);
-  if (!currentToastState) {
-    return;
-  }
-
-  toast.dismiss(currentToastState.toastId);
-  retryToastState.delete(operationKey);
-};
+interface RetryTelemetryContext {
+  requestId: string;
+  operationKey: string;
+  operationType: "query" | "mutation";
+}
 
 const retryRequest = async <TData>(
   apiCall: () => Promise<ApiResponse<TData>>,
@@ -668,16 +705,36 @@ const retryRequest = async <TData>(
   maxRetries: number,
   reason: AniListRetryContext["reason"],
   retryMetadata: RetryMetadata | null,
-  operationKey: string,
+  telemetryContext: RetryTelemetryContext,
   handlers?: RetryHandlers,
 ): Promise<ApiResponse<TData>> => {
+  const { requestId, operationKey, operationType } = telemetryContext;
+
   if (retryCount >= maxRetries) {
-    console.error("Max retries reached for AniList requests.");
     const maxRetryError = createApiError({
       kind: "unknown",
       status: null,
       messages: ["Max retries reached for AniList requests."],
       retryable: false,
+      metadata: {
+        requestId,
+      },
+    });
+    emitApiTelemetry({
+      eventName: "anilist.retry.exhausted",
+      severity: "error",
+      requestId,
+      operationKey,
+      operationType,
+      error: {
+        className: getErrorClassName(maxRetryError),
+        message: maxRetryError.message,
+        status: maxRetryError.status,
+        kind: maxRetryError.kind,
+      },
+      metadata: {
+        maxRetries,
+      },
     });
     handlers?.onFailure?.(maxRetryError);
     throw maxRetryError;
@@ -690,17 +747,30 @@ const retryRequest = async <TData>(
     reason,
     retryAfterSeconds,
     retryAttempt,
+    requestId,
   };
 
-  console.warn(
-    `AniList request will retry after ${retryAfterSeconds} seconds due to ${reason}.`,
-  );
-  notifyRetry(retryContext, operationKey, handlers?.onRetry);
+  emitApiTelemetry({
+    eventName: "anilist.retry.scheduled",
+    severity: "warn",
+    requestId,
+    operationKey,
+    operationType,
+    retry: {
+      attempt: retryAttempt,
+      reason,
+      retryAfterSeconds,
+      maxRetries,
+    },
+  });
+  handlers?.onRetry?.(retryContext);
   await delay(retryAfterSeconds * 1000);
 
   return handleRateLimit(
     apiCall,
+    requestId,
     operationKey,
+    operationType,
     retryAttempt,
     maxRetries,
     handlers,
@@ -709,7 +779,8 @@ const retryRequest = async <TData>(
 
 /**
  * Handles API rate limiting by retrying requests based on the error response.
- * Utilizes callbacks to handle component-specific side-effects like displaying toasts.
+ * Utilizes callbacks to allow component-level UX handling while emitting
+ * structured telemetry for request lifecycle events.
  * @param apiCall - The API call function to execute.
  * @param retryCount - The current retry attempt.
  * @param retryAfter - The time to wait before retrying (in seconds).
@@ -720,7 +791,9 @@ const retryRequest = async <TData>(
  */
 const handleRateLimit = async <TData>(
   apiCall: () => Promise<ApiResponse<TData>>,
+  requestId: string,
   operationKey: string,
+  operationType: "query" | "mutation",
   retryCount = 0,
   maxRetries = 5,
   handlers?: RetryHandlers,
@@ -738,7 +811,7 @@ const handleRateLimit = async <TData>(
         maxRetries,
         "rateLimit",
         getRetryMetadata(apiError),
-        operationKey,
+        { requestId, operationKey, operationType },
         handlers,
       );
     }
@@ -750,7 +823,7 @@ const handleRateLimit = async <TData>(
         maxRetries,
         "networkError",
         null,
-        operationKey,
+        { requestId, operationKey, operationType },
         handlers,
       );
     }
@@ -762,7 +835,7 @@ const handleRateLimit = async <TData>(
         maxRetries,
         "timeout",
         null,
-        operationKey,
+        { requestId, operationKey, operationType },
         handlers,
       );
     }
@@ -774,14 +847,31 @@ const handleRateLimit = async <TData>(
         maxRetries,
         "serverError",
         null,
-        operationKey,
+        { requestId, operationKey, operationType },
         handlers,
       );
     }
 
-    console.error("API call failed:", apiError);
-    handlers?.onFailure?.(apiError);
-    throw apiError;
+    const enrichedApiError = enrichApiErrorWithRequestId(apiError, requestId);
+    emitApiTelemetry({
+      eventName: "anilist.request.failed",
+      severity: "error",
+      requestId,
+      operationKey,
+      operationType,
+      error: {
+        className: getErrorClassName(enrichedApiError),
+        message: enrichedApiError.message,
+        status: statusCode,
+        kind: enrichedApiError.kind,
+      },
+      metadata: {
+        retryCount,
+        maxRetries,
+      },
+    });
+    handlers?.onFailure?.(enrichedApiError);
+    throw enrichedApiError;
   }
 };
 
@@ -888,8 +978,8 @@ const parseAniListResponse = async <TData>(
  * @param query - The GraphQL query string.
  * @param variables - Variables for the GraphQL query.
  * @param token - The AniList access token.
- * @param onRetry - Optional callback for retries (e.g., to display toasts).
- * @param onFailure - Optional callback for failures (e.g., to display toasts).
+ * @param onRetry - Optional callback for retry UX updates.
+ * @param onFailure - Optional callback for failure UX updates.
  * @returns The data returned from the AniList API.
  */
 export const fetchAniList = async <
@@ -905,7 +995,17 @@ export const fetchAniList = async <
   requestOptions?: FetchAniListOptions,
 ): Promise<ApiResponse<TData>> => {
   const normalizedVariables: AniListRequestVariables = variables ?? {};
+  const requestId = generateRequestId();
   const operationKey = buildRequestDedupKey(query, normalizedVariables, token);
+  const operationType = resolveOperationType(query);
+
+  emitApiTelemetry({
+    eventName: "anilist.request.started",
+    severity: "info",
+    requestId,
+    operationKey,
+    operationType,
+  });
 
   const options = {
     method: "POST",
@@ -922,6 +1022,13 @@ export const fetchAniList = async <
   if (dedupeKey) {
     const cachedResponse = getCachedReadResponse<TData>(dedupeKey);
     if (cachedResponse) {
+      emitApiTelemetry({
+        eventName: "anilist.request.cacheHit",
+        severity: "info",
+        requestId,
+        operationKey,
+        operationType,
+      });
       return cachedResponse;
     }
   }
@@ -977,7 +1084,9 @@ export const fetchAniList = async <
           requestController.cleanup();
         }
       },
+      requestId,
       operationKey,
+      operationType,
       0,
       5,
       {
@@ -987,19 +1096,18 @@ export const fetchAniList = async <
     );
 
   if (!dedupeKey) {
-    try {
-      const response = await runRequest(onRetry, (error) => {
-        toast.error("Request Failed", {
-          description: getFailureDescription(error),
-        });
-        if (onFailure) onFailure(error);
-      });
-      clearRetryToastForOperation(operationKey);
-      return response;
-    } catch (error) {
-      clearRetryToastForOperation(operationKey);
-      throw error;
-    }
+    const response = await runRequest(onRetry, onFailure);
+    emitApiTelemetry({
+      eventName: "anilist.request.succeeded",
+      severity: "info",
+      requestId,
+      operationKey,
+      operationType,
+      metadata: {
+        hasErrors: Boolean(response.errors?.length),
+      },
+    });
+    return response;
   }
 
   const existingInFlight = inFlightRequests.get(dedupeKey);
@@ -1007,6 +1115,16 @@ export const fetchAniList = async <
 
   if (existingInFlight) {
     existingInFlight.subscribers.add(subscriber);
+    emitApiTelemetry({
+      eventName: "anilist.request.joinedInFlight",
+      severity: "info",
+      requestId: existingInFlight.requestId,
+      operationKey,
+      operationType,
+      metadata: {
+        subscriberCount: existingInFlight.subscribers.size,
+      },
+    });
     return existingInFlight.promise.finally(() => {
       existingInFlight.subscribers.delete(subscriber);
     }) as Promise<ApiResponse<TData>>;
@@ -1019,10 +1137,6 @@ export const fetchAniList = async <
     });
   };
   const notifyFailureSubscribers = (error: ApiError) => {
-    toast.error("Request Failed", {
-      description: getFailureDescription(error),
-    });
-
     subscribers.forEach((entry) => {
       entry.onFailure?.(error);
     });
@@ -1036,17 +1150,27 @@ export const fetchAniList = async <
   inFlightRequests.set(dedupeKey, {
     promise: requestPromise,
     subscribers,
+    requestId,
   });
 
   try {
     const response = (await requestPromise) as ApiResponse<TData>;
     setCachedReadResponse(dedupeKey, response);
-    clearRetryToastForOperation(operationKey);
+    emitApiTelemetry({
+      eventName: "anilist.request.succeeded",
+      severity: "info",
+      requestId,
+      operationKey,
+      operationType,
+      metadata: {
+        hasErrors: Boolean(response.errors?.length),
+        deduped: true,
+      },
+    });
     return response;
   } finally {
     subscribers.delete(subscriber);
     inFlightRequests.delete(dedupeKey);
-    clearRetryToastForOperation(operationKey);
   }
 };
 
