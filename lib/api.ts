@@ -18,6 +18,31 @@ import {
  */
 export const ANILIST_API_CONTRACT_VERSION = "2026-05-23.v1";
 const ANILIST_GRAPHQL_ENDPOINT = "https://graphql.anilist.co";
+const MAX_RETRY_DELAY_SECONDS = 30;
+const MAX_TOTAL_RETRY_DELAY_MS = 120_000;
+const RETRY_JITTER_FACTOR = 0.2;
+
+interface RetryMetadata {
+  retryAfterSeconds?: number;
+  rateLimitResetAt?: number;
+}
+
+interface InFlightRequestSubscriber {
+  onRetry?: (retryContext: AniListRetryContext) => void;
+  onFailure?: (error: ApiError) => void;
+}
+
+interface InFlightRequestEntry {
+  promise: Promise<ApiResponse<unknown>>;
+  subscribers: Set<InFlightRequestSubscriber>;
+}
+
+interface RetryRequestState {
+  retryMetadata: RetryMetadata | null;
+  totalRetryDelayMs: number;
+}
+
+const inFlightRequests = new Map<string, InFlightRequestEntry>();
 
 export interface AniListRetryContext {
   reason: "networkError" | "rateLimit" | "serverError";
@@ -168,6 +193,25 @@ const parseHeaderNumber = (value: string | null): number | null => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
+const parseRetryAfterSeconds = (value: string | null): number | null => {
+  if (!value) {
+    return null;
+  }
+
+  const numericValue = Number(value);
+  if (Number.isFinite(numericValue) && numericValue >= 0) {
+    return Math.ceil(numericValue);
+  }
+
+  const parsedDate = Date.parse(value);
+  if (Number.isNaN(parsedDate)) {
+    return null;
+  }
+
+  const secondsUntilDate = Math.ceil((parsedDate - Date.now()) / 1000);
+  return secondsUntilDate > 0 ? secondsUntilDate : null;
+};
+
 const getRateLimitInfo = (headers: Headers): RateLimitInfo => ({
   remaining: parseHeaderNumber(headers.get("x-ratelimit-remaining")),
   limit: parseHeaderNumber(headers.get("x-ratelimit-limit")),
@@ -208,6 +252,114 @@ const normalizeUnknownError = (error: unknown): ApiError => {
   });
 };
 
+const getRetryMetadata = (error: ApiError): RetryMetadata | null => {
+  if (!isRecord(error.cause)) {
+    return null;
+  }
+
+  const retryAfterSeconds =
+    typeof error.cause.retryAfterSeconds === "number" &&
+    Number.isFinite(error.cause.retryAfterSeconds) &&
+    error.cause.retryAfterSeconds >= 0
+      ? Math.ceil(error.cause.retryAfterSeconds)
+      : undefined;
+
+  const rateLimitResetAt =
+    typeof error.cause.rateLimitResetAt === "number" &&
+    Number.isFinite(error.cause.rateLimitResetAt)
+      ? error.cause.rateLimitResetAt
+      : undefined;
+
+  if (retryAfterSeconds == null && rateLimitResetAt == null) {
+    return null;
+  }
+
+  return {
+    retryAfterSeconds,
+    rateLimitResetAt,
+  };
+};
+
+const computeRetryDelaySeconds = (
+  reason: AniListRetryContext["reason"],
+  retryAttempt: number,
+  retryMetadata?: RetryMetadata | null,
+): number => {
+  const baseDelayByReason: Record<AniListRetryContext["reason"], number> = {
+    rateLimit: 2,
+    networkError: 1,
+    serverError: 2,
+  };
+
+  const backoffDelay = Math.min(
+    MAX_RETRY_DELAY_SECONDS,
+    baseDelayByReason[reason] * 2 ** Math.max(0, retryAttempt - 1),
+  );
+
+  let hintedDelay: number | null = null;
+  if (reason === "rateLimit" && retryMetadata) {
+    if (retryMetadata.retryAfterSeconds != null) {
+      hintedDelay = retryMetadata.retryAfterSeconds;
+    } else if (retryMetadata.rateLimitResetAt != null) {
+      const nowInSeconds = Math.floor(Date.now() / 1000);
+      const untilReset = retryMetadata.rateLimitResetAt - nowInSeconds;
+      hintedDelay = untilReset > 0 ? untilReset : null;
+    }
+  }
+
+  const unclampedDelay = hintedDelay ?? backoffDelay;
+  const boundedDelay = Math.max(
+    1,
+    Math.min(MAX_RETRY_DELAY_SECONDS, unclampedDelay),
+  );
+
+  const jitterOffset =
+    boundedDelay * RETRY_JITTER_FACTOR * (Math.random() * 2 - 1);
+  const jitteredDelay = Math.round(boundedDelay + jitterOffset);
+
+  return Math.max(1, jitteredDelay);
+};
+
+const normalizeRequestValue = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeRequestValue(item));
+  }
+
+  if (!isRecord(value)) {
+    return value;
+  }
+
+  const sortedEntries = Object.entries(value).sort(([a], [b]) =>
+    a.localeCompare(b),
+  );
+
+  return Object.fromEntries(
+    sortedEntries.map(([key, nestedValue]) => [
+      key,
+      normalizeRequestValue(nestedValue),
+    ]),
+  );
+};
+
+const buildRequestDedupKey = (
+  query: string,
+  variables: AniListRequestVariables,
+  token: string,
+): string =>
+  JSON.stringify({
+    query: query.trim(),
+    token,
+    variables: normalizeRequestValue(variables),
+  });
+
+const shouldDedupeRequest = (query: string): boolean => {
+  const normalizedQuery = query.trimStart();
+  return !normalizedQuery.toLowerCase().startsWith("mutation");
+};
+
+const getFailureDescription = (error: ApiError): string =>
+  error.message || "An error occurred while fetching data.";
+
 const isNetworkError = (apiError: ApiError): boolean =>
   apiError.kind === "network" ||
   apiError.message === "Network Error" ||
@@ -233,28 +385,64 @@ const notifyRetry = (
 const retryRequest = async <TData>(
   apiCall: () => Promise<ApiResponse<TData>>,
   retryCount: number,
-  retryAfterSeconds: number,
   maxRetries: number,
   reason: AniListRetryContext["reason"],
+  retryState: RetryRequestState,
   onRetry?: (retryContext: AniListRetryContext) => void,
   onFailure?: (error: ApiError) => void,
 ): Promise<ApiResponse<TData>> => {
-  if (retryCount >= maxRetries) {
+  const { retryMetadata, totalRetryDelayMs } = retryState;
+
+  if (
+    retryCount >= maxRetries ||
+    totalRetryDelayMs >= MAX_TOTAL_RETRY_DELAY_MS
+  ) {
     console.error("Max retries reached for AniList requests.");
     const maxRetryError = createApiError({
       kind: "unknown",
       status: null,
-      messages: ["Max retries reached for AniList requests."],
+      messages: [
+        "Retry budget exhausted for AniList requests.",
+        "Please try again in a moment.",
+      ],
       retryable: false,
     });
     onFailure?.(maxRetryError);
     throw maxRetryError;
   }
 
+  const retryAttempt = retryCount + 1;
+  const computedDelaySeconds = computeRetryDelaySeconds(
+    reason,
+    retryAttempt,
+    retryMetadata,
+  );
+  const remainingRetryBudgetMs = Math.max(
+    0,
+    MAX_TOTAL_RETRY_DELAY_MS - totalRetryDelayMs,
+  );
+
+  if (remainingRetryBudgetMs <= 0) {
+    const retryBudgetError = createApiError({
+      kind: "unknown",
+      status: null,
+      messages: ["Retry budget exhausted for AniList requests."],
+      retryable: false,
+    });
+    onFailure?.(retryBudgetError);
+    throw retryBudgetError;
+  }
+
+  const boundedDelayMs = Math.min(
+    computedDelaySeconds * 1000,
+    remainingRetryBudgetMs,
+  );
+  const retryAfterSeconds = Math.max(1, Math.ceil(boundedDelayMs / 1000));
+
   const retryContext: AniListRetryContext = {
     reason,
     retryAfterSeconds,
-    retryAttempt: retryCount + 1,
+    retryAttempt,
   };
 
   console.warn(
@@ -265,9 +453,9 @@ const retryRequest = async <TData>(
 
   return handleRateLimit(
     apiCall,
-    retryCount + 1,
-    retryAfterSeconds,
+    retryAttempt,
     maxRetries,
+    totalRetryDelayMs + boundedDelayMs,
     onRetry,
     onFailure,
   );
@@ -287,8 +475,8 @@ const retryRequest = async <TData>(
 const handleRateLimit = async <TData>(
   apiCall: () => Promise<ApiResponse<TData>>,
   retryCount = 0,
-  retryAfter = 60,
   maxRetries = 5,
+  totalRetryDelayMs = 0,
   onRetry?: (retryContext: AniListRetryContext) => void,
   onFailure?: (error: ApiError) => void,
 ): Promise<ApiResponse<TData>> => {
@@ -302,9 +490,12 @@ const handleRateLimit = async <TData>(
       return retryRequest(
         apiCall,
         retryCount,
-        retryAfter,
         maxRetries,
         "rateLimit",
+        {
+          retryMetadata: getRetryMetadata(apiError),
+          totalRetryDelayMs,
+        },
         onRetry,
         onFailure,
       );
@@ -314,21 +505,27 @@ const handleRateLimit = async <TData>(
       return retryRequest(
         apiCall,
         retryCount,
-        retryAfter,
         maxRetries,
         "networkError",
+        {
+          retryMetadata: null,
+          totalRetryDelayMs,
+        },
         onRetry,
         onFailure,
       );
     }
 
-    if (statusCode === 500 && retryCount < 5) {
+    if (statusCode === 500 && retryCount < maxRetries) {
       return retryRequest(
         apiCall,
         retryCount,
-        15,
-        5,
+        maxRetries,
         "serverError",
+        {
+          retryMetadata: null,
+          totalRetryDelayMs,
+        },
         onRetry,
         onFailure,
       );
@@ -344,6 +541,70 @@ interface AniListResponse<TData> {
   data?: TData | null;
   errors?: AniListGraphQLError[];
 }
+
+const parseAniListResponse = async <TData>(
+  response: Response,
+): Promise<ApiResponse<TData>> => {
+  const rawBody = await response.text();
+  const parsedBody = parseResponseBody(rawBody);
+  const graphQLErrors = extractGraphQLErrors(parsedBody);
+
+  if (!response.ok) {
+    const retryMetadata: RetryMetadata = {
+      retryAfterSeconds:
+        parseRetryAfterSeconds(response.headers.get("retry-after")) ??
+        undefined,
+      rateLimitResetAt:
+        parseHeaderNumber(response.headers.get("x-ratelimit-reset")) ??
+        undefined,
+    };
+
+    const apiError = createApiError({
+      kind: "http",
+      status: response.status,
+      messages: [getResponseErrorMessage(response.status, parsedBody)],
+      retryable: response.status === 429 || response.status >= 500,
+      graphQLErrors,
+      cause: retryMetadata,
+    });
+    throw apiError;
+  }
+
+  if (graphQLErrors.length > 0) {
+    throw createApiError({
+      kind: "graphql",
+      status: response.status,
+      messages: graphQLErrors.map((error) => error.message),
+      retryable: false,
+      graphQLErrors,
+    });
+  }
+
+  if (!isRecord(parsedBody)) {
+    throw createApiError({
+      kind: "unknown",
+      status: response.status,
+      messages: ["Invalid JSON payload returned by AniList."],
+      retryable: false,
+    });
+  }
+
+  const data = parsedBody as AniListResponse<TData>;
+  if (data.data == null) {
+    throw createApiError({
+      kind: "unknown",
+      status: response.status,
+      messages: ["AniList returned an empty data payload."],
+      retryable: false,
+    });
+  }
+
+  return {
+    data: data.data,
+    errors: data.errors,
+    rateLimit: getRateLimitInfo(response.headers),
+  };
+};
 
 /**
  * Fetches data from the AniList GraphQL API.
@@ -364,6 +625,8 @@ export const fetchAniList = async <
   onRetry?: (retryContext: AniListRetryContext) => void,
   onFailure?: (error: ApiError) => void,
 ): Promise<ApiResponse<TData>> => {
+  const normalizedVariables: AniListRequestVariables = variables ?? {};
+
   const options = {
     method: "POST",
     headers: {
@@ -371,73 +634,80 @@ export const fetchAniList = async <
       "Content-Type": "application/json",
       Accept: "application/json",
     },
-    body: JSON.stringify({ query, variables: variables ?? {} }),
+    body: JSON.stringify({ query, variables: normalizedVariables }),
   };
 
-  return handleRateLimit(
-    () =>
-      fetch(ANILIST_GRAPHQL_ENDPOINT, options).then(async (response) => {
-        const rawBody = await response.text();
-        const parsedBody = parseResponseBody(rawBody);
-        const graphQLErrors = extractGraphQLErrors(parsedBody);
+  const dedupeKey = shouldDedupeRequest(query)
+    ? buildRequestDedupKey(query, normalizedVariables, token)
+    : null;
 
-        if (!response.ok) {
-          const apiError = createApiError({
-            kind: "http",
-            status: response.status,
-            messages: [getResponseErrorMessage(response.status, parsedBody)],
-            retryable: response.status === 429 || response.status >= 500,
-            graphQLErrors,
-          });
-          throw apiError;
-        }
+  const runRequest = (
+    retryHandler?: (retryContext: AniListRetryContext) => void,
+    failureHandler?: (error: ApiError) => void,
+  ): Promise<ApiResponse<TData>> =>
+    handleRateLimit(
+      () =>
+        fetch(ANILIST_GRAPHQL_ENDPOINT, options).then((response) =>
+          parseAniListResponse<TData>(response),
+        ),
+      0,
+      5,
+      0,
+      retryHandler,
+      failureHandler,
+    );
 
-        if (graphQLErrors.length > 0) {
-          throw createApiError({
-            kind: "graphql",
-            status: response.status,
-            messages: graphQLErrors.map((error) => error.message),
-            retryable: false,
-            graphQLErrors,
-          });
-        }
-
-        if (!isRecord(parsedBody)) {
-          throw createApiError({
-            kind: "unknown",
-            status: response.status,
-            messages: ["Invalid JSON payload returned by AniList."],
-            retryable: false,
-          });
-        }
-
-        const data = parsedBody as AniListResponse<TData>;
-        if (data.data == null) {
-          throw createApiError({
-            kind: "unknown",
-            status: response.status,
-            messages: ["AniList returned an empty data payload."],
-            retryable: false,
-          });
-        }
-
-        return {
-          data: data.data,
-          errors: data.errors,
-          rateLimit: getRateLimitInfo(response.headers),
-        };
-      }),
-    0,
-    60,
-    5,
-    onRetry,
-    (error) => {
+  if (!dedupeKey) {
+    return runRequest(onRetry, (error) => {
       toast.error("Request Failed", {
-        description: error.message || "An error occurred while fetching data.",
+        description: getFailureDescription(error),
       });
       if (onFailure) onFailure(error);
-    },
-  );
+    });
+  }
+
+  const existingInFlight = inFlightRequests.get(dedupeKey);
+  const subscriber: InFlightRequestSubscriber = { onRetry, onFailure };
+
+  if (existingInFlight) {
+    existingInFlight.subscribers.add(subscriber);
+    return existingInFlight.promise.finally(() => {
+      existingInFlight.subscribers.delete(subscriber);
+    }) as Promise<ApiResponse<TData>>;
+  }
+
+  const subscribers = new Set<InFlightRequestSubscriber>([subscriber]);
+  const notifyRetrySubscribers = (retryContext: AniListRetryContext) => {
+    subscribers.forEach((entry) => {
+      entry.onRetry?.(retryContext);
+    });
+  };
+  const notifyFailureSubscribers = (error: ApiError) => {
+    toast.error("Request Failed", {
+      description: getFailureDescription(error),
+    });
+
+    subscribers.forEach((entry) => {
+      entry.onFailure?.(error);
+    });
+  };
+
+  const requestPromise = runRequest(
+    notifyRetrySubscribers,
+    notifyFailureSubscribers,
+  ) as Promise<ApiResponse<unknown>>;
+
+  inFlightRequests.set(dedupeKey, {
+    promise: requestPromise,
+    subscribers,
+  });
+
+  try {
+    return (await requestPromise) as ApiResponse<TData>;
+  } finally {
+    subscribers.delete(subscriber);
+    inFlightRequests.delete(dedupeKey);
+  }
 };
 
 /**
