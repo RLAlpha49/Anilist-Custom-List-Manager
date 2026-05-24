@@ -147,6 +147,34 @@ interface FetchUserCustomListsVariables extends AniListRequestVariables {
   userId: number;
 }
 
+const HELP_STEPS = [
+  {
+    step: "1",
+    title: "Select Anime or Manga",
+    desc: "Switch between Anime and Manga lists using the tabs at the top.",
+  },
+  {
+    step: "2",
+    title: "Fetch Your Lists",
+    desc: "Click Fetch Lists to load your custom lists from AniList.",
+  },
+  {
+    step: "3",
+    title: "Drag to Reorder",
+    desc: "Drag and drop lists to change their order. The new order is saved automatically.",
+  },
+  {
+    step: "4",
+    title: "Set Conditions",
+    desc: "Choose conditions for each list to control how entries are sorted and filtered.",
+  },
+  {
+    step: "5",
+    title: "Add, Rename, or Delete Lists",
+    desc: "Use the buttons to add new lists, rename, or delete existing ones.",
+  },
+];
+
 const EMPTY_LIST_STATE: CachedListState = {
   lists: [],
   originalSectionOrder: [],
@@ -188,6 +216,104 @@ function ActionIconButton({
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
+  );
+}
+
+function CustomListManagerHelpSheet() {
+  return (
+    <SheetContent
+      style={{
+        backgroundColor: "var(--z-surface)",
+        borderLeft: "1px solid var(--z-border)",
+      }}
+    >
+      <SheetHeader>
+        <div className="mb-2 flex items-center gap-2">
+          <FaInfoCircle
+            className="size-5"
+            style={{ color: "var(--z-amber)" }}
+          />
+          <SheetTitle
+            className="text-lg font-bold"
+            style={{
+              color: "var(--z-text)",
+              fontFamily: "var(--font-syne-var)",
+            }}
+          >
+            How to Use the Custom List Manager
+          </SheetTitle>
+        </div>
+        <SheetDescription style={{ color: "var(--z-muted)" }}>
+          Easily organize and manage your AniList custom lists with these steps:
+        </SheetDescription>
+      </SheetHeader>
+      <div className="mt-8 space-y-6">
+        <ol className="space-y-5">
+          {HELP_STEPS.map(({ step, title, desc }) => (
+            <li key={step} className="flex items-start gap-3">
+              <span
+                className="
+                  flex size-8 shrink-0 items-center justify-center rounded-full text-sm font-bold
+                "
+                style={{
+                  backgroundColor: "var(--z-amber-dim)",
+                  color: "var(--z-amber)",
+                }}
+              >
+                {step}
+              </span>
+              <div>
+                <span
+                  className="font-semibold"
+                  style={{ color: "var(--z-text)" }}
+                >
+                  {title}
+                </span>
+                <p className="text-sm" style={{ color: "var(--z-muted)" }}>
+                  {desc}
+                </p>
+              </div>
+            </li>
+          ))}
+        </ol>
+        <div
+          className="rounded-lg p-4"
+          style={{
+            backgroundColor: "var(--z-amber-dim)",
+            border: "1px solid var(--z-border)",
+          }}
+        >
+          <div className="flex items-start gap-2">
+            <FaInfoCircle
+              className="mt-0.5 size-5 shrink-0"
+              style={{ color: "var(--z-amber)" }}
+            />
+            <div>
+              <span
+                className="font-semibold"
+                style={{ color: "var(--z-amber)" }}
+              >
+                Tips:
+              </span>
+              <ul
+                className="mt-1 list-disc space-y-1 pl-5 text-sm"
+                style={{ color: "var(--z-text)" }}
+              >
+                <li>
+                  You can hide default status lists using the checkbox below the
+                  toolbar.
+                </li>
+                <li>
+                  Click <span className="font-medium">Next</span> to proceed to
+                  updating your lists after setting conditions.
+                </li>
+                <li>Hover over icons for tooltips describing their actions.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </SheetContent>
   );
 }
 
@@ -1276,134 +1402,7 @@ function PageData() {
                   Help
                 </button>
               </SheetTrigger>
-              <SheetContent
-                style={{
-                  backgroundColor: "var(--z-surface)",
-                  borderLeft: "1px solid var(--z-border)",
-                }}
-              >
-                <SheetHeader>
-                  <div className="mb-2 flex items-center gap-2">
-                    <FaInfoCircle
-                      className="size-5"
-                      style={{ color: "var(--z-amber)" }}
-                    />
-                    <SheetTitle
-                      className="text-lg font-bold"
-                      style={{
-                        color: "var(--z-text)",
-                        fontFamily: "var(--font-syne-var)",
-                      }}
-                    >
-                      How to Use the Custom List Manager
-                    </SheetTitle>
-                  </div>
-                  <SheetDescription style={{ color: "var(--z-muted)" }}>
-                    Easily organize and manage your AniList custom lists with
-                    these steps:
-                  </SheetDescription>
-                </SheetHeader>
-                <div className="mt-8 space-y-6">
-                  <ol className="space-y-5">
-                    {[
-                      {
-                        step: "1",
-                        title: "Select Anime or Manga",
-                        desc: "Switch between Anime and Manga lists using the tabs at the top.",
-                      },
-                      {
-                        step: "2",
-                        title: "Fetch Your Lists",
-                        desc: "Click Fetch Lists to load your custom lists from AniList.",
-                      },
-                      {
-                        step: "3",
-                        title: "Drag to Reorder",
-                        desc: "Drag and drop lists to change their order. The new order is saved automatically.",
-                      },
-                      {
-                        step: "4",
-                        title: "Set Conditions",
-                        desc: "Choose conditions for each list to control how entries are sorted and filtered.",
-                      },
-                      {
-                        step: "5",
-                        title: "Add, Rename, or Delete Lists",
-                        desc: "Use the buttons to add new lists, rename, or delete existing ones.",
-                      },
-                    ].map(({ step, title, desc }) => (
-                      <li key={step} className="flex items-start gap-3">
-                        <span
-                          className="
-                            flex size-8 shrink-0 items-center justify-center rounded-full text-sm
-                            font-bold
-                          "
-                          style={{
-                            backgroundColor: "var(--z-amber-dim)",
-                            color: "var(--z-amber)",
-                          }}
-                        >
-                          {step}
-                        </span>
-                        <div>
-                          <span
-                            className="font-semibold"
-                            style={{ color: "var(--z-text)" }}
-                          >
-                            {title}
-                          </span>
-                          <p
-                            className="text-sm"
-                            style={{ color: "var(--z-muted)" }}
-                          >
-                            {desc}
-                          </p>
-                        </div>
-                      </li>
-                    ))}
-                  </ol>
-                  <div
-                    className="rounded-lg p-4"
-                    style={{
-                      backgroundColor: "var(--z-amber-dim)",
-                      border: "1px solid var(--z-border)",
-                    }}
-                  >
-                    <div className="flex items-start gap-2">
-                      <FaInfoCircle
-                        className="mt-0.5 size-5 shrink-0"
-                        style={{ color: "var(--z-amber)" }}
-                      />
-                      <div>
-                        <span
-                          className="font-semibold"
-                          style={{ color: "var(--z-amber)" }}
-                        >
-                          Tips:
-                        </span>
-                        <ul
-                          className="mt-1 list-disc space-y-1 pl-5 text-sm"
-                          style={{ color: "var(--z-text)" }}
-                        >
-                          <li>
-                            You can hide default status lists using the checkbox
-                            below the toolbar.
-                          </li>
-                          <li>
-                            Click <span className="font-medium">Next</span> to
-                            proceed to updating your lists after setting
-                            conditions.
-                          </li>
-                          <li>
-                            Hover over icons for tooltips describing their
-                            actions.
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </SheetContent>
+              <CustomListManagerHelpSheet />
             </Sheet>
           </div>
         </motion.div>

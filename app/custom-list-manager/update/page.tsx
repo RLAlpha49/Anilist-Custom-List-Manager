@@ -1382,6 +1382,258 @@ function DoneCard({
   );
 }
 
+function UpdateControlToolbar({
+  phase,
+  queuedAction,
+  pendingEntryCount,
+  onStart,
+  onPause,
+  onStop,
+  onComplete,
+  onBack,
+}: Readonly<{
+  phase: Phase;
+  queuedAction: PendingAction;
+  pendingEntryCount: number;
+  onStart: () => void;
+  onPause: () => void;
+  onStop: () => void;
+  onComplete: () => void;
+  onBack: () => void;
+}>) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.05 }}
+      className="flex flex-wrap items-center gap-3"
+    >
+      {phase === "ready" && (
+        <>
+          <button
+            onClick={onStart}
+            className="
+              flex cursor-pointer items-center gap-2 rounded-lg px-5 py-3 text-sm font-bold
+              transition-all
+              hover:brightness-110
+              active:scale-[0.97]
+            "
+            style={{
+              background:
+                "linear-gradient(135deg, var(--z-amber) 0%, #ef8d2f 100%)",
+              color: "#07060f",
+            }}
+          >
+            <FaPlay size={10} />
+            Start Update
+          </button>
+          <button
+            onClick={onComplete}
+            className="
+              flex cursor-pointer items-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold
+              transition-all
+              hover:bg-z-card-up
+              active:scale-[0.97]
+            "
+            style={{
+              border: "1px solid rgba(34,197,94,0.28)",
+              color: "var(--z-green)",
+            }}
+          >
+            <FaCheckCircle size={10} />
+            Complete
+          </button>
+          <button
+            onClick={onBack}
+            className="
+              flex cursor-pointer items-center gap-2 rounded-lg px-5 py-3 text-sm font-medium
+              transition-all
+              hover:bg-z-card-up
+              active:scale-[0.97]
+            "
+            style={{
+              border: "1px solid var(--z-border-mid)",
+              color: "var(--z-muted)",
+            }}
+          >
+            <FaChevronLeft size={10} />
+            Back
+          </button>
+        </>
+      )}
+
+      {phase === "processing" && (
+        <>
+          <button
+            onClick={onPause}
+            disabled={queuedAction !== null}
+            className="
+              flex cursor-pointer items-center gap-2 rounded-lg px-5 py-3 text-sm font-bold
+              transition-all
+              hover:bg-z-card-up
+              active:scale-[0.97]
+              disabled:cursor-not-allowed disabled:opacity-45
+            "
+            style={{
+              border: "1px solid rgba(232,121,249,0.28)",
+              color: "var(--z-pink)",
+            }}
+          >
+            <FaPause size={10} />
+            Pause
+          </button>
+          <button
+            onClick={onComplete}
+            disabled={queuedAction !== null}
+            className="
+              flex cursor-pointer items-center gap-2 rounded-lg px-5 py-3 text-sm font-bold
+              transition-all
+              hover:bg-z-card-up
+              active:scale-[0.97]
+              disabled:cursor-not-allowed disabled:opacity-45
+            "
+            style={{
+              border: "1px solid rgba(34,197,94,0.28)",
+              color: "var(--z-green)",
+            }}
+          >
+            <FaCheckCircle size={10} />
+            Complete
+          </button>
+          <button
+            onClick={onStop}
+            disabled={queuedAction !== null}
+            className="
+              flex cursor-pointer items-center gap-2 rounded-lg px-5 py-3 text-sm font-bold
+              transition-all
+              hover:bg-z-card-up
+              active:scale-[0.97]
+              disabled:cursor-not-allowed disabled:opacity-45
+            "
+            style={{
+              border: "1px solid rgba(248,113,113,0.28)",
+              color: "var(--z-red)",
+            }}
+          >
+            <FaStop size={10} />
+            Stop
+          </button>
+        </>
+      )}
+
+      {phase === "paused" && (
+        <>
+          <button
+            onClick={onStart}
+            className="
+              flex cursor-pointer items-center gap-2 rounded-lg px-5 py-3 text-sm font-bold
+              transition-all
+              hover:brightness-110
+              active:scale-[0.97]
+            "
+            style={{
+              background:
+                "linear-gradient(135deg, var(--z-amber) 0%, #ef8d2f 100%)",
+              color: "#07060f",
+            }}
+          >
+            <FaPlay size={10} />
+            Resume
+          </button>
+          <button
+            onClick={onComplete}
+            className="
+              flex cursor-pointer items-center gap-2 rounded-lg px-5 py-3 text-sm font-bold
+              transition-all
+              hover:bg-z-card-up
+              active:scale-[0.97]
+            "
+            style={{
+              border: "1px solid rgba(34,197,94,0.28)",
+              color: "var(--z-green)",
+            }}
+          >
+            <FaCheckCircle size={10} />
+            Complete
+          </button>
+          <button
+            onClick={onStop}
+            className="
+              flex cursor-pointer items-center gap-2 rounded-lg px-5 py-3 text-sm font-bold
+              transition-all
+              hover:bg-z-card-up
+              active:scale-[0.97]
+            "
+            style={{
+              border: "1px solid rgba(248,113,113,0.28)",
+              color: "var(--z-red)",
+            }}
+          >
+            <FaStop size={10} />
+            Stop
+          </button>
+        </>
+      )}
+
+      {phase === "stopped" && (
+        <>
+          {pendingEntryCount > 0 && (
+            <button
+              onClick={onStart}
+              className="
+                flex cursor-pointer items-center gap-2 rounded-lg px-5 py-3 text-sm font-bold
+                transition-all
+                hover:brightness-110
+                active:scale-[0.97]
+              "
+              style={{
+                background:
+                  "linear-gradient(135deg, var(--z-amber) 0%, #ef8d2f 100%)",
+                color: "#07060f",
+              }}
+            >
+              <FaPlay size={10} />
+              Start Remaining
+            </button>
+          )}
+          <button
+            onClick={onComplete}
+            className="
+              flex cursor-pointer items-center gap-2 rounded-lg px-5 py-3 text-sm font-bold
+              transition-all
+              hover:bg-z-card-up
+              active:scale-[0.97]
+            "
+            style={{
+              border: "1px solid rgba(34,197,94,0.28)",
+              color: "var(--z-green)",
+            }}
+          >
+            <FaCheckCircle size={10} />
+            Complete
+          </button>
+          <button
+            onClick={onBack}
+            className="
+              flex cursor-pointer items-center gap-2 rounded-lg px-5 py-3 text-sm font-medium
+              transition-all
+              hover:bg-z-card-up
+              active:scale-[0.97]
+            "
+            style={{
+              border: "1px solid var(--z-border-mid)",
+              color: "var(--z-muted)",
+            }}
+          >
+            <FaChevronLeft size={10} />
+            Back
+          </button>
+        </>
+      )}
+    </motion.div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function UpdatePage() {
@@ -1589,6 +1841,10 @@ export default function UpdatePage() {
 
           if (cancelled) {
             return;
+          }
+
+          if (response.data.MediaListCollection == null) {
+            break;
           }
 
           if (!hasPagedMediaListCollectionData(response.data)) {
@@ -2379,235 +2635,20 @@ export default function UpdatePage() {
             <div style={{ borderTop: "1px solid var(--z-border)" }} />
 
             {/* Control Toolbar */}
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.05 }}
-              className="flex flex-wrap items-center gap-3"
-            >
-              {phase === "ready" && (
-                <>
-                  <button
-                    onClick={() => void startProcessing()}
-                    className="
-                      flex cursor-pointer items-center gap-2 rounded-lg px-5 py-3 text-sm font-bold
-                      transition-all
-                      hover:brightness-110
-                      active:scale-[0.97]
-                    "
-                    style={{
-                      background:
-                        "linear-gradient(135deg, var(--z-amber) 0%, #ef8d2f 100%)",
-                      color: "#07060f",
-                    }}
-                  >
-                    <FaPlay size={10} />
-                    Start Update
-                  </button>
-                  <button
-                    onClick={handleComplete}
-                    className="
-                      flex cursor-pointer items-center gap-2 rounded-lg px-5 py-3 text-sm
-                      font-semibold transition-all
-                      hover:bg-z-card-up
-                      active:scale-[0.97]
-                    "
-                    style={{
-                      border: "1px solid rgba(34,197,94,0.28)",
-                      color: "var(--z-green)",
-                    }}
-                  >
-                    <FaCheckCircle size={10} />
-                    Complete
-                  </button>
-                  <button
-                    onClick={() => router.push("/custom-list-manager")}
-                    className="
-                      flex cursor-pointer items-center gap-2 rounded-lg px-5 py-3 text-sm
-                      font-medium transition-all
-                      hover:bg-z-card-up
-                      active:scale-[0.97]
-                    "
-                    style={{
-                      border: "1px solid var(--z-border-mid)",
-                      color: "var(--z-muted)",
-                    }}
-                  >
-                    <FaChevronLeft size={10} />
-                    Back
-                  </button>
-                </>
-              )}
-
-              {phase === "processing" && (
-                <>
-                  <button
-                    onClick={handlePause}
-                    disabled={queuedAction !== null}
-                    className="
-                      flex cursor-pointer items-center gap-2 rounded-lg px-5 py-3 text-sm font-bold
-                      transition-all
-                      hover:bg-z-card-up
-                      active:scale-[0.97]
-                      disabled:cursor-not-allowed disabled:opacity-45
-                    "
-                    style={{
-                      border: "1px solid rgba(232,121,249,0.28)",
-                      color: "var(--z-pink)",
-                    }}
-                  >
-                    <FaPause size={10} />
-                    Pause
-                  </button>
-                  <button
-                    onClick={handleComplete}
-                    disabled={queuedAction !== null}
-                    className="
-                      flex cursor-pointer items-center gap-2 rounded-lg px-5 py-3 text-sm font-bold
-                      transition-all
-                      hover:bg-z-card-up
-                      active:scale-[0.97]
-                      disabled:cursor-not-allowed disabled:opacity-45
-                    "
-                    style={{
-                      border: "1px solid rgba(34,197,94,0.28)",
-                      color: "var(--z-green)",
-                    }}
-                  >
-                    <FaCheckCircle size={10} />
-                    Complete
-                  </button>
-                  <button
-                    onClick={handleStop}
-                    disabled={queuedAction !== null}
-                    className="
-                      flex cursor-pointer items-center gap-2 rounded-lg px-5 py-3 text-sm font-bold
-                      transition-all
-                      hover:bg-z-card-up
-                      active:scale-[0.97]
-                      disabled:cursor-not-allowed disabled:opacity-45
-                    "
-                    style={{
-                      border: "1px solid rgba(248,113,113,0.28)",
-                      color: "var(--z-red)",
-                    }}
-                  >
-                    <FaStop size={10} />
-                    Stop
-                  </button>
-                </>
-              )}
-
-              {phase === "paused" && (
-                <>
-                  <button
-                    onClick={() => void startProcessing()}
-                    className="
-                      flex cursor-pointer items-center gap-2 rounded-lg px-5 py-3 text-sm font-bold
-                      transition-all
-                      hover:brightness-110
-                      active:scale-[0.97]
-                    "
-                    style={{
-                      background:
-                        "linear-gradient(135deg, var(--z-amber) 0%, #ef8d2f 100%)",
-                      color: "#07060f",
-                    }}
-                  >
-                    <FaPlay size={10} />
-                    Resume
-                  </button>
-                  <button
-                    onClick={handleComplete}
-                    className="
-                      flex cursor-pointer items-center gap-2 rounded-lg px-5 py-3 text-sm font-bold
-                      transition-all
-                      hover:bg-z-card-up
-                      active:scale-[0.97]
-                    "
-                    style={{
-                      border: "1px solid rgba(34,197,94,0.28)",
-                      color: "var(--z-green)",
-                    }}
-                  >
-                    <FaCheckCircle size={10} />
-                    Complete
-                  </button>
-                  <button
-                    onClick={handleStop}
-                    className="
-                      flex cursor-pointer items-center gap-2 rounded-lg px-5 py-3 text-sm font-bold
-                      transition-all
-                      hover:bg-z-card-up
-                      active:scale-[0.97]
-                    "
-                    style={{
-                      border: "1px solid rgba(248,113,113,0.28)",
-                      color: "var(--z-red)",
-                    }}
-                  >
-                    <FaStop size={10} />
-                    Stop
-                  </button>
-                </>
-              )}
-
-              {phase === "stopped" && (
-                <>
-                  {pendingEntries.length > 0 && (
-                    <button
-                      onClick={() => void startProcessing()}
-                      className="
-                        flex cursor-pointer items-center gap-2 rounded-lg px-5 py-3 text-sm
-                        font-bold transition-all
-                        hover:brightness-110
-                        active:scale-[0.97]
-                      "
-                      style={{
-                        background:
-                          "linear-gradient(135deg, var(--z-amber) 0%, #ef8d2f 100%)",
-                        color: "#07060f",
-                      }}
-                    >
-                      <FaPlay size={10} />
-                      Start Remaining
-                    </button>
-                  )}
-                  <button
-                    onClick={handleComplete}
-                    className="
-                      flex cursor-pointer items-center gap-2 rounded-lg px-5 py-3 text-sm font-bold
-                      transition-all
-                      hover:bg-z-card-up
-                      active:scale-[0.97]
-                    "
-                    style={{
-                      border: "1px solid rgba(34,197,94,0.28)",
-                      color: "var(--z-green)",
-                    }}
-                  >
-                    <FaCheckCircle size={10} />
-                    Complete
-                  </button>
-                  <button
-                    onClick={() => router.push("/custom-list-manager")}
-                    className="
-                      flex cursor-pointer items-center gap-2 rounded-lg px-5 py-3 text-sm
-                      font-medium transition-all
-                      hover:bg-z-card-up
-                      active:scale-[0.97]
-                    "
-                    style={{
-                      border: "1px solid var(--z-border-mid)",
-                      color: "var(--z-muted)",
-                    }}
-                  >
-                    <FaChevronLeft size={10} />
-                    Back
-                  </button>
-                </>
-              )}
-            </motion.div>
+            <UpdateControlToolbar
+              phase={phase}
+              queuedAction={queuedAction}
+              pendingEntryCount={pendingEntries.length}
+              onStart={() => {
+                void startProcessing();
+              }}
+              onPause={handlePause}
+              onStop={handleStop}
+              onComplete={handleComplete}
+              onBack={() => {
+                router.push("/custom-list-manager");
+              }}
+            />
 
             {/* Progress */}
             <motion.div
