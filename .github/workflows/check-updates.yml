@@ -41,6 +41,9 @@ jobs:
         with:
           bun-version: latest
 
+      - name: Enforce dependency vulnerability gate (high+)
+        run: bun audit --audit-level=high
+
       - name: Determine update automation mode
         id: automation-mode
         env:
@@ -231,7 +234,7 @@ jobs:
             bun run update
           fi
 
-          bun install
+          bun install --no-frozen-lockfile
 
           manifest_changed=false
           lockfile_changed=false
