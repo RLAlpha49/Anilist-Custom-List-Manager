@@ -1,6 +1,5 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
 import React, {
   forwardRef,
   useCallback,
@@ -104,9 +103,20 @@ export const DynamicSelect = forwardRef<HTMLButtonElement, DynamicSelectProps>(
       return "transparent";
     };
 
-    const selectedLabel =
-      options.flatMap((g) => g.items).find((item) => item.value === value)
-        ?.label ?? "";
+    const labelByValue = useMemo(() => {
+      const map = new Map<string, string>();
+      options.forEach((group) => {
+        group.items.forEach((item) => {
+          map.set(item.value, item.label);
+        });
+      });
+      return map;
+    }, [options]);
+
+    const selectedLabel = useMemo(
+      () => (value ? (labelByValue.get(value) ?? "") : ""),
+      [labelByValue, value],
+    );
 
     const computePosition = useCallback(() => {
       if (!triggerRef.current) return;
@@ -321,152 +331,149 @@ export const DynamicSelect = forwardRef<HTMLButtonElement, DynamicSelectProps>(
 
         {mounted &&
           createPortal(
-            <AnimatePresence>
-              {isOpen && (
-                <motion.div
-                  ref={panelRef}
-                  initial={{ opacity: 0, y: -6, scale: 0.97 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -6, scale: 0.97 }}
-                  transition={{ duration: 0.14, ease: "easeOut" }}
-                  role="listbox"
+            isOpen ? (
+              <div
+                ref={panelRef}
+                style={{
+                  ...dropdownStyle,
+                  zIndex: 9999,
+                  backgroundColor: "var(--z-card)",
+                  border: "1px solid var(--z-border-mid)",
+                  borderRadius: "0.875rem",
+                  boxShadow:
+                    "0 24px 64px rgba(0,0,0,0.55), 0 0 0 1px rgba(245,166,35,0.1)",
+                  overflow: "hidden",
+                  display: "flex",
+                  flexDirection: "column",
+                  opacity: 1,
+                  transform: "translateY(0)",
+                  transition:
+                    "opacity 120ms ease-out, transform 120ms ease-out",
+                }}
+              >
+                {/* Search bar */}
+                <div
                   style={{
-                    ...dropdownStyle,
-                    zIndex: 9999,
-                    backgroundColor: "var(--z-card)",
-                    border: "1px solid var(--z-border-mid)",
-                    borderRadius: "0.875rem",
-                    boxShadow:
-                      "0 24px 64px rgba(0,0,0,0.55), 0 0 0 1px rgba(245,166,35,0.1)",
-                    overflow: "hidden",
-                    display: "flex",
-                    flexDirection: "column",
+                    padding: "10px 10px 6px",
+                    borderBottom: "1px solid var(--z-border)",
                   }}
                 >
-                  {/* Search bar */}
                   <div
+                    className="flex items-center gap-2 rounded-lg px-3 py-2"
                     style={{
-                      padding: "10px 10px 6px",
-                      borderBottom: "1px solid var(--z-border)",
+                      backgroundColor: "var(--z-surface)",
+                      border: "1px solid var(--z-border)",
                     }}
                   >
-                    <div
-                      className="flex items-center gap-2 rounded-lg px-3 py-2"
-                      style={{
-                        backgroundColor: "var(--z-surface)",
-                        border: "1px solid var(--z-border)",
+                    <FaSearch
+                      size={11}
+                      style={{ color: "var(--z-muted)", flexShrink: 0 }}
+                    />
+                    <input
+                      ref={searchRef}
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => {
+                        setSearchQuery(e.target.value);
+                        setHighlightedIndex(-1);
                       }}
-                    >
-                      <FaSearch
-                        size={11}
-                        style={{ color: "var(--z-muted)", flexShrink: 0 }}
-                      />
-                      <input
-                        ref={searchRef}
-                        type="text"
-                        value={searchQuery}
-                        onChange={(e) => {
-                          setSearchQuery(e.target.value);
+                      onKeyDown={handleKeyDown}
+                      placeholder="Search..."
+                      className="w-full bg-transparent text-sm outline-none"
+                      style={{
+                        color: "var(--z-text)",
+                      }}
+                      aria-label="Search options"
+                    />
+                    {searchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSearchQuery("");
                           setHighlightedIndex(-1);
+                          searchRef.current?.focus();
                         }}
-                        onKeyDown={handleKeyDown}
-                        placeholder="Search..."
-                        className="w-full bg-transparent text-sm outline-none"
-                        style={{
-                          color: "var(--z-text)",
-                        }}
-                        aria-label="Search options"
-                      />
-                      {searchQuery && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSearchQuery("");
-                            setHighlightedIndex(-1);
-                            searchRef.current?.focus();
-                          }}
-                          style={{ color: "var(--z-subtle)", flexShrink: 0 }}
-                        >
-                          <FaTimes size={10} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Options list */}
-                  <div
-                    style={{
-                      overflowY: "auto",
-                      flex: 1,
-                      padding: "6px 6px 8px",
-                    }}
-                  >
-                    {filteredOptions.length === 0 ? (
-                      <div
-                        className="py-8 text-center text-sm"
-                        style={{ color: "var(--z-muted)" }}
+                        style={{ color: "var(--z-subtle)", flexShrink: 0 }}
                       >
-                        No results found
-                      </div>
-                    ) : (
-                      filteredOptions.map((group) => (
-                        <div key={group.label}>
-                          <div
-                            className="px-3 py-1.5 text-[10px] font-bold tracking-widest uppercase"
-                            style={{ color: "var(--z-subtle)" }}
-                          >
-                            {group.label}
-                          </div>
-                          {group.items.map((item) => {
-                            const globalIdx =
-                              itemIndexByValue.get(item.value) ?? -1;
-                            const isHighlighted =
-                              globalIdx === highlightedIndex;
-                            const isSelected = item.value === value;
-                            return (
-                              <button
-                                key={item.value}
-                                type="button"
-                                role="option"
-                                aria-selected={isSelected}
-                                onClick={() => handleSelect(item.value)}
-                                onMouseEnter={() =>
-                                  setHighlightedIndex(globalIdx)
-                                }
-                                className="
-                                  flex w-full cursor-pointer items-center justify-between rounded-md
-                                  px-3 py-1.5 text-left text-sm transition-colors duration-100
-                                "
-                                style={{
-                                  backgroundColor: getItemBg(
-                                    isSelected,
-                                    isHighlighted,
-                                  ),
-                                  color: isSelected
-                                    ? "var(--z-amber)"
-                                    : "var(--z-text)",
-                                }}
-                              >
-                                <span>{item.label}</span>
-                                {isSelected && (
-                                  <FaCheck
-                                    size={9}
-                                    style={{
-                                      color: "var(--z-amber)",
-                                      flexShrink: 0,
-                                    }}
-                                  />
-                                )}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      ))
+                        <FaTimes size={10} />
+                      </button>
                     )}
                   </div>
-                </motion.div>
-              )}
-            </AnimatePresence>,
+                </div>
+
+                {/* Options list */}
+                <div
+                  style={{
+                    overflowY: "auto",
+                    flex: 1,
+                    padding: "6px 6px 8px",
+                  }}
+                >
+                  {filteredOptions.length === 0 ? (
+                    <div
+                      className="py-8 text-center text-sm"
+                      style={{ color: "var(--z-muted)" }}
+                    >
+                      No results found
+                    </div>
+                  ) : (
+                    filteredOptions.map((group) => (
+                      <div key={group.label}>
+                        <div
+                          className="px-3 py-1.5 text-[10px] font-bold tracking-widest uppercase"
+                          style={{ color: "var(--z-subtle)" }}
+                        >
+                          {group.label}
+                        </div>
+                        {group.items.map((item) => {
+                          const globalIdx =
+                            itemIndexByValue.get(item.value) ?? -1;
+                          const isHighlighted = globalIdx === highlightedIndex;
+                          const isSelected = item.value === value;
+                          return (
+                            <button
+                              key={item.value}
+                              type="button"
+                              aria-pressed={isSelected}
+                              onClick={() => handleSelect(item.value)}
+                              onMouseEnter={
+                                globalIdx === highlightedIndex
+                                  ? undefined
+                                  : () => setHighlightedIndex(globalIdx)
+                              }
+                              className="
+                                flex w-full cursor-pointer items-center justify-between rounded-md
+                                px-3 py-1.5 text-left text-sm transition-colors duration-100
+                              "
+                              style={{
+                                backgroundColor: getItemBg(
+                                  isSelected,
+                                  isHighlighted,
+                                ),
+                                color: isSelected
+                                  ? "var(--z-amber)"
+                                  : "var(--z-text)",
+                              }}
+                            >
+                              <span>{item.label}</span>
+                              {isSelected && (
+                                <FaCheck
+                                  size={9}
+                                  style={{
+                                    color: "var(--z-amber)",
+                                    flexShrink: 0,
+                                  }}
+                                />
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            ) : null,
             document.body,
           )}
       </>
