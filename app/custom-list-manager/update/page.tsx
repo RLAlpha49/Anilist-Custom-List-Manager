@@ -2295,13 +2295,6 @@ export default function UpdatePage() {
       "The run is stopped, so no new completed entries will be added here.";
   }
   const queueVirtualItems = queueVirtualizer.getVirtualItems();
-  const queuePaddingTop =
-    queueVirtualItems.length > 0 ? queueVirtualItems[0].start : 0;
-  const queuePaddingBottom =
-    queueVirtualItems.length > 0
-      ? queueVirtualizer.getTotalSize() -
-        queueVirtualItems[queueVirtualItems.length - 1].end
-      : 0;
   const breadcrumbs = [
     { name: "Home", href: "/" },
     { name: "Custom List Manager", href: "/custom-list-manager" },
@@ -2837,66 +2830,59 @@ export default function UpdatePage() {
                     ref={queueScrollContainerRef}
                     className="max-h-168 overflow-y-auto pr-1 sm:pr-2"
                   >
-                    <div className="space-y-3">
-                      {pendingEntries.length > 0 && (
-                        <div
-                          style={{
-                            paddingTop: `${queuePaddingTop}px`,
-                            paddingBottom: `${queuePaddingBottom}px`,
-                          }}
-                        >
-                          {queueVirtualItems.map((virtualItem) => {
-                            const entry = pendingEntries[virtualItem.index];
+                    {pendingEntries.length > 0 ? (
+                      <div
+                        style={{
+                          height: `${queueVirtualizer.getTotalSize()}px`,
+                          position: "relative",
+                          width: "100%",
+                        }}
+                      >
+                        {queueVirtualItems.map((virtualItem) => {
+                          const entry = pendingEntries[virtualItem.index];
 
-                            if (!entry) {
-                              return null;
-                            }
+                          if (!entry) {
+                            return null;
+                          }
 
-                            return (
-                              <motion.div
-                                key={entry.entry.id}
-                                ref={queueVirtualizer.measureElement}
-                                data-index={virtualItem.index}
-                                layout="position"
-                                initial={false}
-                                animate={{ opacity: 1 }}
-                                transition={{
-                                  duration: 0.26,
-                                  ease: [0.22, 1, 0.36, 1],
-                                }}
-                                style={{
-                                  width: "100%",
-                                  willChange: "transform, opacity",
-                                  transition:
-                                    "transform 260ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease-out",
-                                  paddingBottom:
-                                    virtualItem.index <
-                                    pendingEntries.length - 1
-                                      ? `${VIRTUAL_ROW_GAP_PX}px`
-                                      : undefined,
-                                }}
-                              >
-                                <PendingCard entry={entry} animated />
-                              </motion.div>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      {pendingEntries.length === 0 && (
-                        <div
-                          className="
-                            flex min-h-40 items-center justify-center rounded-xl py-12 text-sm
-                          "
-                          style={{
-                            color: "var(--z-muted)",
-                            border: "1px dashed var(--z-border)",
-                          }}
-                        >
-                          Queue empty
-                        </div>
-                      )}
-                    </div>
+                          return (
+                            <div
+                              key={`queue-${entry.entry.id}`}
+                              ref={queueVirtualizer.measureElement}
+                              data-index={virtualItem.index}
+                              style={{
+                                position: "absolute",
+                                top: 0,
+                                left: 0,
+                                width: "100%",
+                                transform: `translateY(${virtualItem.start}px)`,
+                                willChange: "transform, opacity",
+                                transition:
+                                  "transform 260ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease-out",
+                                paddingBottom:
+                                  virtualItem.index < pendingEntries.length - 1
+                                    ? `${VIRTUAL_ROW_GAP_PX}px`
+                                    : undefined,
+                              }}
+                            >
+                              <PendingCard entry={entry} animated />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div
+                        className="
+                          flex min-h-40 items-center justify-center rounded-xl py-12 text-sm
+                        "
+                        style={{
+                          color: "var(--z-muted)",
+                          border: "1px dashed var(--z-border)",
+                        }}
+                      >
+                        Queue empty
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
