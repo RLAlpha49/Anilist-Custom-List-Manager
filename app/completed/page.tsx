@@ -12,7 +12,7 @@ import {
   FaRedo,
 } from "react-icons/fa";
 
-import { getItemWithExpiry } from "@/lib/local-storage";
+import { getJsonItemWithExpiry, STORAGE_KEYS } from "@/lib/local-storage";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -177,17 +177,13 @@ export default function CompletedPage() {
   const [showParticles, setShowParticles] = useState(false);
 
   useEffect(() => {
-    const raw = getItemWithExpiry<string>("updateStats");
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw) as UpdateStats;
-        setStats(parsed);
-      } catch {
-        setStats({ totalUpdated: 0, errorCount: 0, timeTaken: 0 });
-      }
-    } else {
-      setStats({ totalUpdated: 0, errorCount: 0, timeTaken: 0 });
-    }
+    setStats(
+      getJsonItemWithExpiry<UpdateStats>(STORAGE_KEYS.updateStats, {
+        totalUpdated: 0,
+        errorCount: 0,
+        timeTaken: 0,
+      }),
+    );
 
     // Trigger particle burst after checkmark appears
     const t = setTimeout(() => setShowParticles(true), 500);

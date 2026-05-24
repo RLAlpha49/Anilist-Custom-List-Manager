@@ -29,7 +29,10 @@ import {
   getItemWithExpiry,
   getJsonItemWithExpiry,
   isStorageFallbackResult,
+  normalizeUserId,
   setItemWithExpiry,
+  STORAGE_KEYS,
+  STORAGE_TTLS,
 } from "@/lib/local-storage";
 import {
   AniListRequestVariables,
@@ -1363,7 +1366,7 @@ function DoneCard({
 
 export default function UpdatePage() {
   const router = useRouter();
-  const { token } = useAuth();
+  const { token, userId: authUserId } = useAuth();
 
   const [phase, setPhase] = useState<Phase>("scanning");
   const [pendingEntries, setPendingEntries] = useState<TrackedEntry[]>([]);
@@ -1410,7 +1413,7 @@ export default function UpdatePage() {
   });
 
   const getAuthToken = (): string | null =>
-    token ?? getItemWithExpiry<string>("anilistToken");
+    token ?? getItemWithExpiry<string>(STORAGE_KEYS.authToken);
 
   const setUpdatingEntries = (entries: TrackedEntry[]) => {
     setCurrentUpdating(entries);
@@ -1426,9 +1429,9 @@ export default function UpdatePage() {
     timeTaken: number;
   }) => {
     const result = setItemWithExpiry(
-      "updateStats",
-      JSON.stringify(stats),
-      60 * 60 * 1000,
+      STORAGE_KEYS.updateStats,
+      stats,
+      STORAGE_TTLS.updateSummary,
     );
 
     if (isStorageFallbackResult(result) && !storageFallbackWarnedRef.current) {
@@ -1507,18 +1510,22 @@ export default function UpdatePage() {
 
     const prepareQueue = async () => {
       const listConfigs = getJsonItemWithExpiry<CustomListConfig[]>(
-        "lists",
+        STORAGE_KEYS.workflowLists,
         [],
       );
       const listsToRemove = getJsonItemWithExpiry<string[]>(
-        "listsToRemoveFromAllEntries",
+        STORAGE_KEYS.workflowListsToRemoveFromAllEntries,
         [],
       );
-      const listType = getItemWithExpiry<string>("listType") ?? "ANIME";
-      const rawUserId = getItemWithExpiry<string>("userId");
-      const userId = Number.parseInt(rawUserId ?? "0", 10);
+      const listType =
+        getItemWithExpiry<string>(STORAGE_KEYS.workflowListType) ?? "ANIME";
+      const userId =
+        authUserId ??
+        normalizeUserId(
+          getItemWithExpiry<number | string>(STORAGE_KEYS.authUserId),
+        );
       const hideDefaultStatusLists = getBooleanItemWithExpiry(
-        "hideDefaultStatusLists",
+        STORAGE_KEYS.workflowHideDefaultStatusLists,
         false,
       );
 
@@ -1615,7 +1622,7 @@ export default function UpdatePage() {
     return () => {
       cancelled = true;
     };
-  }, [prepareRunId, token]);
+  }, [authUserId, prepareRunId, token]);
 
   const completeRun = (navigateToCompleted = false) => {
     const timeTaken =

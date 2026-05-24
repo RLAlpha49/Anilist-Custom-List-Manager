@@ -66,10 +66,13 @@ import {
 import { useAuth } from "@/context/auth-context";
 import { fetchAniList } from "@/lib/api";
 import {
+  getBooleanItemWithExpiry,
   getItemWithExpiry,
   getJsonItemWithExpiry,
   isStorageFallbackResult,
   setItemWithExpiry,
+  STORAGE_KEYS,
+  STORAGE_TTLS,
 } from "@/lib/local-storage";
 import {
   formatItemsAnime,
@@ -329,8 +332,13 @@ function PageData() {
   const [lists, setLists] = useState<CustomList[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [listType, setListType] = useState<MediaType>("ANIME");
-  const [hideDefaultStatusLists, setHideDefaultStatusLists] =
-    useState<boolean>(true);
+  const [hideDefaultStatusLists, setHideDefaultStatusLists] = useState<boolean>(
+    () =>
+      getBooleanItemWithExpiry(
+        STORAGE_KEYS.workflowHideDefaultStatusLists,
+        true,
+      ),
+  );
   const [showPopup, setShowPopup] = useState<boolean>(false);
   const [isListEmpty, setIsListEmpty] = useState<boolean>(true);
   const [dataLoaded, setDataLoaded] = useState<boolean>(false);
@@ -363,7 +371,10 @@ function PageData() {
     useState<CustomList | null>(null);
   const [listsToRemoveFromAllEntries, setListsToRemoveFromAllEntries] =
     useState<string[]>(() =>
-      getJsonItemWithExpiry<string[]>("listsToRemoveFromAllEntries", []),
+      getJsonItemWithExpiry<string[]>(
+        STORAGE_KEYS.workflowListsToRemoveFromAllEntries,
+        [],
+      ),
     );
 
   // Ref Hooks
@@ -454,7 +465,7 @@ function PageData() {
       const getAuthToken = (): string => {
         let authToken = token;
         if (!authToken) {
-          authToken = getItemWithExpiry("anilistToken");
+          authToken = getItemWithExpiry<string>(STORAGE_KEYS.authToken);
           if (!authToken) {
             throw new Error("Anilist token not found");
           }
@@ -523,18 +534,20 @@ function PageData() {
         condition: list.selectedOption || "",
       }));
       setItemWithExpiry(
-        listType === "ANIME" ? "conditionsAnime" : "conditionsManga",
+        listType === "ANIME"
+          ? STORAGE_KEYS.workflowConditionsAnime
+          : STORAGE_KEYS.workflowConditionsManga,
         newConditions,
-        60 * 60 * 24 * 1000,
+        STORAGE_TTLS.workflowCache,
       );
     }
   }, [lists, listType]);
 
   useEffect(() => {
     setItemWithExpiry(
-      "hideDefaultStatusLists",
+      STORAGE_KEYS.workflowHideDefaultStatusLists,
       hideDefaultStatusLists,
-      60 * 60 * 24 * 1000,
+      STORAGE_TTLS.workflowCache,
     );
   }, [hideDefaultStatusLists]);
 
@@ -726,19 +739,18 @@ function PageData() {
 					}
 				}
 			`;
-      const parsedUserId = Number.parseInt(String(userId), 10);
-      if (!Number.isFinite(parsedUserId)) {
+      if (!userId) {
         throw new TypeError("Invalid AniList user ID.");
       }
 
       const variables: FetchUserCustomListsVariables = {
-        userId: parsedUserId,
+        userId,
       };
 
       try {
         let authToken = token;
         if (!authToken) {
-          authToken = getItemWithExpiry("anilistToken");
+          authToken = getItemWithExpiry<string>(STORAGE_KEYS.authToken);
           if (!authToken) {
             throw new Error("Anilist token not found");
           }
@@ -823,28 +835,27 @@ function PageData() {
     setShowPopup(false);
     const writeResults = [
       setItemWithExpiry(
-        "lists",
+        STORAGE_KEYS.workflowLists,
         lists.map((list) => ({
           name: list.name,
           selectedOption: list.selectedOption,
         })),
-        60 * 60 * 24 * 1000,
+        STORAGE_TTLS.workflowCache,
       ),
       setItemWithExpiry(
-        "listsToRemoveFromAllEntries",
+        STORAGE_KEYS.workflowListsToRemoveFromAllEntries,
         listsToRemoveFromAllEntries,
-        60 * 60 * 24 * 1000,
-      ),
-      setItemWithExpiry("listType", listType, 60 * 60 * 24 * 1000),
-      setItemWithExpiry(
-        "userId",
-        userId?.toString() || "",
-        60 * 60 * 24 * 1000,
+        STORAGE_TTLS.workflowCache,
       ),
       setItemWithExpiry(
-        "hideDefaultStatusLists",
+        STORAGE_KEYS.workflowListType,
+        listType,
+        STORAGE_TTLS.workflowCache,
+      ),
+      setItemWithExpiry(
+        STORAGE_KEYS.workflowHideDefaultStatusLists,
         hideDefaultStatusLists,
-        60 * 60 * 24 * 1000,
+        STORAGE_TTLS.workflowCache,
       ),
     ];
 
