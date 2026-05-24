@@ -95,6 +95,51 @@ type StoredItem<T> = {
   expiry: number;
 };
 
+type StorageDebugFailureCategory =
+  | "write-too-large"
+  | "write-unavailable"
+  | "write-memory-fallback"
+  | "read-malformed-json"
+  | "read-malformed-shape"
+  | "read-json-parse-failed"
+  | "read-boolean-parse-failed"
+  | "read-boolean-invalid";
+
+type StorageDebugEventDetail = {
+  scope: "local-storage";
+  key: string;
+  category: StorageDebugFailureCategory;
+};
+
+const STORAGE_DEBUG_SAMPLE_RATE = 0.05;
+
+const emitSampledStorageDebugEvent = (
+  key: string,
+  category: StorageDebugFailureCategory,
+): void => {
+  if (Math.random() > STORAGE_DEBUG_SAMPLE_RATE) {
+    return;
+  }
+
+  const detail: StorageDebugEventDetail = {
+    scope: "local-storage",
+    key,
+    category,
+  };
+
+  if (typeof CustomEvent !== "undefined" && "dispatchEvent" in globalThis) {
+    globalThis.dispatchEvent(
+      new CustomEvent<StorageDebugEventDetail>("aclm:storage-debug", {
+        detail,
+      }),
+    );
+  }
+
+  if (typeof console !== "undefined" && typeof console.debug === "function") {
+    console.debug("[aclm:storage-debug]", detail);
+  }
+};
+
 export type StorageWriteResult =
   | "stored"
   | "memory-fallback"
@@ -152,11 +197,17 @@ const getByteSize = (value: string): number => {
   return value.length;
 };
 
-const parseStoredItem = <T>(raw: string): StoredItem<T> | null => {
+const parseStoredItem = <T>(
+  raw: string,
+  diagnosticKey?: string,
+): StoredItem<T> | null => {
   try {
     const parsed = JSON.parse(raw) as Partial<StoredItem<T>> | null;
 
     if (!parsed || typeof parsed !== "object") {
+      if (diagnosticKey) {
+        emitSampledStorageDebugEvent(diagnosticKey, "read-malformed-shape");
+      }
       return null;
     }
 
@@ -165,6 +216,9 @@ const parseStoredItem = <T>(raw: string): StoredItem<T> | null => {
       typeof parsed.expiry !== "number" ||
       !Number.isFinite(parsed.expiry)
     ) {
+      if (diagnosticKey) {
+        emitSampledStorageDebugEvent(diagnosticKey, "read-malformed-shape");
+      }
       return null;
     }
 
@@ -173,6 +227,9 @@ const parseStoredItem = <T>(raw: string): StoredItem<T> | null => {
       expiry: parsed.expiry,
     };
   } catch {
+    if (diagnosticKey) {
+      emitSampledStorageDebugEvent(diagnosticKey, "read-malformed-json");
+    }
     return null;
   }
 };
@@ -225,7 +282,7 @@ const pruneExpiredLocalStorageEntries = (): void => {
       continue;
     }
 
-    const parsed = parseStoredItem<unknown>(stored);
+    const parsed = parseStoredItem<unknown>(stored, key);
     if (!parsed || isExpired(parsed.expiry)) {
       localStorage.removeItem(key);
       inMemoryFallbackStore.delete(key);
@@ -267,12 +324,14 @@ export const setItemWithExpiry = <T>(
   if (getByteSize(serialized) > MAX_LOCAL_STORAGE_ITEM_BYTES) {
     inMemoryFallbackStore.set(key, serialized);
     legacyKeys.forEach(removeRawStorageKey);
+    emitSampledStorageDebugEvent(key, "write-too-large");
     return "too-large";
   }
 
   if (!canUseLocalStorage()) {
     inMemoryFallbackStore.set(key, serialized);
     legacyKeys.forEach(removeRawStorageKey);
+    emitSampledStorageDebugEvent(key, "write-unavailable");
     return "unavailable";
   }
 
@@ -285,6 +344,7 @@ export const setItemWithExpiry = <T>(
     if (!isQuotaExceededError(error)) {
       inMemoryFallbackStore.set(key, serialized);
       legacyKeys.forEach(removeRawStorageKey);
+      emitSampledStorageDebugEvent(key, "write-memory-fallback");
       return "memory-fallback";
     }
 
@@ -298,6 +358,7 @@ export const setItemWithExpiry = <T>(
     } catch {
       inMemoryFallbackStore.set(key, serialized);
       legacyKeys.forEach(removeRawStorageKey);
+      emitSampledStorageDebugEvent(key, "write-memory-fallback");
       return "memory-fallback";
     }
   }
@@ -305,7 +366,7 @@ export const setItemWithExpiry = <T>(
 
 export const getItemWithExpiry = <T>(key: string): T | null => {
   const getValidValueFromRaw = (raw: string): T | null => {
-    const parsed = parseStoredItem<T>(raw);
+    const parsed = parseStoredItem<T>(raw, key);
     if (!parsed) {
       return null;
     }
@@ -345,6 +406,7 @@ export const getJsonItemWithExpiry = <T>(key: string, fallback: T): T => {
     try {
       return JSON.parse(value) as T;
     } catch {
+      emitSampledStorageDebugEvent(key, "read-json-parse-failed");
       removeItemWithExpiry(key);
       return fallback;
     }
@@ -374,10 +436,12 @@ export const getBooleanItemWithExpiry = (
         return parsed;
       }
     } catch {
+      emitSampledStorageDebugEvent(key, "read-boolean-parse-failed");
       removeItemWithExpiry(key);
       return fallback;
     }
 
+    emitSampledStorageDebugEvent(key, "read-boolean-invalid");
     removeItemWithExpiry(key);
   }
 
