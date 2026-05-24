@@ -8,8 +8,16 @@
     ".husky/pre-push",
   ],
   "project": ["**/*.ts", "**/*.tsx"],
-  "ignoreDependencies": ["lint-staged", "postcss-load-config"],
-  "ignoreBinaries": ["ncu"],
+  "ignoreDependencies": [
+    "lint-staged",
+    "postcss-load-config",
+    // Intentionally retained for reusable UI primitives that are not currently route-mounted.
+    "@radix-ui/react-progress",
+    "@radix-ui/react-select",
+    "@radix-ui/react-separator",
+    "@radix-ui/react-slot",
+    "cmdk",
+  ],
   "ignoreIssues": {
     "components/ui/*.tsx": ["exports", "types"],
   },
