@@ -1,6 +1,8 @@
 "use client";
 
+import { Analytics } from "@vercel/analytics/next";
 import Link from "next/link";
+import Script from "next/script";
 import React, { ReactNode } from "react";
 
 import DarkModeToggle from "@/components/dark-mode-toggle";
@@ -69,6 +71,8 @@ export default function Layout({ children }: Readonly<LayoutProps>) {
         </div>
       </footer>
       <Toaster />
+      <Script src="/googleAnalytics.js" strategy="lazyOnload" />
+      <Analytics />
     </div>
   );
 }

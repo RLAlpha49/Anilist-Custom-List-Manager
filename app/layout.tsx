@@ -1,11 +1,9 @@
 import "./globals.css";
 
-import { Analytics } from "@vercel/analytics/next";
 import { DM_Sans, Syne } from "next/font/google";
-import Script from "next/script";
-import { ThemeProvider } from "next-themes";
 import React from "react";
 
+import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider } from "@/context/auth-context";
 
 const syne = Syne({
@@ -38,8 +36,6 @@ export default function RootLayout({
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <AuthProvider>{children}</AuthProvider>
         </ThemeProvider>
-        <Script src="/googleAnalytics.js" strategy="afterInteractive" />
-        <Analytics />
       </body>
     </html>
   );
