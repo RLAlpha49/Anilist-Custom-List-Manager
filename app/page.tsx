@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { FaExclamationTriangle, FaGithub } from "react-icons/fa";
 import { HiOutlineSparkles } from "react-icons/hi";
@@ -6,11 +7,63 @@ import Breadcrumbs from "@/components/breadcrumbs";
 import { HomeCacheResetButton } from "@/components/home-cache-reset-button";
 import Layout from "@/components/layout";
 
+export const metadata: Metadata = {
+  title: "Home",
+  description:
+    "Manage AniList custom lists with rule-based conditions and a guided update workflow.",
+  alternates: {
+    canonical: "/",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
+  openGraph: {
+    title: "AniList Custom List Manager",
+    description:
+      "Create and manage AniList custom lists with rule-based conditions and safer updates.",
+    url: "/",
+  },
+  twitter: {
+    title: "AniList Custom List Manager",
+    description:
+      "Create and manage AniList custom lists with rule-based conditions and safer updates.",
+  },
+};
+
+const webApplicationJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  name: "AniList Custom List Manager",
+  applicationCategory: "UtilitiesApplication",
+  operatingSystem: "Web",
+  description:
+    "A web app to create and manage AniList custom lists with rule-based conditions and guided updates.",
+  offers: {
+    "@type": "Offer",
+    price: "0",
+    priceCurrency: "USD",
+  },
+};
+
 export default function Page() {
   const breadcrumbs = [{ name: "Home", href: "/" }];
 
   return (
     <Layout>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(webApplicationJsonLd),
+        }}
+      />
       <Breadcrumbs breadcrumbs={breadcrumbs} />
       <div className="mx-auto w-full max-w-5xl px-6 py-16">
         <p
