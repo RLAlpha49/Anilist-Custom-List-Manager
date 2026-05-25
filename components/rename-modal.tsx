@@ -66,17 +66,61 @@ const RenameModal = React.memo(
         title="Rename List"
         confirmButtonText="Save Changes"
       >
-        <div className="space-y-4">
-          <p className="text-sm text-z-muted">
-            Renaming:{" "}
-            <span className="font-semibold text-z-amber">
-              &quot;{currentListName}&quot;
+        <div className="space-y-5">
+          {/* From → To visual */}
+          <div
+            className="flex items-center gap-3 rounded-2xl p-4"
+            style={{
+              backgroundColor: "var(--z-card-up)",
+              border: "1px solid var(--z-border)",
+            }}
+          >
+            <div className="min-w-0 flex-1">
+              <p
+                className="text-[10px] font-bold tracking-[0.15em] uppercase"
+                style={{ color: "var(--z-subtle)" }}
+              >
+                Current name
+              </p>
+              <p
+                className="mt-0.5 truncate text-sm font-semibold"
+                style={{ color: "var(--z-muted)" }}
+              >
+                {currentListName}
+              </p>
+            </div>
+            <span
+              className="shrink-0 text-base font-bold"
+              style={{ color: "var(--z-border-mid)" }}
+            >
+              →
             </span>
-          </p>
+            <div className="min-w-0 flex-1">
+              <p
+                className="text-[10px] font-bold tracking-[0.15em] uppercase"
+                style={{ color: "var(--z-amber)" }}
+              >
+                New name
+              </p>
+              <p
+                className="mt-0.5 truncate text-sm font-semibold"
+                style={{
+                  color: newListName.trim()
+                    ? "var(--z-text)"
+                    : "var(--z-subtle)",
+                }}
+              >
+                {newListName.trim() || "…"}
+              </p>
+            </div>
+          </div>
+
+          {/* Input */}
           <div className="space-y-2">
             <label
               htmlFor="newListName"
-              className="text-xs font-semibold tracking-widest text-z-muted uppercase"
+              className="text-[11px] font-bold tracking-[0.15em] uppercase"
+              style={{ color: "var(--z-subtle)" }}
             >
               New Name
             </label>
@@ -87,11 +131,21 @@ const RenameModal = React.memo(
               value={newListName}
               onChange={(e) => setNewListName(e.target.value)}
               className="
-                w-full rounded-md border border-(--z-border-mid) bg-z-card-up px-4 py-3 text-z-text
-                transition-colors
+                w-full rounded-xl px-4 py-3 text-sm transition-colors
                 placeholder:text-z-subtle
-                focus:border-(--z-amber) focus:outline-none
+                focus:outline-none
               "
+              style={{
+                backgroundColor: "var(--z-card-up)",
+                border: "1px solid var(--z-border-mid)",
+                color: "var(--z-text)",
+              }}
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = "var(--z-amber)";
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = "var(--z-border-mid)";
+              }}
               placeholder="Enter new list name"
               aria-label="New list name"
               autoComplete="off"

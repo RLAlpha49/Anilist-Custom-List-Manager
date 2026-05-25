@@ -473,25 +473,30 @@ function CustomListManagerHelpModal({
                   style={{
                     backgroundColor: "var(--z-surface)",
                     border: "1px solid var(--z-border-mid)",
-                    borderRadius: "1rem",
+                    borderRadius: "1.25rem",
                     boxShadow: "0 40px 100px rgba(0,0,0,0.7)",
                   }}
                 >
+                  {/* Amber top accent line */}
+                  <div
+                    className="absolute inset-x-0 top-0 h-0.5 rounded-t-[1.25rem]"
+                    style={{ backgroundColor: "var(--z-amber)" }}
+                  />
+
                   {/* Modal header */}
                   <div
-                    className="flex shrink-0 items-center justify-between px-7 pt-5 pb-4"
-                    style={{
-                      borderBottom: "1px solid var(--z-border)",
-                      backgroundColor: "rgba(255,255,255,0.015)",
-                    }}
+                    className="flex shrink-0 items-center justify-between px-7 pt-6 pb-5"
+                    style={{ borderBottom: "1px solid var(--z-border)" }}
                   >
-                    <div className="flex items-center gap-3">
-                      <FaInfoCircle
-                        className="size-5"
+                    <div>
+                      <p
+                        className="text-[10px] font-bold tracking-[0.2em] uppercase"
                         style={{ color: "var(--z-amber)" }}
-                      />
+                      >
+                        Help &amp; Documentation
+                      </p>
                       <DialogPrimitive.Title
-                        className="text-xl font-black"
+                        className="mt-0.5 text-xl font-black"
                         style={{
                           color: "var(--z-text)",
                           fontFamily: "var(--font-syne-var)",
@@ -505,7 +510,7 @@ function CustomListManagerHelpModal({
                       onClick={onClose}
                       aria-label="Close guide"
                       className="
-                        flex size-8 cursor-pointer items-center justify-center rounded-lg
+                        flex size-8 cursor-pointer items-center justify-center rounded-xl
                         transition-all duration-200
                         hover:bg-z-card-high
                         active:scale-90
@@ -517,9 +522,9 @@ function CustomListManagerHelpModal({
                   </div>
 
                   {/* Section nav */}
-                  <div className="shrink-0 px-7 pt-5">
+                  <div className="shrink-0 px-7 pt-5 pb-1">
                     <div
-                      className="grid grid-cols-3 gap-1 rounded-lg p-1"
+                      className="grid grid-cols-3 gap-1 rounded-xl p-1"
                       style={{
                         backgroundColor: "var(--z-card)",
                         border: "1px solid var(--z-border)",
@@ -527,16 +532,23 @@ function CustomListManagerHelpModal({
                     >
                       {(
                         [
-                          { id: "guide", label: "Guide" },
-                          { id: "conditions", label: "Conditions" },
-                          { id: "tips", label: "Tips" },
+                          { id: "guide", label: "Guide", sub: "9 steps" },
+                          {
+                            id: "conditions",
+                            label: "Conditions",
+                            sub: "7 groups",
+                          },
+                          { id: "tips", label: "Tips", sub: "7 tips" },
                         ] as const
-                      ).map(({ id, label }) => (
+                      ).map(({ id, label, sub }) => (
                         <button
                           key={id}
                           type="button"
                           onClick={() => setSection(id)}
-                          className="rounded-md py-1.5 text-xs font-semibold transition-all"
+                          className="
+                            flex flex-col items-center rounded-lg py-2 text-xs font-semibold
+                            transition-all
+                          "
                           style={{
                             backgroundColor:
                               section === id ? "var(--z-amber)" : "transparent",
@@ -545,81 +557,84 @@ function CustomListManagerHelpModal({
                           }}
                         >
                           {label}
+                          <span className="mt-0.5 text-[9px] font-normal opacity-70">
+                            {sub}
+                          </span>
                         </button>
                       ))}
                     </div>
                   </div>
 
-                  <div className="flex-1 space-y-5 overflow-y-auto px-7 py-5 pb-8">
+                  <div className="flex-1 space-y-4 overflow-y-auto px-7 py-5 pb-8">
                     {/* ── GUIDE ── */}
                     {section === "guide" && (
                       <>
                         {/* 3-step overview */}
                         <div
-                          className="rounded-lg p-4"
+                          className="rounded-2xl p-5"
                           style={{
                             backgroundColor: "var(--z-card)",
                             border: "1px solid var(--z-border)",
                           }}
                         >
                           <p
-                            className="mb-2 text-xs font-bold tracking-wider uppercase"
+                            className="mb-3 text-[10px] font-bold tracking-[0.2em] uppercase"
                             style={{ color: "var(--z-amber)" }}
                           >
                             3-Step Workflow
                           </p>
-                          {[
-                            {
-                              n: "1",
-                              label: "Login",
-                              desc: "Connect your AniList account via OAuth.",
-                            },
-                            {
-                              n: "2",
-                              label: "Configure Lists",
-                              desc: "Fetch your lists, set rules, and define conditions.",
-                            },
-                            {
-                              n: "3",
-                              label: "Update",
-                              desc: "Apply changes — entries are sorted automatically.",
-                            },
-                          ].map(({ n, label, desc }) => (
-                            <div
-                              key={n}
-                              className="mt-2 flex items-start gap-2"
-                            >
-                              <span
-                                className="
-                                  flex size-5 shrink-0 items-center justify-center rounded-full
-                                  text-[10px] font-bold
-                                "
-                                style={{
-                                  backgroundColor: "var(--z-amber-dim)",
-                                  color: "var(--z-amber)",
-                                }}
-                              >
-                                {n}
-                              </span>
-                              <p
-                                className="text-xs"
-                                style={{ color: "var(--z-muted)" }}
-                              >
+                          <div className="space-y-2.5">
+                            {[
+                              {
+                                n: "1",
+                                label: "Login",
+                                desc: "Connect your AniList account via OAuth.",
+                              },
+                              {
+                                n: "2",
+                                label: "Configure Lists",
+                                desc: "Fetch your lists, set rules, and define conditions.",
+                              },
+                              {
+                                n: "3",
+                                label: "Update",
+                                desc: "Apply changes — entries are sorted automatically.",
+                              },
+                            ].map(({ n, label, desc }) => (
+                              <div key={n} className="flex items-start gap-3">
                                 <span
-                                  className="font-semibold"
-                                  style={{ color: "var(--z-text)" }}
+                                  className="
+                                    flex size-6 shrink-0 items-center justify-center rounded-full
+                                    text-[11px] font-black
+                                  "
+                                  style={{
+                                    backgroundColor: "var(--z-amber-dim)",
+                                    color: "var(--z-amber)",
+                                    border: "1px solid rgba(245,166,35,0.3)",
+                                  }}
                                 >
-                                  {label} —{" "}
+                                  {n}
                                 </span>
-                                {desc}
-                              </p>
-                            </div>
-                          ))}
+                                <p
+                                  className="mt-0.5 text-sm"
+                                  style={{ color: "var(--z-muted)" }}
+                                >
+                                  <span
+                                    className="font-bold"
+                                    style={{ color: "var(--z-text)" }}
+                                  >
+                                    {label} —{" "}
+                                  </span>
+                                  {desc}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
                         </div>
 
                         {/* Detailed steps */}
                         <p
-                          className="text-xs font-bold tracking-wider uppercase"
+                          className="text-[10px] font-bold tracking-[0.2em] uppercase"
                           style={{ color: "var(--z-subtle)" }}
                         >
                           Detailed Steps
@@ -648,7 +663,7 @@ function CustomListManagerHelpModal({
                             title: "Set Rules for Each List",
                             body: 'Each list can have multiple rules. Choose "Include" to add entries that match a condition, "Exclude" to block entries that match. "Match all" (AND) requires every include rule to pass. "Match any" (OR) requires at least one.',
                             example:
-                              'Example: "Completed Movies" list → include "Status set to Completed" + include "Format set to Movie" with Match all.',
+                              '"Completed Movies" list → include "Status set to Completed" + include "Format set to Movie" with Match all.',
                           },
                           {
                             num: "5",
@@ -683,17 +698,18 @@ function CustomListManagerHelpModal({
                         ].map(({ num, title, body, example }) => (
                           <div
                             key={num}
-                            className="rounded-lg p-4"
+                            className="rounded-2xl p-4"
                             style={{
                               backgroundColor: "var(--z-card-up)",
                               border: "1px solid var(--z-border)",
+                              borderLeft: "2px solid var(--z-border-mid)",
                             }}
                           >
-                            <div className="mb-2 flex items-center gap-2">
+                            <div className="mb-2 flex items-center gap-3">
                               <span
                                 className="
                                   flex size-6 shrink-0 items-center justify-center rounded-full
-                                  text-xs font-bold
+                                  text-xs font-black
                                 "
                                 style={{
                                   backgroundColor: "var(--z-amber-dim)",
@@ -703,27 +719,28 @@ function CustomListManagerHelpModal({
                                 {num}
                               </span>
                               <span
-                                className="text-sm font-semibold"
+                                className="font-bold"
                                 style={{ color: "var(--z-text)" }}
                               >
                                 {title}
                               </span>
                             </div>
                             <p
-                              className="text-xs/relaxed"
+                              className="ml-9 text-xs/relaxed"
                               style={{ color: "var(--z-muted)" }}
                             >
                               {body}
                             </p>
                             {example && (
                               <p
-                                className="mt-2 rounded-sm px-2 py-1.5 text-xs italic"
+                                className="mt-2 ml-9 rounded-xl px-3 py-2 text-xs italic"
                                 style={{
                                   backgroundColor: "var(--z-amber-dim)",
                                   color: "var(--z-amber)",
+                                  border: "1px solid rgba(245,166,35,0.2)",
                                 }}
                               >
-                                {example}
+                                Example: {example}
                               </p>
                             )}
                           </div>
@@ -731,21 +748,24 @@ function CustomListManagerHelpModal({
 
                         {/* Default Template */}
                         <div
-                          className="rounded-lg p-4"
+                          className="rounded-2xl p-5"
                           style={{
-                            backgroundColor: "var(--z-card)",
-                            border: "1px solid var(--z-border)",
+                            backgroundColor: "var(--z-amber-dim)",
+                            border: "1px solid rgba(245,166,35,0.25)",
                           }}
                         >
                           <p
-                            className="mb-1 text-sm font-semibold"
-                            style={{ color: "var(--z-text)" }}
+                            className="mb-1 font-bold"
+                            style={{
+                              color: "var(--z-amber)",
+                              fontFamily: "var(--font-syne-var)",
+                            }}
                           >
                             Load Default Template
                           </p>
                           <p
-                            className="mb-3 text-xs/relaxed"
-                            style={{ color: "var(--z-muted)" }}
+                            className="mb-4 text-xs/relaxed"
+                            style={{ color: "rgba(245,166,35,0.75)" }}
                           >
                             Not sure where to start? Load a sample preset with
                             common list rules (Watching, Completed, Movies, and
@@ -757,8 +777,8 @@ function CustomListManagerHelpModal({
                             type="button"
                             onClick={onLoadDefaultTemplate}
                             className="
-                              inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm
-                              font-semibold transition-all
+                              inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold
+                              transition-all
                               hover:brightness-110
                               active:scale-95
                             "
@@ -776,7 +796,7 @@ function CustomListManagerHelpModal({
 
                     {/* ── CONDITIONS ── */}
                     {section === "conditions" && (
-                      <div className="space-y-5">
+                      <div className="space-y-4">
                         <p
                           className="text-xs/relaxed"
                           style={{ color: "var(--z-muted)" }}
@@ -931,35 +951,43 @@ function CustomListManagerHelpModal({
                         ].map(({ category, accent, bg, conditions }) => (
                           <div
                             key={category}
-                            className="overflow-hidden rounded-lg"
+                            className="overflow-hidden rounded-2xl"
                             style={{ border: "1px solid var(--z-border)" }}
                           >
                             <div
-                              className="px-4 py-2"
+                              className="px-4 py-2.5"
                               style={{ backgroundColor: bg }}
                             >
                               <span
-                                className="text-xs font-bold tracking-wider uppercase"
+                                className="text-[10px] font-bold tracking-[0.2em] uppercase"
                                 style={{ color: accent }}
                               >
                                 {category}
                               </span>
                             </div>
-                            <div
-                              className="divide-y"
-                              style={{ borderColor: "var(--z-border)" }}
-                            >
-                              {conditions.map(({ label, desc }) => (
+                            <div>
+                              {conditions.map(({ label, desc }, i) => (
                                 <div
                                   key={label}
                                   className="
-                                    flex flex-col gap-1 px-4 py-2.5
-                                    sm:flex-row sm:items-start sm:gap-3
+                                    flex flex-col gap-1.5 px-4 py-3
+                                    sm:flex-row sm:items-start sm:gap-4
                                   "
+                                  style={{
+                                    borderTop:
+                                      i > 0
+                                        ? "1px solid var(--z-border)"
+                                        : undefined,
+                                    backgroundColor:
+                                      i % 2 === 0
+                                        ? "transparent"
+                                        : "rgba(255,255,255,0.013)",
+                                  }}
                                 >
                                   <code
                                     className="
-                                      shrink-0 self-start rounded-sm px-1.5 py-0.5 text-[11px]
+                                      shrink-0 self-start rounded-lg px-2 py-0.5 text-[11px]
+                                      font-medium
                                     "
                                     style={{
                                       backgroundColor: "var(--z-card-up)",
@@ -985,21 +1013,21 @@ function CustomListManagerHelpModal({
 
                     {/* ── TIPS & SAFETY ── */}
                     {section === "tips" && (
-                      <div className="space-y-4">
+                      <div className="space-y-3">
                         <div
-                          className="rounded-lg p-4"
+                          className="rounded-2xl p-5"
                           style={{
                             backgroundColor: "var(--z-card)",
                             border: "1px solid var(--z-border)",
                           }}
                         >
                           <p
-                            className="mb-3 text-xs font-bold tracking-wider uppercase"
+                            className="mb-4 text-[10px] font-bold tracking-[0.2em] uppercase"
                             style={{ color: "var(--z-frost)" }}
                           >
                             Best Practices
                           </p>
-                          <ul className="space-y-2.5">
+                          <ul className="space-y-3">
                             {[
                               'Use "Estimate Matches" before updating to confirm your rules target the right entries.',
                               'Use "Preview Entry" to check a specific title — especially helpful for edge cases.',
@@ -1008,16 +1036,26 @@ function CustomListManagerHelpModal({
                               "Hide Default Status Lists once your custom lists cover all entries to keep your AniList view clean.",
                               "If an entry matches no configured include rules, it remains in its current custom lists unchanged.",
                               "Hover over toolbar icons for tooltips describing their actions.",
-                            ].map((tip) => (
+                            ].map((tip, i) => (
                               <li
                                 key={tip}
-                                className="flex gap-2 text-xs"
+                                className="flex items-start gap-3"
                                 style={{ color: "var(--z-text)" }}
                               >
-                                <span style={{ color: "var(--z-frost)" }}>
-                                  •
+                                <span
+                                  className="
+                                    flex size-5 shrink-0 items-center justify-center rounded-full
+                                    text-[10px] font-black
+                                  "
+                                  style={{
+                                    backgroundColor: "rgba(103,193,245,0.1)",
+                                    color: "var(--z-frost)",
+                                    border: "1px solid rgba(103,193,245,0.2)",
+                                  }}
+                                >
+                                  {i + 1}
                                 </span>
-                                {tip}
+                                <span className="text-xs/relaxed">{tip}</span>
                               </li>
                             ))}
                           </ul>
@@ -1087,252 +1125,305 @@ const CustomListRow = memo(function CustomListRow({
     helperCopy = "Add at least one include rule before updating this list.";
   }
 
+  const statusDotColor = markedForRemoval
+    ? "var(--z-frost)"
+    : hasConfiguredRules
+      ? "var(--z-green)"
+      : "var(--z-subtle)";
+
   return (
     <SortableItem id={list.name}>
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="font-semibold" style={{ color: "var(--z-text)" }}>
+      {/* ── Header: status dot + name + badge + actions ── */}
+      <div className="flex w-full min-w-0 items-center gap-2.5">
+        {/* Polarity status dot */}
+        <div
+          className="size-2 shrink-0 rounded-full transition-colors duration-300"
+          style={{ backgroundColor: statusDotColor }}
+        />
+
+        {/* List name */}
+        <span
+          className="min-w-0 flex-1 truncate text-sm font-bold"
+          style={{
+            color: "var(--z-text)",
+            fontFamily: "var(--font-syne-var)",
+          }}
+        >
           {list.name}
         </span>
+
+        {/* Rule count badge */}
         <span
-          className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
+          className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold"
           style={{
             backgroundColor: hasConfiguredRules
               ? "var(--z-amber-dim)"
-              : "var(--z-card-up)",
-            color: hasConfiguredRules ? "var(--z-amber)" : "var(--z-muted)",
-            border: "1px solid var(--z-border)",
+              : "rgba(255,255,255,0.04)",
+            color: hasConfiguredRules ? "var(--z-amber)" : "var(--z-subtle)",
+            border: `1px solid ${hasConfiguredRules ? "rgba(245,166,35,0.22)" : "rgba(255,255,255,0.07)"}`,
           }}
         >
-          {activeRuleCount} active rule{activeRuleCount === 1 ? "" : "s"}
+          {activeRuleCount} {activeRuleCount === 1 ? "rule" : "rules"}
         </span>
+
+        {/* Action buttons */}
+        <div className="flex shrink-0 items-center gap-0.5">
+          <ActionIconButton
+            ariaLabel="Clear rules"
+            tooltip="Clear rules"
+            onClick={() => onClearRules(index)}
+            className="size-8 rounded-md transition-colors hover:bg-white/5 active:scale-90"
+            style={{ color: "var(--z-subtle)" }}
+          >
+            <FaTimesCircle className="size-3.5" />
+          </ActionIconButton>
+
+          <ActionIconButton
+            ariaLabel="Rename list"
+            tooltip="Rename list"
+            onClick={() => onOpenRename(list)}
+            className="size-8 rounded-md transition-colors hover:bg-z-amber-dim active:scale-90"
+            style={{ color: "var(--z-amber)" }}
+          >
+            <FaEdit className="size-3.5" />
+          </ActionIconButton>
+
+          <ActionIconButton
+            ariaLabel="Delete list"
+            tooltip="Delete list"
+            onClick={() => onDelete(list.name)}
+            className="
+              size-8 rounded-md transition-colors
+              hover:bg-[rgba(248,113,113,0.12)]
+              active:scale-90
+            "
+            style={{ color: "var(--z-red)" }}
+          >
+            <FaTrash className="size-3.5" />
+          </ActionIconButton>
+
+          <ActionIconButton
+            ariaLabel="Remove from all entries"
+            tooltip="Remove from all entries"
+            onClick={() => onRemoveAll(list)}
+            className="
+              size-8 rounded-md transition-colors
+              hover:bg-[rgba(34,211,238,0.1)]
+              active:scale-90
+            "
+            style={{ color: "var(--z-frost)" }}
+          >
+            <FaTimesCircle className="size-3.5" />
+          </ActionIconButton>
+        </div>
       </div>
 
+      {/* ── Content: removal notice OR rules editor ── */}
       {markedForRemoval ? (
-        <span
-          className="
-            ml-2 inline-flex items-center gap-2 rounded-full px-2 py-0.5 text-xs font-semibold
-          "
+        <div
+          className="flex items-center justify-between px-4 py-3"
           style={{
-            backgroundColor: "var(--z-amber-dim)",
-            color: "var(--z-amber)",
+            backgroundColor: "rgba(34,211,238,0.04)",
+            borderTop: "1px solid rgba(34,211,238,0.12)",
           }}
         >
-          Will be removed from all entries{" "}
+          <span
+            className="text-xs font-medium"
+            style={{ color: "var(--z-frost)" }}
+          >
+            Marked — will be removed from all entries on next update
+          </span>
           <button
             type="button"
             aria-label="Undo remove from all entries"
             onClick={() => onUndoRemoveAll(list.name)}
-            className="rounded-full p-0.5 transition-colors hover:brightness-110"
+            className="
+              flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all
+              hover:bg-white/5
+              active:scale-95
+            "
+            style={{
+              color: "var(--z-muted)",
+              border: "1px solid var(--z-border-mid)",
+            }}
           >
             <FaTimesCircle className="size-3" />
+            Undo
           </button>
-        </span>
+        </div>
       ) : (
-        <div className="min-w-full sm:min-w-xl">
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <div
-                className="inline-flex rounded-lg p-1"
-                style={{
-                  backgroundColor: "var(--z-card-up)",
-                  border: "1px solid var(--z-border)",
-                }}
-              >
-                {(["ALL", "ANY"] as const).map((operator) => {
-                  const isActive = ruleSet.operator === operator;
+        <div className="flex flex-col gap-3 p-4">
+          {/* Controls row */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Operator toggle */}
+            <div
+              className="inline-flex rounded-xl p-0.5"
+              style={{
+                backgroundColor: "var(--z-card-up)",
+                border: "1px solid var(--z-border)",
+              }}
+            >
+              {(["ALL", "ANY"] as const).map((operator) => {
+                const isActive = ruleSet.operator === operator;
 
-                  return (
-                    <button
-                      key={operator}
-                      type="button"
-                      onClick={() => onOperatorChange(index, operator)}
-                      className="
-                        rounded-md px-3 py-1.5 text-xs font-bold tracking-wide transition-all
-                      "
-                      style={{
-                        backgroundColor: isActive
-                          ? "var(--z-amber)"
-                          : "transparent",
-                        color: isActive ? "#07060f" : "var(--z-muted)",
-                      }}
-                    >
-                      {operator === "ALL" ? "Match all" : "Match any"}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <button
-                type="button"
-                onClick={() => onAddRule(index)}
-                className="
-                  inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold
-                  transition-all
-                  hover:brightness-110
-                  active:scale-95
-                "
-                style={{
-                  backgroundColor: "var(--z-amber-dim)",
-                  color: "var(--z-amber)",
-                  border: "1px solid rgba(245,166,35,0.2)",
-                }}
-              >
-                <FaPlus className="size-3" />
-                Add rule
-              </button>
-            </div>
-
-            <p className="text-xs" style={{ color: "var(--z-muted)" }}>
-              {helperCopy}
-            </p>
-
-            {ruleSet.rules.length === 0 ? (
-              <div
-                className="rounded-lg border border-dashed p-3 text-sm"
-                style={{
-                  borderColor: "var(--z-border-mid)",
-                  backgroundColor: "var(--z-card-up)",
-                  color: "var(--z-muted)",
-                }}
-              >
-                Add your first include or exclude rule to start building this
-                custom list.
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {ruleSet.rules.map((rule, ruleIndex) => (
-                  <div
-                    key={rule.id}
-                    className="flex flex-col gap-2 rounded-lg p-3 sm:flex-row sm:items-center"
+                return (
+                  <button
+                    key={operator}
+                    type="button"
+                    onClick={() => onOperatorChange(index, operator)}
+                    className="
+                      rounded-[9px] px-3 py-1.5 text-xs font-bold tracking-wide transition-all
+                    "
                     style={{
-                      backgroundColor: "var(--z-card-up)",
-                      border: "1px solid var(--z-border)",
+                      backgroundColor: isActive
+                        ? "var(--z-amber)"
+                        : "transparent",
+                      color: isActive ? "#07060f" : "var(--z-muted)",
                     }}
                   >
-                    <div className="sm:w-32">
-                      <label
-                        className="sr-only"
-                        htmlFor={`${list.name}-rule-${rule.id}-polarity`}
-                      >
-                        Rule polarity
-                      </label>
-                      <select
-                        id={`${list.name}-rule-${rule.id}-polarity`}
-                        value={rule.polarity}
-                        onChange={(event) =>
-                          onRulePolarityChange(
-                            index,
-                            rule.id,
-                            event.target.value as "include" | "exclude",
-                          )
-                        }
-                        className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
-                        style={{
-                          backgroundColor: "var(--z-card)",
-                          border: "1px solid var(--z-border-mid)",
-                          color: "var(--z-text)",
-                        }}
-                      >
-                        <option value="include">Include</option>
-                        <option value="exclude">Exclude</option>
-                      </select>
-                    </div>
-
-                    <div className="min-w-0 flex-1">
-                      <DynamicSelect
-                        value={rule.condition}
-                        onValueChange={(value: string) =>
-                          onRuleConditionChange(index, rule.id, value)
-                        }
-                        options={options}
-                        placeholder={`Select ${rule.polarity} condition`}
-                        className="w-full min-w-0"
-                      />
-                    </div>
-
-                    <button
-                      type="button"
-                      aria-label={`Remove rule ${ruleIndex + 1}`}
-                      onClick={() => onRemoveRule(index, rule.id)}
-                      className="
-                        inline-flex size-10 items-center justify-center rounded-full transition-all
-                        hover:bg-[rgba(248,113,113,0.12)]
-                        active:scale-90
-                      "
-                      style={{ color: "var(--z-red)" }}
-                    >
-                      <FaTrash className="size-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="text-[11px]" style={{ color: "var(--z-subtle)" }}>
-                Exclude rules always block matches, even when include rules
-                pass.
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                <ActionIconButton
-                  ariaLabel="Clear rules"
-                  tooltip="Clear rules"
-                  onClick={() => onClearRules(index)}
-                  className="
-                    size-8 rounded-full p-0 transition-all duration-150
-                    hover:bg-z-card-up
-                    active:scale-90
-                  "
-                  style={{ color: "var(--z-muted)" }}
-                >
-                  <FaTimesCircle className="size-4" />
-                </ActionIconButton>
-
-                <ActionIconButton
-                  ariaLabel="Rename list"
-                  tooltip="Rename list"
-                  onClick={() => onOpenRename(list)}
-                  className="
-                    size-8 rounded-full p-0 transition-all duration-150
-                    hover:bg-z-amber-dim
-                    active:scale-90
-                  "
-                  style={{ color: "var(--z-amber)" }}
-                >
-                  <FaEdit className="size-4" />
-                </ActionIconButton>
-
-                <ActionIconButton
-                  ariaLabel="Delete list"
-                  tooltip="Delete list"
-                  onClick={() => onDelete(list.name)}
-                  className="
-                    size-8 rounded-full p-0 transition-all duration-150
-                    hover:bg-[rgba(248,113,113,0.12)]
-                    active:scale-90
-                  "
-                  style={{ color: "var(--z-red)" }}
-                >
-                  <FaTrash className="size-4" />
-                </ActionIconButton>
-
-                <ActionIconButton
-                  ariaLabel="Remove from all entries"
-                  tooltip="Remove from all entries"
-                  onClick={() => onRemoveAll(list)}
-                  className="
-                    size-8 rounded-full p-0 transition-all duration-150
-                    hover:bg-[rgba(34,211,238,0.12)]
-                    active:scale-90
-                  "
-                  style={{ color: "var(--z-frost)" }}
-                >
-                  <FaTimesCircle className="size-4" />
-                </ActionIconButton>
-              </div>
+                    {operator === "ALL" ? "Match all" : "Match any"}
+                  </button>
+                );
+              })}
             </div>
+
+            {/* Add rule */}
+            <button
+              type="button"
+              onClick={() => onAddRule(index)}
+              className="
+                inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold
+                transition-all
+                hover:brightness-110
+                active:scale-95
+              "
+              style={{
+                backgroundColor: "var(--z-amber-dim)",
+                color: "var(--z-amber)",
+                border: "1px solid rgba(245,166,35,0.18)",
+              }}
+            >
+              <FaPlus className="size-3" />
+              Add rule
+            </button>
+
+            {/* Helper copy — hidden on small screens, shown inline on lg+ */}
+            <p
+              className="hidden text-xs lg:block"
+              style={{ color: "var(--z-subtle)" }}
+            >
+              {helperCopy}
+            </p>
           </div>
+
+          {/* Helper copy on small screens */}
+          <p className="text-xs lg:hidden" style={{ color: "var(--z-subtle)" }}>
+            {helperCopy}
+          </p>
+
+          {/* Rules list */}
+          {ruleSet.rules.length === 0 ? (
+            <div
+              className="rounded-xl border border-dashed px-4 py-3 text-sm"
+              style={{
+                borderColor: "var(--z-border-mid)",
+                color: "var(--z-muted)",
+              }}
+            >
+              Add your first include or exclude rule to start building this
+              custom list.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {ruleSet.rules.map((rule, ruleIndex) => (
+                <div
+                  key={rule.id}
+                  className="flex flex-col gap-2 rounded-xl p-3 sm:flex-row sm:items-center"
+                  style={{
+                    backgroundColor: "var(--z-card-up)",
+                    border: "1px solid var(--z-border)",
+                  }}
+                >
+                  {/* Polarity indicator + select */}
+                  <div className="flex items-center gap-2 sm:w-36">
+                    <div
+                      className="size-2 shrink-0 rounded-full"
+                      style={{
+                        backgroundColor:
+                          rule.polarity === "include"
+                            ? "var(--z-green)"
+                            : "var(--z-red)",
+                      }}
+                    />
+                    <label
+                      className="sr-only"
+                      htmlFor={`${list.name}-rule-${rule.id}-polarity`}
+                    >
+                      Rule polarity
+                    </label>
+                    <select
+                      id={`${list.name}-rule-${rule.id}-polarity`}
+                      value={rule.polarity}
+                      onChange={(event) =>
+                        onRulePolarityChange(
+                          index,
+                          rule.id,
+                          event.target.value as "include" | "exclude",
+                        )
+                      }
+                      className="
+                        w-full rounded-lg px-3 py-1.5 text-xs font-semibold
+                        focus:outline-none
+                      "
+                      style={{
+                        backgroundColor: "var(--z-card)",
+                        border: "1px solid var(--z-border-mid)",
+                        color:
+                          rule.polarity === "include"
+                            ? "var(--z-green)"
+                            : "var(--z-red)",
+                      }}
+                    >
+                      <option value="include">Include</option>
+                      <option value="exclude">Exclude</option>
+                    </select>
+                  </div>
+
+                  {/* Condition select */}
+                  <div className="min-w-0 flex-1">
+                    <DynamicSelect
+                      value={rule.condition}
+                      onValueChange={(value: string) =>
+                        onRuleConditionChange(index, rule.id, value)
+                      }
+                      options={options}
+                      placeholder={`Select ${rule.polarity} condition`}
+                      className="w-full min-w-0"
+                    />
+                  </div>
+
+                  {/* Remove rule */}
+                  <button
+                    type="button"
+                    aria-label={`Remove rule ${ruleIndex + 1}`}
+                    onClick={() => onRemoveRule(index, rule.id)}
+                    className="
+                      inline-flex size-8 items-center justify-center rounded-full transition-all
+                      hover:bg-[rgba(248,113,113,0.12)]
+                      active:scale-90
+                    "
+                    style={{ color: "var(--z-red)" }}
+                  >
+                    <FaTrash className="size-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <p className="text-[11px]" style={{ color: "var(--z-subtle)" }}>
+            Exclude rules always block matches, even when include rules pass.
+          </p>
         </div>
       )}
     </SortableItem>
@@ -1345,11 +1436,13 @@ function renderMatchPreviewContent(
 ): ReactNode {
   if (matchPreview.loading) {
     return (
-      <div className="flex flex-col items-center justify-center py-8">
+      <div className="flex flex-col items-center justify-center py-12">
         <LoadingIndicator size="lg" />
         <p className="mt-4 text-sm" style={{ color: "var(--z-muted)" }}>
-          Scanning your {listType.toLowerCase()} library with the same matcher
-          used by the updater...
+          Scanning your {listType.toLowerCase()} library…
+        </p>
+        <p className="mt-1 text-xs" style={{ color: "var(--z-subtle)" }}>
+          Using the same matcher as the updater
         </p>
       </div>
     );
@@ -1358,10 +1451,10 @@ function renderMatchPreviewContent(
   if (matchPreview.error) {
     return (
       <div
-        className="rounded-lg p-4 text-sm"
+        className="rounded-xl p-4 text-sm"
         style={{
           backgroundColor: "rgba(248,113,113,0.1)",
-          border: "1px solid rgba(248,113,113,0.2)",
+          border: "1px solid rgba(248,113,113,0.25)",
           color: "var(--z-red)",
         }}
       >
@@ -1371,86 +1464,183 @@ function renderMatchPreviewContent(
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
+      {/* Summary bar */}
       <div
-        className="rounded-lg p-3"
+        className="flex items-center justify-between rounded-2xl p-4"
         style={{
           backgroundColor: "var(--z-card-up)",
           border: "1px solid var(--z-border)",
         }}
       >
-        <p className="text-sm font-medium" style={{ color: "var(--z-text)" }}>
-          Scanned {matchPreview.entryCount} {listType.toLowerCase()} entr
-          {matchPreview.entryCount === 1 ? "y" : "ies"}.
-        </p>
-        <p className="mt-1 text-xs" style={{ color: "var(--z-muted)" }}>
-          Counts are read-only estimates based on your current rules. Samples
-          show up to three matching titles per list.
-        </p>
+        <div>
+          <p
+            className="text-[10px] font-bold tracking-[0.15em] uppercase"
+            style={{ color: "var(--z-subtle)" }}
+          >
+            Entries scanned
+          </p>
+          <p
+            className="mt-0.5 text-3xl font-black tabular-nums"
+            style={{
+              color: "var(--z-text)",
+              fontFamily: "var(--font-syne-var)",
+            }}
+          >
+            {matchPreview.entryCount}
+          </p>
+        </div>
+        <div className="text-right">
+          <p
+            className="text-[10px] font-bold tracking-[0.15em] uppercase"
+            style={{ color: "var(--z-subtle)" }}
+          >
+            Lists analysed
+          </p>
+          <p
+            className="mt-0.5 text-3xl font-black tabular-nums"
+            style={{
+              color: "var(--z-amber)",
+              fontFamily: "var(--font-syne-var)",
+            }}
+          >
+            {matchPreview.estimates.length}
+          </p>
+        </div>
       </div>
 
-      <div className="space-y-3">
+      <p className="text-[11px]" style={{ color: "var(--z-subtle)" }}>
+        Estimates only — no changes are made. Samples show up to 3 matching
+        titles per list.
+      </p>
+
+      {/* Estimate cards */}
+      <div className="space-y-2">
         {matchPreview.estimates.map((estimate) => (
           <div
             key={estimate.name}
-            className="rounded-lg p-3"
+            className="overflow-hidden rounded-2xl"
             style={{
               backgroundColor: "var(--z-card-up)",
               border: "1px solid var(--z-border)",
             }}
           >
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <p className="font-semibold" style={{ color: "var(--z-text)" }}>
-                  {estimate.name}
-                </p>
-                <p className="mt-1 text-xs" style={{ color: "var(--z-muted)" }}>
-                  {estimate.hasActiveRules
-                    ? estimate.summary
-                    : "Remove-from-all only"}
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                {estimate.markedForRemoval && (
-                  <span
-                    className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
+            {/* Card header row */}
+            <div className="flex items-center gap-3 px-4 py-3.5">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <p
+                    className="truncate font-bold"
                     style={{
-                      backgroundColor: "var(--z-amber-dim)",
-                      color: "var(--z-amber)",
+                      color: "var(--z-text)",
+                      fontFamily: "var(--font-syne-var)",
                     }}
                   >
-                    remove from all
-                  </span>
-                )}
+                    {estimate.name}
+                  </p>
+                  {estimate.markedForRemoval && (
+                    <span
+                      className="
+                        shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide
+                        uppercase
+                      "
+                      style={{
+                        backgroundColor: "rgba(103,193,245,0.1)",
+                        color: "var(--z-frost)",
+                        border: "1px solid rgba(103,193,245,0.2)",
+                      }}
+                    >
+                      remove all
+                    </span>
+                  )}
+                </div>
+                <p
+                  className="mt-0.5 text-[11px]"
+                  style={{ color: "var(--z-muted)" }}
+                >
+                  {estimate.hasActiveRules
+                    ? estimate.summary
+                    : "Remove-from-all only — no include rules configured"}
+                </p>
+              </div>
+              {/* Match count badge */}
+              <div
+                className="flex size-14 shrink-0 flex-col items-center justify-center rounded-xl"
+                style={{
+                  backgroundColor:
+                    estimate.totalMatches > 0
+                      ? "var(--z-amber-dim)"
+                      : "var(--z-card)",
+                  border:
+                    estimate.totalMatches > 0
+                      ? "1px solid rgba(245,166,35,0.25)"
+                      : "1px solid var(--z-border)",
+                }}
+              >
                 <span
-                  className="rounded-full px-2.5 py-1 text-xs font-semibold"
+                  className="text-xl leading-none font-black tabular-nums"
                   style={{
-                    backgroundColor: "var(--z-card)",
-                    border: "1px solid var(--z-border)",
-                    color: "var(--z-text)",
+                    color:
+                      estimate.totalMatches > 0
+                        ? "var(--z-amber)"
+                        : "var(--z-subtle)",
                   }}
                 >
-                  {estimate.totalMatches} match
-                  {estimate.totalMatches === 1 ? "" : "es"}
+                  {estimate.totalMatches}
+                </span>
+                <span
+                  className="mt-0.5 text-[9px] font-bold tracking-wide uppercase"
+                  style={{
+                    color:
+                      estimate.totalMatches > 0
+                        ? "rgba(245,166,35,0.65)"
+                        : "var(--z-subtle)",
+                  }}
+                >
+                  {estimate.totalMatches === 1 ? "match" : "matches"}
                 </span>
               </div>
             </div>
 
-            {estimate.sampleTitles.length > 0 ? (
-              <ul
-                className="mt-3 space-y-1 text-sm"
-                style={{ color: "var(--z-subtle)" }}
+            {/* Sample titles */}
+            {estimate.sampleTitles.length > 0 && (
+              <div
+                className="flex flex-wrap gap-1.5 border-t px-4 py-3"
+                style={{
+                  borderColor: "var(--z-border)",
+                  backgroundColor: "rgba(255,255,255,0.02)",
+                }}
               >
                 {estimate.sampleTitles.map((title) => (
-                  <li key={`${estimate.name}-${title}`}>• {title}</li>
+                  <span
+                    key={`${estimate.name}-${title}`}
+                    className="rounded-lg px-2.5 py-1 text-[11px]"
+                    style={{
+                      backgroundColor: "var(--z-card)",
+                      border: "1px solid var(--z-border)",
+                      color: "var(--z-muted)",
+                    }}
+                  >
+                    {title}
+                  </span>
                 ))}
-              </ul>
-            ) : (
-              <p className="mt-3 text-sm" style={{ color: "var(--z-subtle)" }}>
-                {estimate.hasActiveRules
-                  ? "No current library entries matched this rule set."
-                  : "This list is currently only queued for remove-from-all."}
-              </p>
+              </div>
+            )}
+            {estimate.sampleTitles.length === 0 && estimate.hasActiveRules && (
+              <div
+                className="border-t px-4 py-3"
+                style={{
+                  borderColor: "var(--z-border)",
+                  backgroundColor: "rgba(255,255,255,0.02)",
+                }}
+              >
+                <p
+                  className="text-[11px] italic"
+                  style={{ color: "var(--z-subtle)" }}
+                >
+                  No current library entries matched this rule set.
+                </p>
+              </div>
             )}
           </div>
         ))}
@@ -1494,6 +1684,7 @@ function renderEntryPreviewSelected(
 
   return (
     <div className="space-y-4">
+      {/* Back button */}
       <button
         type="button"
         onClick={() =>
@@ -1505,36 +1696,63 @@ function renderEntryPreviewSelected(
         ← Back to search
       </button>
 
+      {/* Entry card */}
       <div
-        className="rounded-lg p-3"
+        className="rounded-2xl p-4"
         style={{
           backgroundColor: "var(--z-card-up)",
           border: "1px solid var(--z-border)",
         }}
       >
-        <p className="font-semibold" style={{ color: "var(--z-text)" }}>
+        <p
+          className="font-black"
+          style={{
+            color: "var(--z-text)",
+            fontFamily: "var(--font-syne-var)",
+          }}
+        >
           {getMediaEntryTitle(selectedEntry)}
         </p>
-        <p className="mt-1 text-xs" style={{ color: "var(--z-muted)" }}>
-          ID: {selectedEntry.id}
-          {selectedEntry.status ? ` · ${selectedEntry.status}` : ""}
-        </p>
+        <div className="mt-1.5 flex items-center gap-2">
+          <span
+            className="text-[11px] tabular-nums"
+            style={{ color: "var(--z-subtle)" }}
+          >
+            ID {selectedEntry.id}
+          </span>
+          {selectedEntry.status && (
+            <>
+              <span style={{ color: "var(--z-border)" }}>·</span>
+              <span
+                className="rounded-md px-1.5 py-0.5 text-[10px] font-bold tracking-wide uppercase"
+                style={{
+                  backgroundColor: "var(--z-card)",
+                  border: "1px solid var(--z-border)",
+                  color: "var(--z-muted)",
+                }}
+              >
+                {selectedEntry.status}
+              </span>
+            </>
+          )}
+        </div>
       </div>
 
-      <div className="space-y-3">
+      {/* Before / After */}
+      <div className="grid grid-cols-2 gap-3">
         <div>
           <p
-            className="mb-1.5 text-xs font-semibold"
-            style={{ color: "var(--z-muted)" }}
+            className="mb-2 text-[10px] font-bold tracking-[0.15em] uppercase"
+            style={{ color: "var(--z-subtle)" }}
           >
-            Current custom lists
+            Current lists
           </p>
           <div className="flex flex-wrap gap-1.5">
             {currentLists.length > 0 ? (
               currentLists.map((name) => (
                 <span
                   key={name}
-                  className="rounded-sm px-2 py-0.5 text-xs"
+                  className="rounded-lg px-2.5 py-1 text-xs"
                   style={{
                     backgroundColor: "var(--z-card-up)",
                     border: "1px solid var(--z-border)",
@@ -1549,7 +1767,7 @@ function renderEntryPreviewSelected(
                 className="text-xs italic"
                 style={{ color: "var(--z-muted)" }}
               >
-                No custom lists
+                None
               </span>
             )}
           </div>
@@ -1557,19 +1775,18 @@ function renderEntryPreviewSelected(
 
         <div>
           <p
-            className="mb-1.5 text-xs font-semibold"
-            style={{ color: "var(--z-muted)" }}
+            className="mb-2 text-[10px] font-bold tracking-[0.15em] uppercase"
+            style={{ color: "var(--z-subtle)" }}
           >
             After update
           </p>
           <div className="flex flex-wrap gap-1.5">
             {result.newLists.map((name) => {
               const isNew = added.includes(name);
-              const addedPrefix = isNew ? "+ " : "";
               return (
                 <span
                   key={name}
-                  className="rounded-sm px-2 py-0.5 text-xs font-medium"
+                  className="rounded-lg px-2.5 py-1 text-xs font-medium"
                   style={{
                     backgroundColor: isNew
                       ? "rgba(74,222,128,0.12)"
@@ -1580,7 +1797,7 @@ function renderEntryPreviewSelected(
                     color: isNew ? "#4ade80" : "var(--z-text)",
                   }}
                 >
-                  {addedPrefix}
+                  {isNew ? "+ " : ""}
                   {name}
                 </span>
               );
@@ -1588,7 +1805,7 @@ function renderEntryPreviewSelected(
             {removed.map((name) => (
               <span
                 key={name}
-                className="rounded-sm px-2 py-0.5 text-xs font-medium line-through"
+                className="rounded-lg px-2.5 py-1 text-xs font-medium line-through"
                 style={{
                   backgroundColor: "rgba(248,113,113,0.08)",
                   border: "1px solid rgba(248,113,113,0.2)",
@@ -1603,26 +1820,27 @@ function renderEntryPreviewSelected(
                 className="text-xs italic"
                 style={{ color: "var(--z-muted)" }}
               >
-                No custom lists after update
+                None
               </span>
             )}
           </div>
         </div>
+      </div>
 
-        <div
-          className="rounded-lg p-3 text-xs"
-          style={{
-            backgroundColor: result.changed
-              ? "rgba(74,222,128,0.07)"
-              : "var(--z-card-up)",
-            border: result.changed
-              ? "1px solid rgba(74,222,128,0.2)"
-              : "1px solid var(--z-border)",
-            color: result.changed ? "#4ade80" : "var(--z-muted)",
-          }}
-        >
-          {summary}
-        </div>
+      {/* Summary */}
+      <div
+        className="rounded-2xl px-4 py-3 text-sm"
+        style={{
+          backgroundColor: result.changed
+            ? "rgba(74,222,128,0.07)"
+            : "var(--z-card-up)",
+          border: result.changed
+            ? "1px solid rgba(74,222,128,0.2)"
+            : "1px solid var(--z-border)",
+          color: result.changed ? "#4ade80" : "var(--z-muted)",
+        }}
+      >
+        {summary}
       </div>
     </div>
   );
@@ -1643,11 +1861,12 @@ function renderEntryPreviewSearch(
 
   return (
     <div className="space-y-3">
+      {/* Search input */}
       <div
-        className="flex items-center gap-2 rounded-lg px-3 py-2"
+        className="flex items-center gap-2.5 rounded-xl px-3.5 py-2.5"
         style={{
           backgroundColor: "var(--z-card-up)",
-          border: "1px solid var(--z-border)",
+          border: "1px solid var(--z-border-mid)",
         }}
       >
         <FaSearch
@@ -1660,15 +1879,26 @@ function renderEntryPreviewSearch(
           onChange={(e) =>
             setEntryPreview((prev) => ({ ...prev, query: e.target.value }))
           }
-          placeholder="Search by title or ID…"
+          placeholder={`Search ${listType.toLowerCase()} entries by title or ID…`}
           className="flex-1 bg-transparent text-sm outline-none"
           style={{ color: "var(--z-text)" }}
           autoFocus
         />
+        {state.query && (
+          <button
+            type="button"
+            onClick={() => setEntryPreview((prev) => ({ ...prev, query: "" }))}
+            className="shrink-0 opacity-50 transition-opacity hover:opacity-100"
+            style={{ color: "var(--z-muted)" }}
+          >
+            <FaTimesCircle className="size-3" />
+          </button>
+        )}
       </div>
 
+      {/* Results */}
       {filteredEntries.length > 0 ? (
-        <div className="max-h-96 space-y-1.5 overflow-y-auto">
+        <div className="max-h-96 space-y-1 overflow-y-auto pr-0.5">
           {filteredEntries.map((entry) => (
             <button
               key={entry.id}
@@ -1680,7 +1910,7 @@ function renderEntryPreviewSearch(
                 }))
               }
               className="
-                w-full cursor-pointer rounded-lg px-3 py-2.5 text-left transition-all
+                group w-full cursor-pointer rounded-xl px-3.5 py-2.5 text-left transition-all
                 hover:bg-z-card-high
               "
               style={{
@@ -1688,29 +1918,60 @@ function renderEntryPreviewSearch(
                 border: "1px solid var(--z-border)",
               }}
             >
-              <p
-                className="text-sm font-medium"
-                style={{ color: "var(--z-text)" }}
-              >
-                {getMediaEntryTitle(entry)}
-              </p>
-              <p className="mt-0.5 text-xs" style={{ color: "var(--z-muted)" }}>
-                ID: {entry.id}
-                {entry.status ? ` · ${entry.status}` : ""}
-              </p>
+              <div className="flex items-center justify-between gap-2">
+                <p
+                  className="text-sm font-semibold"
+                  style={{ color: "var(--z-text)" }}
+                >
+                  {getMediaEntryTitle(entry)}
+                </p>
+                <span
+                  className="
+                    shrink-0 text-[10px] opacity-0 transition-opacity
+                    group-hover:opacity-100
+                  "
+                  style={{ color: "var(--z-amber)" }}
+                >
+                  Preview →
+                </span>
+              </div>
+              <div className="mt-0.5 flex items-center gap-1.5">
+                <span
+                  className="text-[11px] tabular-nums"
+                  style={{ color: "var(--z-subtle)" }}
+                >
+                  ID {entry.id}
+                </span>
+                {entry.status && (
+                  <>
+                    <span style={{ color: "var(--z-border)" }}>·</span>
+                    <span
+                      className="text-[11px]"
+                      style={{ color: "var(--z-subtle)" }}
+                    >
+                      {entry.status}
+                    </span>
+                  </>
+                )}
+              </div>
             </button>
           ))}
         </div>
       ) : (
-        <p
-          className="py-6 text-center text-sm"
-          style={{ color: "var(--z-muted)" }}
+        <div
+          className="flex flex-col items-center justify-center py-10"
+          style={{ color: "var(--z-subtle)" }}
         >
-          {state.query ? "No entries match your search." : "No entries found."}
-        </p>
+          <FaSearch className="mb-3 size-5 opacity-30" />
+          <p className="text-sm">
+            {state.query
+              ? "No entries match your search."
+              : "No entries found."}
+          </p>
+        </div>
       )}
 
-      <p className="text-xs" style={{ color: "var(--z-subtle)" }}>
+      <p className="text-[11px]" style={{ color: "var(--z-subtle)" }}>
         {countLabel}
       </p>
     </div>
@@ -3332,50 +3593,7 @@ function PageData() {
   return (
     <Layout>
       <Breadcrumbs breadcrumbs={breadcrumbs} />
-      <div className="mx-auto w-full max-w-5xl px-4 py-10">
-        {/* Page Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
-        >
-          <p
-            className="mb-2 text-xs font-semibold tracking-widest uppercase"
-            style={{ color: "var(--z-amber)" }}
-          >
-            Step 2 of 3 — Custom Lists
-          </p>
-          <div className="flex items-start justify-between gap-4">
-            <h1
-              className="text-3xl font-black"
-              style={{
-                fontFamily: "var(--font-syne-var)",
-                color: "var(--z-text)",
-              }}
-            >
-              Your Custom Lists
-            </h1>
-            <button
-              type="button"
-              aria-label="Open help guide"
-              onClick={() => setShowHelp(true)}
-              className="
-                flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium
-                transition-all duration-200
-                hover:bg-z-card-up hover:text-z-text
-                active:scale-95
-              "
-              style={{
-                border: "1px solid var(--z-border-mid)",
-                color: "var(--z-muted)",
-              }}
-            >
-              <FaInfoCircle className="size-4" />
-              Help
-            </button>
-          </div>
-        </motion.div>
-
+      <div className="mx-auto w-full max-w-7xl px-4 pt-8 pb-20">
         {/* Backup Warning Banner */}
         {showBackupWarning && (
           <motion.div
@@ -3383,10 +3601,10 @@ function PageData() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.2 }}
-            className="mb-6 rounded-xl p-4"
+            className="mb-8 rounded-2xl p-4"
             style={{
-              backgroundColor: "rgba(248,113,113,0.07)",
-              border: "1px solid rgba(248,113,113,0.25)",
+              backgroundColor: "rgba(248,113,113,0.06)",
+              border: "1px solid rgba(248,113,113,0.2)",
             }}
           >
             <div className="flex items-start gap-3">
@@ -3456,74 +3674,120 @@ function PageData() {
           </motion.div>
         )}
 
-        {/* Anime / Manga Tabs */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.05 }}
-          className="mb-6"
-        >
-          <Tabs
-            defaultValue="ANIME"
-            value={activeTab}
-            onValueChange={(v) => setActiveTab(v as "ANIME" | "MANGA")}
-            className="w-full"
+        {/* ── Two-column layout ── */}
+        <div className="flex flex-col gap-8 lg:flex-row lg:items-start">
+          {/* ════════════════════ SIDEBAR ════════════════════ */}
+          <motion.aside
+            initial={{ opacity: 0, x: -16 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="w-full shrink-0 lg:sticky lg:top-24 lg:w-72 xl:w-80"
           >
-            <TabsList
-              className="grid w-full grid-cols-2"
-              style={{
-                backgroundColor: "var(--z-card)",
-                border: "1px solid var(--z-border)",
-              }}
-            >
-              <TabsTrigger
-                value="ANIME"
-                className="rounded-md font-semibold data-[state=active]:font-bold"
-                style={{ color: "var(--z-muted)" }}
+            {/* Step indicator + page title */}
+            <div className="mb-7">
+              <div className="flex items-center justify-between">
+                <p
+                  className="text-[11px] font-bold tracking-[0.2em] uppercase"
+                  style={{ color: "var(--z-amber)" }}
+                >
+                  Step 2 of 3
+                </p>
+                <button
+                  type="button"
+                  aria-label="Open help guide"
+                  onClick={() => setShowHelp(true)}
+                  className="
+                    flex cursor-pointer items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs
+                    font-medium transition-all duration-200
+                    hover:bg-z-card-up
+                    active:scale-95
+                  "
+                  style={{
+                    border: "1px solid var(--z-border)",
+                    color: "var(--z-muted)",
+                  }}
+                >
+                  <FaInfoCircle className="size-3.5" />
+                  Help
+                </button>
+              </div>
+              <h1
+                className="mt-1.5 text-2xl font-black"
+                style={{
+                  fontFamily: "var(--font-syne-var)",
+                  color: "var(--z-text)",
+                }}
               >
-                Anime Lists
-              </TabsTrigger>
-              <TabsTrigger
-                value="MANGA"
-                className="rounded-md font-semibold data-[state=active]:font-bold"
-                style={{ color: "var(--z-muted)" }}
-              >
-                Manga Lists
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </motion.div>
+                Custom Lists
+              </h1>
+              <p className="mt-0.5 text-sm" style={{ color: "var(--z-muted)" }}>
+                Configure rules for each list
+              </p>
+            </div>
 
-        {/* Toolbar */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="mb-6 space-y-4"
-        >
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-wrap gap-3">
+            {/* Media type tabs */}
+            <div className="mb-5">
+              <Tabs
+                defaultValue="ANIME"
+                value={activeTab}
+                onValueChange={(v) => setActiveTab(v as "ANIME" | "MANGA")}
+                className="w-full"
+              >
+                <TabsList
+                  className="grid w-full grid-cols-2"
+                  style={{
+                    backgroundColor: "var(--z-card)",
+                    border: "1px solid var(--z-border)",
+                  }}
+                >
+                  <TabsTrigger
+                    value="ANIME"
+                    className="rounded-md font-semibold data-[state=active]:font-bold"
+                    style={{ color: "var(--z-muted)" }}
+                  >
+                    Anime
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="MANGA"
+                    className="rounded-md font-semibold data-[state=active]:font-bold"
+                    style={{ color: "var(--z-muted)" }}
+                  >
+                    Manga
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+
+            {/* Actions section */}
+            <div className="mb-5 space-y-1.5">
+              <p
+                className="mb-2 text-[10px] font-bold tracking-[0.15em] uppercase"
+                style={{ color: "var(--z-subtle)" }}
+              >
+                Actions
+              </p>
+
               <button
                 onClick={() => fetchLists(activeTab)}
                 aria-label="Fetch lists from AniList"
                 className="
-                  flex items-center gap-2 rounded-lg px-5 py-2.5 font-bold transition-all
+                  flex w-full items-center gap-2.5 rounded-xl px-4 py-2.5 font-bold transition-all
                   duration-200
                   hover:brightness-110
                   active:scale-95
                 "
                 style={{ backgroundColor: "var(--z-amber)", color: "#07060f" }}
               >
-                <FaArrowDown className="size-4" />
+                <FaArrowDown className="size-4 shrink-0" />
                 {dataLoaded ? "Fetch Lists" : "Click to Fetch Lists"}
               </button>
+
               {!isListEmpty && (
                 <button
                   onClick={addNewList}
                   aria-label="Add new list"
                   className="
-                    flex cursor-pointer items-center gap-2 rounded-lg px-5 py-2.5 font-semibold
-                    transition-all duration-200
+                    flex w-full cursor-pointer items-center gap-2.5 rounded-xl px-4 py-2.5
+                    font-semibold transition-all duration-200
                     hover:bg-z-card-high
                     active:scale-95
                   "
@@ -3534,20 +3798,31 @@ function PageData() {
                   }}
                 >
                   <FaPlus
-                    className="size-4"
+                    className="size-4 shrink-0"
                     style={{ color: "var(--z-amber)" }}
                   />
                   Add New List
                 </button>
               )}
-              {!isListEmpty && (
+            </div>
+
+            {/* Analysis section */}
+            {!isListEmpty && (
+              <div className="mb-5 space-y-1.5">
+                <p
+                  className="mb-2 text-[10px] font-bold tracking-[0.15em] uppercase"
+                  style={{ color: "var(--z-subtle)" }}
+                >
+                  Analysis
+                </p>
+
                 <button
                   onClick={handleEstimateMatches}
                   aria-label="Estimate matching entries"
                   disabled={!canEstimateMatches || loading}
                   className="
-                    flex cursor-pointer items-center gap-2 rounded-lg px-5 py-2.5 font-semibold
-                    transition-all duration-200
+                    flex w-full cursor-pointer items-center gap-2.5 rounded-xl px-4 py-2.5
+                    font-semibold transition-all duration-200
                     hover:bg-z-card-high
                     active:scale-95
                     disabled:cursor-not-allowed disabled:opacity-40
@@ -3559,22 +3834,22 @@ function PageData() {
                   }}
                 >
                   <FaEye
-                    className="size-4"
+                    className="size-4 shrink-0"
                     style={{ color: "var(--z-frost)" }}
                   />
                   Estimate Matches
                 </button>
-              )}
-              {!isListEmpty && (
+
                 <button
                   onClick={handleOpenEntryPreview}
                   aria-label="Preview changes for a specific entry"
                   disabled={loading}
                   className="
-                    flex cursor-pointer items-center gap-2 rounded-lg px-5 py-2.5 font-semibold
-                    transition-all duration-200
+                    flex w-full cursor-pointer items-center gap-2.5 rounded-xl px-4 py-2.5
+                    font-semibold transition-all duration-200
                     hover:bg-z-card-high
                     active:scale-95
+                    disabled:cursor-not-allowed disabled:opacity-40
                   "
                   style={{
                     backgroundColor: "var(--z-card)",
@@ -3583,102 +3858,96 @@ function PageData() {
                   }}
                 >
                   <FaSearch
-                    className="size-4"
+                    className="size-4 shrink-0"
                     style={{ color: "var(--z-frost)" }}
                   />
                   Preview Entry
                 </button>
-              )}
-              {!isListEmpty && (
-                <button
-                  onClick={openSavePresetDialog}
-                  aria-label="Save current preset"
-                  className="
-                    flex cursor-pointer items-center gap-2 rounded-lg px-5 py-2.5 font-semibold
-                    transition-all duration-200
-                    hover:bg-z-card-high
-                    active:scale-95
-                  "
-                  style={{
-                    backgroundColor: "var(--z-card)",
-                    border: "1px solid var(--z-border-mid)",
-                    color: "var(--z-text)",
-                  }}
+              </div>
+            )}
+
+            {/* Presets panel */}
+            <div
+              className="mb-5 rounded-2xl p-4"
+              style={{
+                backgroundColor: "var(--z-card)",
+                border: "1px solid var(--z-border)",
+              }}
+            >
+              {/* Presets header */}
+              <div className="mb-3 flex items-center justify-between">
+                <p
+                  className="text-[10px] font-bold tracking-[0.15em] uppercase"
+                  style={{ color: "var(--z-subtle)" }}
                 >
-                  <FaSave
-                    className="size-4"
-                    style={{ color: "var(--z-amber)" }}
-                  />
-                  Save Preset
-                </button>
-              )}
-            </div>
-          </div>
-          <div
-            className="rounded-lg p-4"
-            style={{
-              backgroundColor: "var(--z-card)",
-              border: "1px solid var(--z-border)",
-            }}
-          >
-            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2
-                    className="text-sm font-bold"
-                    style={{ color: "var(--z-text)" }}
+                  Presets
+                </p>
+                <div className="flex items-center gap-2">
+                  <span
+                    className="text-[11px]"
+                    style={{ color: "var(--z-subtle)" }}
                   >
-                    Presets
-                  </h2>
+                    {presets.length} saved
+                  </span>
+                  <button
+                    type="button"
+                    onClick={openSavePresetDialog}
+                    aria-label="Save current preset"
+                    className="
+                      flex cursor-pointer items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs
+                      font-semibold transition-all
+                      hover:brightness-110
+                      active:scale-95
+                    "
+                    style={{
+                      backgroundColor: "var(--z-amber-dim)",
+                      color: "var(--z-amber)",
+                      border: "1px solid rgba(245,166,35,0.2)",
+                    }}
+                  >
+                    <FaSave className="size-3" />
+                    Save
+                  </button>
                 </div>
               </div>
 
-              <span
-                className="text-xs font-semibold"
-                style={{ color: "var(--z-subtle)" }}
+              {/* Preset select */}
+              <label className="sr-only" htmlFor="workflowPresetSelect">
+                Saved workflow presets
+              </label>
+              <select
+                id="workflowPresetSelect"
+                value={selectedPresetId}
+                onChange={(event) => setSelectedPresetId(event.target.value)}
+                className="mb-3 w-full rounded-xl px-3 py-2 text-sm focus:outline-none"
+                style={{
+                  backgroundColor: "var(--z-surface)",
+                  border: "1px solid var(--z-border-mid)",
+                  color: "var(--z-text)",
+                }}
               >
-                {presets.length} preset{presets.length === 1 ? "" : "s"} saved
-              </span>
-            </div>
+                {presets.length === 0 ? (
+                  <option value="">No presets saved yet</option>
+                ) : (
+                  presets.map((preset) => (
+                    <option key={preset.id} value={preset.id}>
+                      {preset.name} · {preset.mediaType.toLowerCase()} ·{" "}
+                      {preset.lists.length} list
+                      {preset.lists.length === 1 ? "" : "s"}
+                    </option>
+                  ))
+                )}
+              </select>
 
-            <div className="mt-4 flex flex-col gap-3 xl:flex-row xl:items-center">
-              <div className="min-w-0 flex-1">
-                <label className="sr-only" htmlFor="workflowPresetSelect">
-                  Saved workflow presets
-                </label>
-                <select
-                  id="workflowPresetSelect"
-                  value={selectedPresetId}
-                  onChange={(event) => setSelectedPresetId(event.target.value)}
-                  className="w-full rounded-lg px-3 py-2.5 text-sm focus:outline-none"
-                  style={{
-                    backgroundColor: "var(--z-surface)",
-                    border: "1px solid var(--z-border-mid)",
-                    color: "var(--z-text)",
-                  }}
-                >
-                  {presets.length === 0 ? (
-                    <option value="">No presets saved yet</option>
-                  ) : (
-                    presets.map((preset) => (
-                      <option key={preset.id} value={preset.id}>
-                        {preset.name} · {preset.mediaType.toLowerCase()} ·{" "}
-                        {preset.lists.length} configured list
-                        {preset.lists.length === 1 ? "" : "s"}
-                      </option>
-                    ))
-                  )}
-                </select>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
+              {/* Preset actions */}
+              <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={handleLoadPreset}
                   disabled={!selectedPreset}
                   className="
-                    inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold
-                    transition-all
+                    inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2
+                    text-xs font-semibold transition-all
                     hover:bg-z-card-high
                     active:scale-95
                     disabled:cursor-not-allowed disabled:opacity-40
@@ -3690,18 +3959,19 @@ function PageData() {
                   }}
                 >
                   <FaFolderOpen
-                    className="size-4"
+                    className="size-3.5"
                     style={{ color: "var(--z-frost)" }}
                   />
                   Load
                 </button>
+
                 <button
                   type="button"
                   onClick={openDuplicatePresetDialog}
                   disabled={!selectedPreset}
                   className="
-                    inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold
-                    transition-all
+                    inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2
+                    text-xs font-semibold transition-all
                     hover:bg-z-card-high
                     active:scale-95
                     disabled:cursor-not-allowed disabled:opacity-40
@@ -3713,137 +3983,159 @@ function PageData() {
                   }}
                 >
                   <FaCopy
-                    className="size-4"
+                    className="size-3.5"
                     style={{ color: "var(--z-amber)" }}
                   />
-                  Duplicate
+                  Copy
                 </button>
+
                 <button
                   type="button"
                   onClick={() => setShowDeletePresetModal(true)}
                   disabled={!selectedPreset}
                   className="
-                    inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold
-                    transition-all
+                    inline-flex size-9 items-center justify-center rounded-xl transition-all
                     hover:bg-[rgba(248,113,113,0.12)]
                     active:scale-95
                     disabled:cursor-not-allowed disabled:opacity-40
                   "
                   style={{
                     backgroundColor: "var(--z-card-up)",
-                    border: "1px solid rgba(248,113,113,0.18)",
+                    border: "1px solid rgba(248,113,113,0.15)",
                     color: "var(--z-red)",
                   }}
                 >
-                  <FaTrash className="size-4" />
-                  Delete
+                  <FaTrash className="size-3.5" />
                 </button>
               </div>
+
+              {selectedPreset && (
+                <p
+                  className="mt-3 text-[11px] leading-relaxed"
+                  style={{ color: "var(--z-subtle)" }}
+                >
+                  <span
+                    className="font-semibold"
+                    style={{ color: "var(--z-text)" }}
+                  >
+                    {selectedPreset.name}
+                  </span>{" "}
+                  — {selectedPreset.mediaType.toLowerCase()},{" "}
+                  {selectedPreset.lists.length} rule set
+                  {selectedPreset.lists.length === 1 ? "" : "s"}
+                </p>
+              )}
             </div>
 
-            {selectedPreset && (
-              <p className="mt-3 text-xs" style={{ color: "var(--z-subtle)" }}>
-                <span
-                  className="font-semibold"
+            {/* Settings: hide default status lists */}
+            {!isListEmpty && (
+              <div
+                className="mb-5 flex items-center gap-3 rounded-xl p-3"
+                style={{
+                  backgroundColor: "var(--z-card)",
+                  border: "1px solid var(--z-border)",
+                }}
+              >
+                <Checkbox
+                  id="hideDefaultStatusLists"
+                  checked={hideDefaultStatusLists}
+                  onCheckedChange={(checked: boolean) =>
+                    setHideDefaultStatusLists(checked)
+                  }
+                  className="size-4"
+                />
+                <label
+                  htmlFor="hideDefaultStatusLists"
+                  className="cursor-pointer text-sm font-medium"
                   style={{ color: "var(--z-text)" }}
                 >
-                  {selectedPreset.name}
-                </span>{" "}
-                targets {selectedPreset.mediaType.toLowerCase()} lists, stores{" "}
-                {selectedPreset.lists.length} configured list rule set
-                {selectedPreset.lists.length === 1 ? "" : "s"}, and remembers{" "}
-                {selectedPreset.listsToRemoveFromAllEntries.length}{" "}
-                remove-from-all selection
-                {selectedPreset.listsToRemoveFromAllEntries.length === 1
-                  ? ""
-                  : "s"}
-                .
-              </p>
+                  Hide Default Status Lists
+                </label>
+              </div>
             )}
-          </div>
-          {!isListEmpty && (
+
+            {/* Divider */}
             <div
-              className="flex items-center gap-3 rounded-lg p-3"
-              style={{
-                backgroundColor: "var(--z-card)",
-                border: "1px solid var(--z-border)",
-              }}
-            >
-              <Checkbox
-                id="hideDefaultStatusLists"
-                checked={hideDefaultStatusLists}
-                onCheckedChange={(checked: boolean) =>
-                  setHideDefaultStatusLists(checked)
-                }
-                className="size-5"
-              />
-              <label
-                htmlFor="hideDefaultStatusLists"
-                className="cursor-pointer text-sm font-medium"
-                style={{ color: "var(--z-text)" }}
+              className="mb-5"
+              style={{ borderTop: "1px solid var(--z-border)" }}
+            />
+
+            {/* Navigation */}
+            <div className="flex gap-3">
+              <button
+                aria-label="Back to login page"
+                onClick={() => router.push("/anilist-login")}
+                className="
+                  flex-1 cursor-pointer rounded-xl px-4 py-2.5 font-medium transition-all
+                  duration-200
+                  hover:bg-z-card-up
+                  active:scale-95
+                "
+                style={{
+                  border: "1px solid var(--z-border-mid)",
+                  color: "var(--z-muted)",
+                }}
               >
-                Hide Default Status Lists
-              </label>
+                Back
+              </button>
+              <button
+                aria-label="Proceed to update step"
+                onClick={confirmAndNavigate}
+                disabled={!canProceed}
+                className="
+                  flex-1 rounded-xl px-4 py-2.5 font-bold transition-all duration-200
+                  hover:brightness-110
+                  active:scale-95
+                  disabled:cursor-not-allowed disabled:opacity-40
+                "
+                style={{ backgroundColor: "var(--z-amber)", color: "#07060f" }}
+              >
+                Next →
+              </button>
             </div>
-          )}
-        </motion.div>
+          </motion.aside>
 
-        {/* Separator */}
-        <div
-          className="mb-6"
-          style={{ borderTop: "1px solid var(--z-border)" }}
-        />
-
-        {/* List Content */}
-        {renderListContent()}
-
-        {/* List count */}
-        {!isListEmpty && lists.length > 0 && (
-          <div className="mt-6 flex justify-center">
-            <span
-              className="rounded-full px-3 py-1 text-xs font-semibold"
-              style={{
-                backgroundColor: "var(--z-card)",
-                border: "1px solid var(--z-border)",
-                color: "var(--z-muted)",
-              }}
-            >
-              {lists.length} {lists.length === 1 ? "list" : "lists"}
-            </span>
-          </div>
-        )}
-
-        {/* Navigation */}
-        <div className="mt-10 flex justify-between">
-          <button
-            aria-label="Back to login page"
-            onClick={() => router.push("/anilist-login")}
-            className="
-              cursor-pointer rounded-lg px-4 py-2 font-medium transition-all duration-200
-              hover:bg-z-card-up hover:text-z-text
-              active:scale-95
-            "
-            style={{
-              border: "1px solid var(--z-border-mid)",
-              color: "var(--z-muted)",
-            }}
+          {/* ════════════════════ MAIN CONTENT ════════════════════ */}
+          <motion.main
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.06 }}
+            className="min-w-0 flex-1"
           >
-            Back
-          </button>
-          <button
-            aria-label="Proceed to update step"
-            onClick={confirmAndNavigate}
-            disabled={!canProceed}
-            className="
-              rounded-lg px-6 py-3 font-bold transition-all duration-200
-              hover:brightness-110
-              active:scale-95
-              disabled:cursor-not-allowed disabled:opacity-40
-            "
-            style={{ backgroundColor: "var(--z-amber)", color: "#07060f" }}
-          >
-            Next
-          </button>
+            {/* List header row */}
+            {!isListEmpty && lists.length > 0 && (
+              <div
+                className="mb-5 flex items-center gap-3 border-b pb-4"
+                style={{ borderColor: "var(--z-border)" }}
+              >
+                <h2
+                  className="text-lg font-black"
+                  style={{
+                    fontFamily: "var(--font-syne-var)",
+                    color: "var(--z-text)",
+                  }}
+                >
+                  {activeTab === "ANIME" ? "Anime" : "Manga"} Lists
+                </h2>
+                <span
+                  className="rounded-full px-2.5 py-0.5 text-xs font-semibold"
+                  style={{
+                    backgroundColor: "var(--z-card)",
+                    border: "1px solid var(--z-border)",
+                    color: "var(--z-muted)",
+                  }}
+                >
+                  {lists.length} {lists.length === 1 ? "list" : "lists"}
+                </span>
+                <span className="text-xs" style={{ color: "var(--z-subtle)" }}>
+                  {configuredLists.length} configured
+                </span>
+              </div>
+            )}
+
+            {/* List content */}
+            {renderListContent()}
+          </motion.main>
         </div>
       </div>
 
@@ -4102,40 +4394,69 @@ function PageData() {
         onClose={() => setShowAddModal(false)}
         onConfirm={handleAddListConfirm}
         title="Add New Custom List"
-        confirmButtonText="Add"
+        confirmButtonText="Add List"
       >
-        <div className="space-y-4">
-          <input
-            type="text"
-            name="newCustomListName"
-            className="w-full rounded-lg px-3 py-2 focus:outline-none"
-            style={{
-              backgroundColor: "var(--z-surface)",
-              border: "1px solid var(--z-border)",
-              color: "var(--z-text)",
-            }}
-            placeholder="Enter new list name"
-            value={newListName}
-            onChange={(e) => {
-              setNewListName(e.target.value);
-              setAddListError("");
-            }}
-            autoComplete="off"
-            autoFocus={shouldAutoFocusAddListInput}
-            maxLength={50}
-            aria-label="New list name"
-          />
-          {addListError && (
-            <div
-              className="rounded-lg px-3 py-2 text-sm"
-              style={{
-                backgroundColor: "rgba(248,113,113,0.1)",
-                color: "var(--z-red)",
-              }}
+        <div className="space-y-5">
+          <p className="text-sm" style={{ color: "var(--z-muted)" }}>
+            Name your new custom list. After adding, configure which entries
+            belong to it using include and exclude rules.
+          </p>
+          <div className="space-y-2">
+            <label
+              htmlFor="newCustomListNameInput"
+              className="text-[11px] font-bold tracking-[0.15em] uppercase"
+              style={{ color: "var(--z-subtle)" }}
             >
-              {addListError}
+              List Name
+            </label>
+            <input
+              id="newCustomListNameInput"
+              type="text"
+              name="newCustomListName"
+              className="w-full rounded-xl px-4 py-3 text-sm transition-colors focus:outline-none"
+              style={{
+                backgroundColor: "var(--z-card-up)",
+                border: addListError
+                  ? "1px solid rgba(248,113,113,0.5)"
+                  : "1px solid var(--z-border-mid)",
+                color: "var(--z-text)",
+              }}
+              placeholder="e.g. Completed Movies, High Score…"
+              value={newListName}
+              onChange={(e) => {
+                setNewListName(e.target.value);
+                setAddListError("");
+              }}
+              autoComplete="off"
+              autoFocus={shouldAutoFocusAddListInput}
+              maxLength={50}
+              aria-label="New list name"
+            />
+            <div className="flex items-center justify-between">
+              {addListError ? (
+                <p
+                  className="flex items-center gap-1.5 text-xs"
+                  style={{ color: "var(--z-red)" }}
+                >
+                  <FaExclamationTriangle className="size-3 shrink-0" />
+                  {addListError}
+                </p>
+              ) : (
+                <span />
+              )}
+              <p
+                className="text-[11px] tabular-nums"
+                style={{
+                  color:
+                    newListName.length > 45
+                      ? "var(--z-amber)"
+                      : "var(--z-subtle)",
+                }}
+              >
+                {newListName.length}/50
+              </p>
             </div>
-          )}
+          </div>
         </div>
       </Modal>
 
