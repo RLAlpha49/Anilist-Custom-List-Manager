@@ -15,6 +15,7 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { AnimatePresence, motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 // External Imports
@@ -38,6 +39,7 @@ import {
   FaInfoCircle,
   FaPlus,
   FaSave,
+  FaSearch,
   FaTimesCircle,
   FaTrash,
 } from "react-icons/fa";
@@ -52,14 +54,6 @@ import { SortableItem } from "@/components/sortable-item";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DynamicSelect } from "@/components/ui/dynamic-select";
 import Modal from "@/components/ui/modal";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Tooltip,
@@ -70,10 +64,13 @@ import {
 import { useAuth } from "@/context/auth-context";
 import { fetchAniList } from "@/lib/api";
 import {
+  computeEntryWorkflowUpdate,
   createEmptyRule,
   createEmptyRuleSet,
   estimateMatchesForListConfig,
   fetchAllWorkflowMediaEntries,
+  getCurrentCustomLists,
+  getMediaEntryTitle,
   hasActiveIncludeRules,
   normalizeCustomListRuleConfig,
   normalizeRuleSet,
@@ -110,6 +107,7 @@ import {
   CustomListApiResponse,
   hasCustomListOptionsData,
   ListCondition,
+  MediaEntry,
   MediaListResponse,
   OptionGroup,
   type WorkflowPreset,
@@ -164,6 +162,15 @@ interface MatchPreviewState {
   error: string | null;
 }
 
+interface EntryPreviewState {
+  open: boolean;
+  loading: boolean;
+  entries: MediaEntry[];
+  query: string;
+  selectedEntryId: number | null;
+  error: string | null;
+}
+
 interface CachedListState {
   lists: CustomList[];
   originalSectionOrder: string[];
@@ -202,33 +209,125 @@ const getApiErrorMessageWithRequestId = (
   return `${baseMessage} (Request ID: ${requestId})`;
 };
 
-const HELP_STEPS = [
-  {
-    step: "1",
-    title: "Select Anime or Manga",
-    desc: "Switch between Anime and Manga lists using the tabs at the top.",
-  },
-  {
-    step: "2",
-    title: "Fetch Your Lists",
-    desc: "Click Fetch Lists to load your custom lists from AniList.",
-  },
-  {
-    step: "3",
-    title: "Drag to Reorder",
-    desc: "Drag and drop lists to change their order. The new order is saved automatically.",
-  },
-  {
-    step: "4",
-    title: "Set Conditions",
-    desc: "Choose conditions for each list to control how entries are sorted and filtered.",
-  },
-  {
-    step: "5",
-    title: "Add, Rename, or Delete Lists",
-    desc: "Use the buttons to add new lists, rename, or delete existing ones.",
-  },
-];
+const DEFAULT_TEMPLATE_PRESET: WorkflowPreset = {
+  id: "built-in-default-template",
+  name: "Default Template (Example)",
+  mediaType: "ANIME",
+  hideDefaultStatusLists: false,
+  lists: [
+    {
+      name: "Watching",
+      ruleSet: {
+        operator: "ALL",
+        rules: [
+          {
+            id: "tmpl-watching",
+            condition: "Status set to Watching",
+            polarity: "include",
+          },
+        ],
+      },
+      selectedOption: "Status set to Watching",
+    },
+    {
+      name: "Completed",
+      ruleSet: {
+        operator: "ALL",
+        rules: [
+          {
+            id: "tmpl-completed",
+            condition: "Status set to Completed",
+            polarity: "include",
+          },
+        ],
+      },
+      selectedOption: "Status set to Completed",
+    },
+    {
+      name: "Dropped",
+      ruleSet: {
+        operator: "ALL",
+        rules: [
+          {
+            id: "tmpl-dropped",
+            condition: "Status set to Dropped",
+            polarity: "include",
+          },
+        ],
+      },
+      selectedOption: "Status set to Dropped",
+    },
+    {
+      name: "Paused",
+      ruleSet: {
+        operator: "ALL",
+        rules: [
+          {
+            id: "tmpl-paused",
+            condition: "Status set to Paused",
+            polarity: "include",
+          },
+        ],
+      },
+      selectedOption: "Status set to Paused",
+    },
+    {
+      name: "Planning",
+      ruleSet: {
+        operator: "ALL",
+        rules: [
+          {
+            id: "tmpl-planning",
+            condition: "Status set to Planning",
+            polarity: "include",
+          },
+        ],
+      },
+      selectedOption: "Status set to Planning",
+    },
+    {
+      name: "Rewatched",
+      ruleSet: {
+        operator: "ALL",
+        rules: [
+          { id: "tmpl-rewatched", condition: "Rewatched", polarity: "include" },
+        ],
+      },
+      selectedOption: "Rewatched",
+    },
+    {
+      name: "Movies",
+      ruleSet: {
+        operator: "ALL",
+        rules: [
+          {
+            id: "tmpl-movies",
+            condition: "Format set to Movie",
+            polarity: "include",
+          },
+        ],
+      },
+      selectedOption: "Format set to Movie",
+    },
+    {
+      name: "<5",
+      ruleSet: {
+        operator: "ALL",
+        rules: [
+          {
+            id: "tmpl-below5",
+            condition: "Score set to below 5",
+            polarity: "include",
+          },
+        ],
+      },
+      selectedOption: "Score set to below 5",
+    },
+  ],
+  listsToRemoveFromAllEntries: [],
+  createdAt: 0,
+  updatedAt: 0,
+};
 
 const EMPTY_LIST_STATE: CachedListState = {
   lists: [],
@@ -321,101 +420,618 @@ function useDesktopAutoFocus(isOpen: boolean): boolean {
   return shouldAutoFocus;
 }
 
-function CustomListManagerHelpSheet() {
+function CustomListManagerHelpModal({
+  isOpen,
+  onClose,
+  onLoadDefaultTemplate,
+}: Readonly<{
+  isOpen: boolean;
+  onClose: () => void;
+  onLoadDefaultTemplate: () => void;
+}>) {
+  const [section, setSection] = useState<"guide" | "conditions" | "tips">(
+    "guide",
+  );
+
   return (
-    <SheetContent
-      style={{
-        backgroundColor: "var(--z-surface)",
-        borderLeft: "1px solid var(--z-border)",
+    <DialogPrimitive.Root
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) onClose();
       }}
     >
-      <SheetHeader>
-        <div className="mb-2 flex items-center gap-2">
-          <FaInfoCircle
-            className="size-5"
-            style={{ color: "var(--z-amber)" }}
-          />
-          <SheetTitle
-            className="text-lg font-bold"
-            style={{
-              color: "var(--z-text)",
-              fontFamily: "var(--font-syne-var)",
-            }}
-          >
-            How to Use the Custom List Manager
-          </SheetTitle>
-        </div>
-        <SheetDescription style={{ color: "var(--z-muted)" }}>
-          Easily organize and manage your AniList custom lists with these steps:
-        </SheetDescription>
-      </SheetHeader>
-      <div className="mt-8 space-y-6">
-        <ol className="space-y-5">
-          {HELP_STEPS.map(({ step, title, desc }) => (
-            <li key={step} className="flex items-start gap-3">
-              <span
-                className="
-                  flex size-8 shrink-0 items-center justify-center rounded-full text-sm font-bold
-                "
+      <AnimatePresence>
+        {isOpen && (
+          <DialogPrimitive.Portal forceMount>
+            <DialogPrimitive.Overlay asChild>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.18 }}
+                className="fixed inset-0 z-50"
                 style={{
-                  backgroundColor: "var(--z-amber-dim)",
-                  color: "var(--z-amber)",
+                  backgroundColor: "rgba(7,6,15,0.88)",
+                  backdropFilter: "blur(14px)",
+                }}
+              />
+            </DialogPrimitive.Overlay>
+
+            <DialogPrimitive.Content asChild>
+              <motion.div
+                initial={{ opacity: 0, scale: 0.96, y: 16 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.96, y: 16 }}
+                transition={{ type: "spring", stiffness: 380, damping: 34 }}
+                className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                onClick={(e) => {
+                  if (e.target === e.currentTarget) onClose();
                 }}
               >
-                {step}
-              </span>
-              <div>
-                <span
-                  className="font-semibold"
-                  style={{ color: "var(--z-text)" }}
+                <div
+                  className="relative flex h-[90vh] w-full max-w-4xl flex-col overflow-hidden"
+                  style={{
+                    backgroundColor: "var(--z-surface)",
+                    border: "1px solid var(--z-border-mid)",
+                    borderRadius: "1rem",
+                    boxShadow: "0 40px 100px rgba(0,0,0,0.7)",
+                  }}
                 >
-                  {title}
-                </span>
-                <p className="text-sm" style={{ color: "var(--z-muted)" }}>
-                  {desc}
-                </p>
-              </div>
-            </li>
-          ))}
-        </ol>
-        <div
-          className="rounded-lg p-4"
-          style={{
-            backgroundColor: "var(--z-amber-dim)",
-            border: "1px solid var(--z-border)",
-          }}
-        >
-          <div className="flex items-start gap-2">
-            <FaInfoCircle
-              className="mt-0.5 size-5 shrink-0"
-              style={{ color: "var(--z-amber)" }}
-            />
-            <div>
-              <span
-                className="font-semibold"
-                style={{ color: "var(--z-amber)" }}
-              >
-                Tips:
-              </span>
-              <ul
-                className="mt-1 list-disc space-y-1 pl-5 text-sm"
-                style={{ color: "var(--z-text)" }}
-              >
-                <li>
-                  You can hide default status lists using the checkbox below the
-                  toolbar.
-                </li>
-                <li>
-                  Click <span className="font-medium">Next</span> to proceed to
-                  updating your lists after setting conditions.
-                </li>
-                <li>Hover over icons for tooltips describing their actions.</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </div>
-    </SheetContent>
+                  {/* Modal header */}
+                  <div
+                    className="flex shrink-0 items-center justify-between px-7 pt-5 pb-4"
+                    style={{
+                      borderBottom: "1px solid var(--z-border)",
+                      backgroundColor: "rgba(255,255,255,0.015)",
+                    }}
+                  >
+                    <div className="flex items-center gap-3">
+                      <FaInfoCircle
+                        className="size-5"
+                        style={{ color: "var(--z-amber)" }}
+                      />
+                      <DialogPrimitive.Title
+                        className="text-xl font-black"
+                        style={{
+                          color: "var(--z-text)",
+                          fontFamily: "var(--font-syne-var)",
+                        }}
+                      >
+                        Custom List Manager Guide
+                      </DialogPrimitive.Title>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      aria-label="Close guide"
+                      className="
+                        flex size-8 cursor-pointer items-center justify-center rounded-lg
+                        transition-all duration-200
+                        hover:bg-z-card-high
+                        active:scale-90
+                      "
+                      style={{ color: "var(--z-muted)" }}
+                    >
+                      <FaTimesCircle size={15} />
+                    </button>
+                  </div>
+
+                  {/* Section nav */}
+                  <div className="shrink-0 px-7 pt-5">
+                    <div
+                      className="grid grid-cols-3 gap-1 rounded-lg p-1"
+                      style={{
+                        backgroundColor: "var(--z-card)",
+                        border: "1px solid var(--z-border)",
+                      }}
+                    >
+                      {(
+                        [
+                          { id: "guide", label: "Guide" },
+                          { id: "conditions", label: "Conditions" },
+                          { id: "tips", label: "Tips" },
+                        ] as const
+                      ).map(({ id, label }) => (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => setSection(id)}
+                          className="rounded-md py-1.5 text-xs font-semibold transition-all"
+                          style={{
+                            backgroundColor:
+                              section === id ? "var(--z-amber)" : "transparent",
+                            color:
+                              section === id ? "#07060f" : "var(--z-muted)",
+                          }}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex-1 space-y-5 overflow-y-auto px-7 py-5 pb-8">
+                    {/* ── GUIDE ── */}
+                    {section === "guide" && (
+                      <>
+                        {/* 3-step overview */}
+                        <div
+                          className="rounded-lg p-4"
+                          style={{
+                            backgroundColor: "var(--z-card)",
+                            border: "1px solid var(--z-border)",
+                          }}
+                        >
+                          <p
+                            className="mb-2 text-xs font-bold tracking-wider uppercase"
+                            style={{ color: "var(--z-amber)" }}
+                          >
+                            3-Step Workflow
+                          </p>
+                          {[
+                            {
+                              n: "1",
+                              label: "Login",
+                              desc: "Connect your AniList account via OAuth.",
+                            },
+                            {
+                              n: "2",
+                              label: "Configure Lists",
+                              desc: "Fetch your lists, set rules, and define conditions.",
+                            },
+                            {
+                              n: "3",
+                              label: "Update",
+                              desc: "Apply changes — entries are sorted automatically.",
+                            },
+                          ].map(({ n, label, desc }) => (
+                            <div
+                              key={n}
+                              className="mt-2 flex items-start gap-2"
+                            >
+                              <span
+                                className="
+                                  flex size-5 shrink-0 items-center justify-center rounded-full
+                                  text-[10px] font-bold
+                                "
+                                style={{
+                                  backgroundColor: "var(--z-amber-dim)",
+                                  color: "var(--z-amber)",
+                                }}
+                              >
+                                {n}
+                              </span>
+                              <p
+                                className="text-xs"
+                                style={{ color: "var(--z-muted)" }}
+                              >
+                                <span
+                                  className="font-semibold"
+                                  style={{ color: "var(--z-text)" }}
+                                >
+                                  {label} —{" "}
+                                </span>
+                                {desc}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Detailed steps */}
+                        <p
+                          className="text-xs font-bold tracking-wider uppercase"
+                          style={{ color: "var(--z-subtle)" }}
+                        >
+                          Detailed Steps
+                        </p>
+                        {[
+                          {
+                            num: "1",
+                            title: "Select Anime or Manga",
+                            body: "Use the Anime Lists / Manga Lists tabs to switch between your two list libraries. Rules are configured independently for each media type.",
+                            example: null,
+                          },
+                          {
+                            num: "2",
+                            title: "Fetch Your Lists",
+                            body: 'Click "Fetch Lists" to load your custom lists from AniList. This reads your current list names and section order. Refetch if you rename or add lists directly on AniList.',
+                            example: null,
+                          },
+                          {
+                            num: "3",
+                            title: "Drag to Reorder",
+                            body: "Grab any list row and drag it up or down. The new order is saved to AniList automatically after a short delay.",
+                            example: null,
+                          },
+                          {
+                            num: "4",
+                            title: "Set Rules for Each List",
+                            body: 'Each list can have multiple rules. Choose "Include" to add entries that match a condition, "Exclude" to block entries that match. "Match all" (AND) requires every include rule to pass. "Match any" (OR) requires at least one.',
+                            example:
+                              'Example: "Completed Movies" list → include "Status set to Completed" + include "Format set to Movie" with Match all.',
+                          },
+                          {
+                            num: "5",
+                            title: "Estimate Matches",
+                            body: "Click \"Estimate Matches\" to preview how many entries from your library would match each list's rules before committing to an update. Sample titles confirm you're targeting the right entries.",
+                            example: null,
+                          },
+                          {
+                            num: "6",
+                            title: "Preview Entry",
+                            body: 'Click "Preview Entry" to search for a specific title or ID and see exactly which lists it would be added to or removed from based on your current rules — useful for edge-case checking.',
+                            example: null,
+                          },
+                          {
+                            num: "7",
+                            title: "Save a Preset",
+                            body: 'Click "Save Preset" to store your current rule configuration locally. Presets remember the media type, all list rules, visibility preferences, and remove-from-all selections. They are browser-local and not synced to AniList.',
+                            example: null,
+                          },
+                          {
+                            num: "8",
+                            title: "Mark Lists for Removal",
+                            body: 'Use the trash icon on any list and select "Remove from all entries". During the next update, every entry that has this list will have it removed. Useful when cleaning up old or reorganised lists.',
+                            example: null,
+                          },
+                          {
+                            num: "9",
+                            title: "Proceed to Update",
+                            body: 'Click "Next" to review a summary of what will change. The update page then processes your library entry by entry, respecting AniList rate limits automatically.',
+                            example: null,
+                          },
+                        ].map(({ num, title, body, example }) => (
+                          <div
+                            key={num}
+                            className="rounded-lg p-4"
+                            style={{
+                              backgroundColor: "var(--z-card-up)",
+                              border: "1px solid var(--z-border)",
+                            }}
+                          >
+                            <div className="mb-2 flex items-center gap-2">
+                              <span
+                                className="
+                                  flex size-6 shrink-0 items-center justify-center rounded-full
+                                  text-xs font-bold
+                                "
+                                style={{
+                                  backgroundColor: "var(--z-amber-dim)",
+                                  color: "var(--z-amber)",
+                                }}
+                              >
+                                {num}
+                              </span>
+                              <span
+                                className="text-sm font-semibold"
+                                style={{ color: "var(--z-text)" }}
+                              >
+                                {title}
+                              </span>
+                            </div>
+                            <p
+                              className="text-xs/relaxed"
+                              style={{ color: "var(--z-muted)" }}
+                            >
+                              {body}
+                            </p>
+                            {example && (
+                              <p
+                                className="mt-2 rounded-sm px-2 py-1.5 text-xs italic"
+                                style={{
+                                  backgroundColor: "var(--z-amber-dim)",
+                                  color: "var(--z-amber)",
+                                }}
+                              >
+                                {example}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+
+                        {/* Default Template */}
+                        <div
+                          className="rounded-lg p-4"
+                          style={{
+                            backgroundColor: "var(--z-card)",
+                            border: "1px solid var(--z-border)",
+                          }}
+                        >
+                          <p
+                            className="mb-1 text-sm font-semibold"
+                            style={{ color: "var(--z-text)" }}
+                          >
+                            Load Default Template
+                          </p>
+                          <p
+                            className="mb-3 text-xs/relaxed"
+                            style={{ color: "var(--z-muted)" }}
+                          >
+                            Not sure where to start? Load a sample preset with
+                            common list rules (Watching, Completed, Movies, and
+                            more) as a starting point. This adds it to your
+                            local presets — your AniList lists are not changed
+                            until you run an update.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={onLoadDefaultTemplate}
+                            className="
+                              inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm
+                              font-semibold transition-all
+                              hover:brightness-110
+                              active:scale-95
+                            "
+                            style={{
+                              backgroundColor: "var(--z-amber)",
+                              color: "#07060f",
+                            }}
+                          >
+                            <FaFolderOpen className="size-4" />
+                            Load Default Template
+                          </button>
+                        </div>
+                      </>
+                    )}
+
+                    {/* ── CONDITIONS ── */}
+                    {section === "conditions" && (
+                      <div className="space-y-5">
+                        <p
+                          className="text-xs/relaxed"
+                          style={{ color: "var(--z-muted)" }}
+                        >
+                          All condition values available for include and exclude
+                          rules. Conditions are matched against each library
+                          entry at update time.
+                        </p>
+                        {[
+                          {
+                            category: "Status",
+                            accent: "var(--z-frost)",
+                            bg: "rgba(103,193,245,0.08)",
+                            conditions: [
+                              {
+                                label: "Status set to Watching",
+                                desc: "Currently watching / reading",
+                              },
+                              {
+                                label: "Status set to Completed",
+                                desc: "Finished",
+                              },
+                              {
+                                label: "Status set to Planning",
+                                desc: "Plan to watch / read",
+                              },
+                              {
+                                label: "Status set to Dropped",
+                                desc: "Dropped",
+                              },
+                              {
+                                label: "Status set to Paused",
+                                desc: "Paused / on hold",
+                              },
+                              {
+                                label: "Status set to Repeating",
+                                desc: "Rewatching / rereading",
+                              },
+                            ],
+                          },
+                          {
+                            category: "Score",
+                            accent: "var(--z-amber)",
+                            bg: "var(--z-amber-dim)",
+                            conditions: [
+                              {
+                                label: "Score set to 10",
+                                desc: "Exactly 10 — repeat for 1–9",
+                              },
+                              {
+                                label: "Score set to below 5",
+                                desc: "Score 1–4 (unscored = 0 is excluded)",
+                              },
+                            ],
+                          },
+                          {
+                            category: "Format (Anime)",
+                            accent: "var(--z-pink)",
+                            bg: "rgba(236,72,153,0.08)",
+                            conditions: [
+                              { label: "Format set to TV", desc: "TV series" },
+                              {
+                                label: "Format set to Movie",
+                                desc: "Feature films",
+                              },
+                              {
+                                label: "Format set to OVA",
+                                desc: "Original Video Animations",
+                              },
+                              {
+                                label: "Format set to ONA",
+                                desc: "Original Net Animations",
+                              },
+                              {
+                                label: "Format set to Special",
+                                desc: "Specials & short films",
+                              },
+                            ],
+                          },
+                          {
+                            category: "Format (Manga)",
+                            accent: "var(--z-pink)",
+                            bg: "rgba(236,72,153,0.08)",
+                            conditions: [
+                              {
+                                label: "Format set to Manga (Japan)",
+                                desc: "Japanese manga",
+                              },
+                              {
+                                label: "Format set to Manga (South Korean)",
+                                desc: "Korean manhwa",
+                              },
+                              {
+                                label: "Format set to Manga (Chinese)",
+                                desc: "Chinese manhua",
+                              },
+                              {
+                                label: "Format set to Novel",
+                                desc: "Light novels",
+                              },
+                              {
+                                label: "Format set to One shot",
+                                desc: "Single-chapter works",
+                              },
+                            ],
+                          },
+                          {
+                            category: "Genres",
+                            accent: "var(--z-frost)",
+                            bg: "rgba(103,193,245,0.08)",
+                            conditions: [
+                              {
+                                label: "Genres contain Action",
+                                desc: "Has the Action genre — works for any AniList genre",
+                              },
+                              {
+                                label: "Genres contain Romance",
+                                desc: "Has the Romance genre",
+                              },
+                            ],
+                          },
+                          {
+                            category: "Tags & Tag Categories",
+                            accent: "var(--z-frost)",
+                            bg: "rgba(103,193,245,0.08)",
+                            conditions: [
+                              {
+                                label: "Tags contain Isekai",
+                                desc: "Has the Isekai tag",
+                              },
+                              {
+                                label: "Tag Categories contain Action",
+                                desc: "Has any tag in the Action category",
+                              },
+                            ],
+                          },
+                          {
+                            category: "Misc",
+                            accent: "var(--z-muted)",
+                            bg: "var(--z-card-up)",
+                            conditions: [
+                              {
+                                label: "Rewatched",
+                                desc: "Re-watched or re-read at least once (repeat > 0)",
+                              },
+                              {
+                                label: "Adult (18+)",
+                                desc: "Marked as adult content on AniList",
+                              },
+                            ],
+                          },
+                        ].map(({ category, accent, bg, conditions }) => (
+                          <div
+                            key={category}
+                            className="overflow-hidden rounded-lg"
+                            style={{ border: "1px solid var(--z-border)" }}
+                          >
+                            <div
+                              className="px-4 py-2"
+                              style={{ backgroundColor: bg }}
+                            >
+                              <span
+                                className="text-xs font-bold tracking-wider uppercase"
+                                style={{ color: accent }}
+                              >
+                                {category}
+                              </span>
+                            </div>
+                            <div
+                              className="divide-y"
+                              style={{ borderColor: "var(--z-border)" }}
+                            >
+                              {conditions.map(({ label, desc }) => (
+                                <div
+                                  key={label}
+                                  className="
+                                    flex flex-col gap-1 px-4 py-2.5
+                                    sm:flex-row sm:items-start sm:gap-3
+                                  "
+                                >
+                                  <code
+                                    className="
+                                      shrink-0 self-start rounded-sm px-1.5 py-0.5 text-[11px]
+                                    "
+                                    style={{
+                                      backgroundColor: "var(--z-card-up)",
+                                      color: "var(--z-text)",
+                                      border: "1px solid var(--z-border)",
+                                    }}
+                                  >
+                                    {label}
+                                  </code>
+                                  <span
+                                    className="text-xs"
+                                    style={{ color: "var(--z-muted)" }}
+                                  >
+                                    {desc}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* ── TIPS & SAFETY ── */}
+                    {section === "tips" && (
+                      <div className="space-y-4">
+                        <div
+                          className="rounded-lg p-4"
+                          style={{
+                            backgroundColor: "var(--z-card)",
+                            border: "1px solid var(--z-border)",
+                          }}
+                        >
+                          <p
+                            className="mb-3 text-xs font-bold tracking-wider uppercase"
+                            style={{ color: "var(--z-frost)" }}
+                          >
+                            Best Practices
+                          </p>
+                          <ul className="space-y-2.5">
+                            {[
+                              'Use "Estimate Matches" before updating to confirm your rules target the right entries.',
+                              'Use "Preview Entry" to check a specific title — especially helpful for edge cases.',
+                              '"Match all" (AND) is strict: every include rule must pass. "Match any" (OR) is broad: one rule suffices.',
+                              "Exclude rules always run after include rules. An entry passes include rules but is still blocked if any exclude rule matches.",
+                              "Hide Default Status Lists once your custom lists cover all entries to keep your AniList view clean.",
+                              "If an entry matches no configured include rules, it remains in its current custom lists unchanged.",
+                              "Hover over toolbar icons for tooltips describing their actions.",
+                            ].map((tip) => (
+                              <li
+                                key={tip}
+                                className="flex gap-2 text-xs"
+                                style={{ color: "var(--z-text)" }}
+                              >
+                                <span style={{ color: "var(--z-frost)" }}>
+                                  •
+                                </span>
+                                {tip}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            </DialogPrimitive.Content>
+          </DialogPrimitive.Portal>
+        )}
+      </AnimatePresence>
+    </DialogPrimitive.Root>
   );
 }
 
@@ -843,6 +1459,342 @@ function renderMatchPreviewContent(
   );
 }
 
+function buildChangeSummary(
+  changed: boolean,
+  added: string[],
+  removed: string[],
+  shouldHide: boolean,
+): string {
+  if (!changed) {
+    return "No changes would be made to this entry with the current rules.";
+  }
+  const parts: string[] = ["This entry would be modified."];
+  if (added.length > 0) parts.push(`Added to: ${added.join(", ")}.`);
+  if (removed.length > 0) parts.push(`Removed from: ${removed.join(", ")}.`);
+  if (shouldHide) parts.push("Default status list will be hidden.");
+  return parts.join(" ");
+}
+
+function renderEntryPreviewSelected(
+  selectedEntry: MediaEntry,
+  currentLists: string[],
+  result: ReturnType<typeof computeEntryWorkflowUpdate>,
+  added: string[],
+  removed: string[],
+  setEntryPreview: (
+    updater: (prev: EntryPreviewState) => EntryPreviewState,
+  ) => void,
+): ReactNode {
+  const summary = buildChangeSummary(
+    result.changed,
+    added,
+    removed,
+    result.shouldHide,
+  );
+
+  return (
+    <div className="space-y-4">
+      <button
+        type="button"
+        onClick={() =>
+          setEntryPreview((prev) => ({ ...prev, selectedEntryId: null }))
+        }
+        className="flex items-center gap-1.5 text-xs transition-opacity hover:opacity-70"
+        style={{ color: "var(--z-muted)" }}
+      >
+        ← Back to search
+      </button>
+
+      <div
+        className="rounded-lg p-3"
+        style={{
+          backgroundColor: "var(--z-card-up)",
+          border: "1px solid var(--z-border)",
+        }}
+      >
+        <p className="font-semibold" style={{ color: "var(--z-text)" }}>
+          {getMediaEntryTitle(selectedEntry)}
+        </p>
+        <p className="mt-1 text-xs" style={{ color: "var(--z-muted)" }}>
+          ID: {selectedEntry.id}
+          {selectedEntry.status ? ` · ${selectedEntry.status}` : ""}
+        </p>
+      </div>
+
+      <div className="space-y-3">
+        <div>
+          <p
+            className="mb-1.5 text-xs font-semibold"
+            style={{ color: "var(--z-muted)" }}
+          >
+            Current custom lists
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {currentLists.length > 0 ? (
+              currentLists.map((name) => (
+                <span
+                  key={name}
+                  className="rounded-sm px-2 py-0.5 text-xs"
+                  style={{
+                    backgroundColor: "var(--z-card-up)",
+                    border: "1px solid var(--z-border)",
+                    color: "var(--z-text)",
+                  }}
+                >
+                  {name}
+                </span>
+              ))
+            ) : (
+              <span
+                className="text-xs italic"
+                style={{ color: "var(--z-muted)" }}
+              >
+                No custom lists
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div>
+          <p
+            className="mb-1.5 text-xs font-semibold"
+            style={{ color: "var(--z-muted)" }}
+          >
+            After update
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {result.newLists.map((name) => {
+              const isNew = added.includes(name);
+              const addedPrefix = isNew ? "+ " : "";
+              return (
+                <span
+                  key={name}
+                  className="rounded-sm px-2 py-0.5 text-xs font-medium"
+                  style={{
+                    backgroundColor: isNew
+                      ? "rgba(74,222,128,0.12)"
+                      : "var(--z-card-up)",
+                    border: isNew
+                      ? "1px solid rgba(74,222,128,0.3)"
+                      : "1px solid var(--z-border)",
+                    color: isNew ? "#4ade80" : "var(--z-text)",
+                  }}
+                >
+                  {addedPrefix}
+                  {name}
+                </span>
+              );
+            })}
+            {removed.map((name) => (
+              <span
+                key={name}
+                className="rounded-sm px-2 py-0.5 text-xs font-medium line-through"
+                style={{
+                  backgroundColor: "rgba(248,113,113,0.08)",
+                  border: "1px solid rgba(248,113,113,0.2)",
+                  color: "var(--z-red)",
+                }}
+              >
+                {name}
+              </span>
+            ))}
+            {result.newLists.length === 0 && removed.length === 0 && (
+              <span
+                className="text-xs italic"
+                style={{ color: "var(--z-muted)" }}
+              >
+                No custom lists after update
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div
+          className="rounded-lg p-3 text-xs"
+          style={{
+            backgroundColor: result.changed
+              ? "rgba(74,222,128,0.07)"
+              : "var(--z-card-up)",
+            border: result.changed
+              ? "1px solid rgba(74,222,128,0.2)"
+              : "1px solid var(--z-border)",
+            color: result.changed ? "#4ade80" : "var(--z-muted)",
+          }}
+        >
+          {summary}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function renderEntryPreviewSearch(
+  state: EntryPreviewState,
+  filteredEntries: MediaEntry[],
+  listType: MediaType,
+  setEntryPreview: (
+    updater: (prev: EntryPreviewState) => EntryPreviewState,
+  ) => void,
+): ReactNode {
+  const resultWord = filteredEntries.length === 1 ? "result" : "results";
+  const countLabel = state.query.trim()
+    ? `${filteredEntries.length} ${resultWord}`
+    : `Showing ${filteredEntries.length} of ${state.entries.length} ${listType.toLowerCase()} entries`;
+
+  return (
+    <div className="space-y-3">
+      <div
+        className="flex items-center gap-2 rounded-lg px-3 py-2"
+        style={{
+          backgroundColor: "var(--z-card-up)",
+          border: "1px solid var(--z-border)",
+        }}
+      >
+        <FaSearch
+          className="size-3.5 shrink-0"
+          style={{ color: "var(--z-muted)" }}
+        />
+        <input
+          type="text"
+          value={state.query}
+          onChange={(e) =>
+            setEntryPreview((prev) => ({ ...prev, query: e.target.value }))
+          }
+          placeholder="Search by title or ID…"
+          className="flex-1 bg-transparent text-sm outline-none"
+          style={{ color: "var(--z-text)" }}
+          autoFocus
+        />
+      </div>
+
+      {filteredEntries.length > 0 ? (
+        <div className="max-h-96 space-y-1.5 overflow-y-auto">
+          {filteredEntries.map((entry) => (
+            <button
+              key={entry.id}
+              type="button"
+              onClick={() =>
+                setEntryPreview((prev) => ({
+                  ...prev,
+                  selectedEntryId: entry.id,
+                }))
+              }
+              className="
+                w-full cursor-pointer rounded-lg px-3 py-2.5 text-left transition-all
+                hover:bg-z-card-high
+              "
+              style={{
+                backgroundColor: "var(--z-card-up)",
+                border: "1px solid var(--z-border)",
+              }}
+            >
+              <p
+                className="text-sm font-medium"
+                style={{ color: "var(--z-text)" }}
+              >
+                {getMediaEntryTitle(entry)}
+              </p>
+              <p className="mt-0.5 text-xs" style={{ color: "var(--z-muted)" }}>
+                ID: {entry.id}
+                {entry.status ? ` · ${entry.status}` : ""}
+              </p>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <p
+          className="py-6 text-center text-sm"
+          style={{ color: "var(--z-muted)" }}
+        >
+          {state.query ? "No entries match your search." : "No entries found."}
+        </p>
+      )}
+
+      <p className="text-xs" style={{ color: "var(--z-subtle)" }}>
+        {countLabel}
+      </p>
+    </div>
+  );
+}
+
+function renderEntryPreviewContent(
+  state: EntryPreviewState,
+  lists: CustomList[],
+  listsToRemoveFromAllEntries: string[],
+  hideDefaultStatusLists: boolean,
+  listType: MediaType,
+  setEntryPreview: (
+    updater: (prev: EntryPreviewState) => EntryPreviewState,
+  ) => void,
+): ReactNode {
+  if (state.loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-8">
+        <LoadingIndicator size="lg" />
+        <p className="mt-4 text-sm" style={{ color: "var(--z-muted)" }}>
+          Loading your {listType.toLowerCase()} library...
+        </p>
+      </div>
+    );
+  }
+
+  if (state.error) {
+    return (
+      <div
+        className="rounded-lg p-4 text-sm"
+        style={{
+          backgroundColor: "rgba(248,113,113,0.1)",
+          border: "1px solid rgba(248,113,113,0.2)",
+          color: "var(--z-red)",
+        }}
+      >
+        {state.error}
+      </div>
+    );
+  }
+
+  const selectedEntry = state.selectedEntryId
+    ? state.entries.find((e) => e.id === state.selectedEntryId)
+    : undefined;
+
+  const filteredEntries = state.query.trim()
+    ? state.entries.filter((e) => {
+        const q = state.query.trim().toLowerCase();
+        return (
+          getMediaEntryTitle(e).toLowerCase().includes(q) ||
+          String(e.id).includes(q)
+        );
+      })
+    : state.entries.slice(0, 50);
+
+  if (selectedEntry) {
+    const result = computeEntryWorkflowUpdate(
+      selectedEntry,
+      lists,
+      listsToRemoveFromAllEntries,
+      hideDefaultStatusLists,
+    );
+    const currentLists = getCurrentCustomLists(selectedEntry);
+    const added = result.newLists.filter((n) => !currentLists.includes(n));
+    const removed = currentLists.filter((n) => !result.newLists.includes(n));
+    return renderEntryPreviewSelected(
+      selectedEntry,
+      currentLists,
+      result,
+      added,
+      removed,
+      setEntryPreview,
+    );
+  }
+
+  return renderEntryPreviewSearch(
+    state,
+    filteredEntries,
+    listType,
+    setEntryPreview,
+  );
+}
+
 function PageData() {
   const buildListOptionsVariables = useCallback(
     (
@@ -914,11 +1866,24 @@ function PageData() {
     useState<PresetDialogMode | null>(null);
   const [presetNameDraft, setPresetNameDraft] = useState("");
   const [showDeletePresetModal, setShowDeletePresetModal] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+  const [showBackupWarning, setShowBackupWarning] = useState(() => {
+    if (globalThis.window === undefined) return true;
+    return localStorage.getItem("aclm:ui:backup-warning-dismissed") !== "true";
+  });
   const [matchPreview, setMatchPreview] = useState<MatchPreviewState>({
     open: false,
     loading: false,
     entryCount: 0,
     estimates: [],
+    error: null,
+  });
+  const [entryPreview, setEntryPreview] = useState<EntryPreviewState>({
+    open: false,
+    loading: false,
+    entries: [],
+    query: "",
+    selectedEntryId: null,
     error: null,
   });
   const shouldAutoFocusAddListInput = useDesktopAutoFocus(showAddModal);
@@ -1812,6 +2777,22 @@ function PageData() {
     });
   }, [presets, selectedPresetId]);
 
+  const handleLoadDefaultTemplate = useCallback(() => {
+    const timestamp = Date.now();
+    const newPreset: WorkflowPreset = {
+      ...DEFAULT_TEMPLATE_PRESET,
+      id: `default-template-${timestamp}`,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+    setPresets((prev) => [newPreset, ...prev]);
+    setSelectedPresetId(newPreset.id);
+    toast.success("Default template loaded", {
+      description:
+        'The template preset has been added to your local presets. Load it with "Load Preset" to apply its rules.',
+    });
+  }, []);
+
   const handleEstimateMatches = useCallback(async () => {
     const relevantLists = lists.filter((list) =>
       hasActiveIncludeRules(list.ruleSet, list.selectedOption),
@@ -1902,6 +2883,46 @@ function PageData() {
       });
     }
   }, [fetchAniListData, listType, lists, listsToRemoveFromAllEntries, userId]);
+
+  const handleOpenEntryPreview = useCallback(async () => {
+    if (!userId) {
+      toast.error("Error", { description: "User ID is not available." });
+      return;
+    }
+
+    setEntryPreview({
+      open: true,
+      loading: true,
+      entries: [],
+      query: "",
+      selectedEntryId: null,
+      error: null,
+    });
+
+    try {
+      const entries = await fetchAllWorkflowMediaEntries({
+        userId,
+        type: listType,
+        fetchPage: async (variables: WorkflowMediaListQueryVariables) =>
+          await fetchAniListData<
+            MediaListResponse["data"],
+            WorkflowMediaListQueryVariables
+          >(WORKFLOW_MEDIA_LIST_QUERY, variables),
+      });
+
+      setEntryPreview((prev) => ({ ...prev, loading: false, entries }));
+    } catch (error) {
+      const apiError = error as ApiError;
+      setEntryPreview((prev) => ({
+        ...prev,
+        loading: false,
+        error: getApiErrorMessageWithRequestId(
+          apiError,
+          "Failed to load library entries.",
+        ),
+      }));
+    }
+  }, [fetchAniListData, listType, userId]);
 
   const openRenameModal = useCallback((list: CustomList): void => {
     setCurrentEditList(list);
@@ -2299,6 +3320,14 @@ function PageData() {
     },
   ];
   const matchPreviewContent = renderMatchPreviewContent(matchPreview, listType);
+  const entryPreviewContent = renderEntryPreviewContent(
+    entryPreview,
+    lists,
+    listsToRemoveFromAllEntries,
+    hideDefaultStatusLists,
+    listType,
+    setEntryPreview,
+  );
 
   return (
     <Layout>
@@ -2326,29 +3355,106 @@ function PageData() {
             >
               Your Custom Lists
             </h1>
-            <Sheet>
-              <SheetTrigger asChild>
-                <button
-                  aria-label="Open help panel"
-                  className="
-                    flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium
-                    transition-all duration-200
-                    hover:bg-z-card-up hover:text-z-text
-                    active:scale-95
-                  "
-                  style={{
-                    border: "1px solid var(--z-border-mid)",
-                    color: "var(--z-muted)",
-                  }}
-                >
-                  <FaInfoCircle className="size-4" />
-                  Help
-                </button>
-              </SheetTrigger>
-              <CustomListManagerHelpSheet />
-            </Sheet>
+            <button
+              type="button"
+              aria-label="Open help guide"
+              onClick={() => setShowHelp(true)}
+              className="
+                flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium
+                transition-all duration-200
+                hover:bg-z-card-up hover:text-z-text
+                active:scale-95
+              "
+              style={{
+                border: "1px solid var(--z-border-mid)",
+                color: "var(--z-muted)",
+              }}
+            >
+              <FaInfoCircle className="size-4" />
+              Help
+            </button>
           </div>
         </motion.div>
+
+        {/* Backup Warning Banner */}
+        {showBackupWarning && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.2 }}
+            className="mb-6 rounded-xl p-4"
+            style={{
+              backgroundColor: "rgba(248,113,113,0.07)",
+              border: "1px solid rgba(248,113,113,0.25)",
+            }}
+          >
+            <div className="flex items-start gap-3">
+              <FaExclamationTriangle
+                className="mt-0.5 size-4 shrink-0"
+                style={{ color: "var(--z-red)" }}
+              />
+              <div className="flex-1">
+                <p
+                  className="mb-1 text-sm font-bold"
+                  style={{ color: "var(--z-red)" }}
+                >
+                  Backup your AniList data before using this tool
+                </p>
+                <p
+                  className="text-xs/relaxed"
+                  style={{ color: "var(--z-muted)" }}
+                >
+                  Export your lists via{" "}
+                  <strong style={{ color: "var(--z-text)" }}>
+                    AniList → Account Settings → Export
+                  </strong>{" "}
+                  before making any changes. In case of data loss, a backup is
+                  the only way to recover. By using this tool,{" "}
+                  <strong style={{ color: "var(--z-text)" }}>
+                    you do so at your own risk.
+                  </strong>{" "}
+                  Contact{" "}
+                  <a
+                    href="https://anilist.co/user/Alpha49/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      color: "var(--z-text)",
+                      textDecoration: "underline",
+                    }}
+                  >
+                    <strong>@Alpha49</strong>
+                  </a>{" "}
+                  for any issues/bugs, questions, or concerns, but understand
+                  that{" "}
+                  <strong style={{ color: "var(--z-text)" }}>
+                    data recovery support cannot be given.
+                  </strong>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  localStorage.setItem(
+                    "aclm:ui:backup-warning-dismissed",
+                    "true",
+                  );
+                  setShowBackupWarning(false);
+                }}
+                aria-label="Dismiss warning"
+                className="
+                  flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md
+                  transition-all
+                  hover:opacity-70
+                "
+                style={{ color: "var(--z-muted)" }}
+              >
+                <FaTimesCircle size={12} />
+              </button>
+            </div>
+          </motion.div>
+        )}
 
         {/* Anime / Manga Tabs */}
         <motion.div
@@ -2461,6 +3567,30 @@ function PageData() {
               )}
               {!isListEmpty && (
                 <button
+                  onClick={handleOpenEntryPreview}
+                  aria-label="Preview changes for a specific entry"
+                  disabled={loading}
+                  className="
+                    flex cursor-pointer items-center gap-2 rounded-lg px-5 py-2.5 font-semibold
+                    transition-all duration-200
+                    hover:bg-z-card-high
+                    active:scale-95
+                  "
+                  style={{
+                    backgroundColor: "var(--z-card)",
+                    border: "1px solid var(--z-border-mid)",
+                    color: "var(--z-text)",
+                  }}
+                >
+                  <FaSearch
+                    className="size-4"
+                    style={{ color: "var(--z-frost)" }}
+                  />
+                  Preview Entry
+                </button>
+              )}
+              {!isListEmpty && (
+                <button
                   onClick={openSavePresetDialog}
                   aria-label="Save current preset"
                   className="
@@ -2498,23 +3628,9 @@ function PageData() {
                     className="text-sm font-bold"
                     style={{ color: "var(--z-text)" }}
                   >
-                    Strategy Presets
+                    Presets
                   </h2>
-                  <span
-                    className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
-                    style={{
-                      backgroundColor: "var(--z-card-up)",
-                      border: "1px solid var(--z-border)",
-                      color: "var(--z-muted)",
-                    }}
-                  >
-                    local only
-                  </span>
                 </div>
-                <p className="mt-1 text-xs" style={{ color: "var(--z-muted)" }}>
-                  Save reusable rule recipes for this browser without exporting
-                  anything to AniList.
-                </p>
               </div>
 
               <span
@@ -2866,6 +3982,39 @@ function PageData() {
               })}
             </motion.ul>
           </div>
+          {/* Backup Warning */}
+          <div
+            className="rounded-lg p-3"
+            style={{
+              backgroundColor: "rgba(248,113,113,0.07)",
+              border: "1px solid rgba(248,113,113,0.25)",
+            }}
+          >
+            <div className="flex items-start gap-2">
+              <FaExclamationTriangle
+                className="mt-0.5 size-4 shrink-0"
+                style={{ color: "var(--z-red)" }}
+              />
+              <div>
+                <p
+                  className="mb-1 text-sm font-semibold"
+                  style={{ color: "var(--z-red)" }}
+                >
+                  Have you backed up your AniList data?
+                </p>
+                <p
+                  className="text-xs/relaxed"
+                  style={{ color: "var(--z-muted)" }}
+                >
+                  Export your lists via{" "}
+                  <strong>AniList → Account Settings → Export</strong> before
+                  proceeding. Changes cannot be automatically reversed. By
+                  continuing, <strong>you accept the risk.</strong>
+                </p>
+              </div>
+            </div>
+          </div>
+
           <div
             className="rounded-lg p-3"
             style={{
@@ -3079,6 +4228,24 @@ function PageData() {
       >
         {matchPreviewContent}
       </Modal>
+
+      {/* Entry Preview Modal */}
+      <Modal
+        isOpen={entryPreview.open}
+        onClose={() => setEntryPreview((prev) => ({ ...prev, open: false }))}
+        onConfirm={() => setEntryPreview((prev) => ({ ...prev, open: false }))}
+        title="Preview Entry Changes"
+        confirmButtonText="Close"
+      >
+        {entryPreviewContent}
+      </Modal>
+
+      {/* Help Guide Modal */}
+      <CustomListManagerHelpModal
+        isOpen={showHelp}
+        onClose={() => setShowHelp(false)}
+        onLoadDefaultTemplate={handleLoadDefaultTemplate}
+      />
 
       {/* Remove from All Entries Modal */}
       <Modal
