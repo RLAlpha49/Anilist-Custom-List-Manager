@@ -118,7 +118,7 @@ export interface MediaEntry {
   media: Media;
 }
 
-interface MediaList {
+export interface MediaListGroup {
   isCustomList: boolean;
   entries: MediaEntry[];
   name: string;
@@ -126,7 +126,7 @@ interface MediaList {
 }
 
 interface MediaListCollection {
-  lists: MediaList[];
+  lists: MediaListGroup[];
   hasNextChunk?: boolean;
 }
 
@@ -163,16 +163,45 @@ export interface MutationResponse {
 }
 
 // Types for Custom List Manager
-export interface ListCondition {
+export type CustomListRuleOperator = "ALL" | "ANY";
+export type CustomListRulePolarity = "include" | "exclude";
+
+export interface CustomListRule {
+  id: string;
+  condition: string;
+  polarity: CustomListRulePolarity;
+}
+
+export interface CustomListRuleSet {
+  operator: CustomListRuleOperator;
+  rules: CustomListRule[];
+}
+
+export interface CustomListRuleConfig {
   name: string;
+  ruleSet?: CustomListRuleSet | null;
+  selectedOption?: string | null;
+}
+
+export interface ListCondition extends CustomListRuleConfig {
   condition: string;
 }
 
-export interface CustomList {
+export interface CustomList extends CustomListRuleConfig {
   id?: number;
   name: string;
   isCustomList: boolean;
-  selectedOption?: string | null;
+}
+
+export interface WorkflowPreset {
+  id: string;
+  name: string;
+  mediaType: AniListMediaType;
+  hideDefaultStatusLists: boolean;
+  lists: CustomListRuleConfig[];
+  listsToRemoveFromAllEntries: string[];
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface OptionGroup {
@@ -339,7 +368,7 @@ const isMediaEntry = (value: unknown): value is MediaEntry => {
   );
 };
 
-const isMediaList = (value: unknown): value is MediaList => {
+const isMediaList = (value: unknown): value is MediaListGroup => {
   if (!isRecord(value) || !Array.isArray(value.entries)) {
     return false;
   }

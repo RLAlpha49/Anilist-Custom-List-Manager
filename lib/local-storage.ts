@@ -28,6 +28,7 @@ export const STORAGE_KEYS = {
   workflowHideDefaultStatusLists: "aclm:workflow:hide-default-status-lists",
   workflowLists: "aclm:workflow:lists",
   workflowListType: "aclm:workflow:list-type",
+  workflowPresets: "aclm:workflow:presets",
   workflowListsToRemoveFromAllEntries:
     "aclm:workflow:lists-to-remove-from-all-entries",
   updateStats: "aclm:update:stats",
@@ -99,6 +100,12 @@ export const STORAGE_KEY_REGISTRY: Record<StorageKey, StorageKeyMetadata> = {
     ttl: STORAGE_TTLS.workflowCache,
     description: "The active AniList media type for the current workflow.",
     legacyKeys: ["listType"],
+  },
+  [STORAGE_KEYS.workflowPresets]: {
+    owner: "app/custom-list-manager/page.tsx",
+    ttl: STORAGE_TTLS.workflowCache,
+    description:
+      "Saved local-only manager presets containing media type, rules, visibility preference, and remove-from-all selections.",
   },
   [STORAGE_KEYS.workflowListsToRemoveFromAllEntries]: {
     owner: "app/custom-list-manager/page.tsx",

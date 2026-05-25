@@ -30,10 +30,14 @@ import {
 } from "react";
 import {
   FaArrowDown,
+  FaCopy,
   FaEdit,
   FaExclamationTriangle,
+  FaEye,
+  FaFolderOpen,
   FaInfoCircle,
   FaPlus,
+  FaSave,
   FaTimesCircle,
   FaTrash,
 } from "react-icons/fa";
@@ -66,6 +70,18 @@ import {
 import { useAuth } from "@/context/auth-context";
 import { fetchAniList } from "@/lib/api";
 import {
+  createEmptyRule,
+  createEmptyRuleSet,
+  estimateMatchesForListConfig,
+  fetchAllWorkflowMediaEntries,
+  hasActiveIncludeRules,
+  normalizeCustomListRuleConfig,
+  normalizeRuleSet,
+  summarizeRuleSet,
+  WORKFLOW_MEDIA_LIST_QUERY,
+  type WorkflowMediaListQueryVariables,
+} from "@/lib/custom-list-workflow";
+import {
   getBooleanItemWithExpiry,
   getItemWithExpiry,
   getJsonItemWithExpiry,
@@ -86,6 +102,7 @@ import {
   tags,
 } from "@/lib/options";
 import {
+  type AniListMediaType,
   AniListRequestVariables,
   ApiError,
   ApiResponse,
@@ -93,7 +110,9 @@ import {
   CustomListApiResponse,
   hasCustomListOptionsData,
   ListCondition,
+  MediaListResponse,
   OptionGroup,
+  type WorkflowPreset,
 } from "@/lib/types";
 
 function debounce<T extends unknown[]>(
@@ -124,7 +143,26 @@ function getFormatLabel(item: string): string {
   return `Format set to ${item}`;
 }
 
-type MediaType = "ANIME" | "MANGA";
+type MediaType = AniListMediaType;
+
+type PresetDialogMode = "save" | "duplicate";
+
+interface ListMatchEstimate {
+  name: string;
+  totalMatches: number;
+  sampleTitles: string[];
+  summary: string;
+  markedForRemoval: boolean;
+  hasActiveRules: boolean;
+}
+
+interface MatchPreviewState {
+  open: boolean;
+  loading: boolean;
+  entryCount: number;
+  estimates: ListMatchEstimate[];
+  error: string | null;
+}
 
 interface CachedListState {
   lists: CustomList[];
@@ -197,6 +235,24 @@ const EMPTY_LIST_STATE: CachedListState = {
   originalSectionOrder: [],
   dataLoaded: false,
   isListEmpty: true,
+};
+
+const normalizeListStateItem = (list: CustomList): CustomList => {
+  const normalized = normalizeCustomListRuleConfig(list);
+
+  return {
+    ...list,
+    ruleSet: normalized.ruleSet,
+    selectedOption: normalized.selectedOption,
+  };
+};
+
+const createPresetId = (name: string): string => {
+  const slug = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return `preset-${slug || "custom-list"}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 };
 
 function ActionIconButton({
@@ -369,28 +425,71 @@ const CustomListRow = memo(function CustomListRow({
   options,
   markedForRemoval,
   onUndoRemoveAll,
-  onClearCondition,
-  onValueChange,
+  onAddRule,
+  onClearRules,
   onOpenRename,
   onDelete,
   onRemoveAll,
+  onOperatorChange,
+  onRemoveRule,
+  onRuleConditionChange,
+  onRulePolarityChange,
 }: Readonly<{
   list: CustomList;
   index: number;
   options: OptionGroup[];
   markedForRemoval: boolean;
   onUndoRemoveAll: (listName: string) => void;
-  onClearCondition: (index: number) => void;
-  onValueChange: (index: number, value: string) => void;
+  onAddRule: (index: number) => void;
+  onClearRules: (index: number) => void;
   onOpenRename: (list: CustomList) => void;
   onDelete: (name: string) => void;
   onRemoveAll: (list: CustomList) => void;
+  onOperatorChange: (index: number, operator: "ALL" | "ANY") => void;
+  onRemoveRule: (index: number, ruleId: string) => void;
+  onRuleConditionChange: (index: number, ruleId: string, value: string) => void;
+  onRulePolarityChange: (
+    index: number,
+    ruleId: string,
+    polarity: "include" | "exclude",
+  ) => void;
 }>) {
+  const ruleSet = normalizeRuleSet(list.ruleSet, list.selectedOption);
+  const activeRuleCount = ruleSet.rules.filter(
+    (rule) => rule.condition.trim().length > 0,
+  ).length;
+  const hasConfiguredRules = hasActiveIncludeRules(
+    ruleSet,
+    list.selectedOption,
+  );
+  let helperCopy =
+    "No rules yet. Add include rules to decide which entries belong here.";
+
+  if (hasConfiguredRules) {
+    helperCopy = summarizeRuleSet(ruleSet, list.selectedOption);
+  } else if (ruleSet.rules.length > 0) {
+    helperCopy = "Add at least one include rule before updating this list.";
+  }
+
   return (
     <SortableItem id={list.name}>
-      <span className="font-semibold" style={{ color: "var(--z-text)" }}>
-        {list.name}
-      </span>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-semibold" style={{ color: "var(--z-text)" }}>
+          {list.name}
+        </span>
+        <span
+          className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
+          style={{
+            backgroundColor: hasConfiguredRules
+              ? "var(--z-amber-dim)"
+              : "var(--z-card-up)",
+            color: hasConfiguredRules ? "var(--z-amber)" : "var(--z-muted)",
+            border: "1px solid var(--z-border)",
+          }}
+        >
+          {activeRuleCount} active rule{activeRuleCount === 1 ? "" : "s"}
+        </span>
+      </div>
 
       {markedForRemoval ? (
         <span
@@ -413,77 +512,336 @@ const CustomListRow = memo(function CustomListRow({
           </button>
         </span>
       ) : (
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          <ActionIconButton
-            ariaLabel="Clear condition"
-            tooltip="Clear condition"
-            onClick={() => onClearCondition(index)}
-            className="
-              size-8 rounded-full p-0 transition-all duration-150
-              hover:bg-z-card-up
-              active:scale-90
-            "
-            style={{ color: "var(--z-muted)" }}
-          >
-            <FaTimesCircle className="size-4" />
-          </ActionIconButton>
+        <div className="min-w-full sm:min-w-xl">
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <div
+                className="inline-flex rounded-lg p-1"
+                style={{
+                  backgroundColor: "var(--z-card-up)",
+                  border: "1px solid var(--z-border)",
+                }}
+              >
+                {(["ALL", "ANY"] as const).map((operator) => {
+                  const isActive = ruleSet.operator === operator;
 
-          <div className="w-full min-w-48 sm:w-auto">
-            <DynamicSelect
-              value={list.selectedOption || ""}
-              onValueChange={(value: string) => onValueChange(index, value)}
-              options={options}
-              placeholder="Select a condition"
-              className="min-w-60"
-            />
+                  return (
+                    <button
+                      key={operator}
+                      type="button"
+                      onClick={() => onOperatorChange(index, operator)}
+                      className="
+                        rounded-md px-3 py-1.5 text-xs font-bold tracking-wide transition-all
+                      "
+                      style={{
+                        backgroundColor: isActive
+                          ? "var(--z-amber)"
+                          : "transparent",
+                        color: isActive ? "#07060f" : "var(--z-muted)",
+                      }}
+                    >
+                      {operator === "ALL" ? "Match all" : "Match any"}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => onAddRule(index)}
+                className="
+                  inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold
+                  transition-all
+                  hover:brightness-110
+                  active:scale-95
+                "
+                style={{
+                  backgroundColor: "var(--z-amber-dim)",
+                  color: "var(--z-amber)",
+                  border: "1px solid rgba(245,166,35,0.2)",
+                }}
+              >
+                <FaPlus className="size-3" />
+                Add rule
+              </button>
+            </div>
+
+            <p className="text-xs" style={{ color: "var(--z-muted)" }}>
+              {helperCopy}
+            </p>
+
+            {ruleSet.rules.length === 0 ? (
+              <div
+                className="rounded-lg border border-dashed p-3 text-sm"
+                style={{
+                  borderColor: "var(--z-border-mid)",
+                  backgroundColor: "var(--z-card-up)",
+                  color: "var(--z-muted)",
+                }}
+              >
+                Add your first include or exclude rule to start building this
+                custom list.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {ruleSet.rules.map((rule, ruleIndex) => (
+                  <div
+                    key={rule.id}
+                    className="flex flex-col gap-2 rounded-lg p-3 sm:flex-row sm:items-center"
+                    style={{
+                      backgroundColor: "var(--z-card-up)",
+                      border: "1px solid var(--z-border)",
+                    }}
+                  >
+                    <div className="sm:w-32">
+                      <label
+                        className="sr-only"
+                        htmlFor={`${list.name}-rule-${rule.id}-polarity`}
+                      >
+                        Rule polarity
+                      </label>
+                      <select
+                        id={`${list.name}-rule-${rule.id}-polarity`}
+                        value={rule.polarity}
+                        onChange={(event) =>
+                          onRulePolarityChange(
+                            index,
+                            rule.id,
+                            event.target.value as "include" | "exclude",
+                          )
+                        }
+                        className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
+                        style={{
+                          backgroundColor: "var(--z-card)",
+                          border: "1px solid var(--z-border-mid)",
+                          color: "var(--z-text)",
+                        }}
+                      >
+                        <option value="include">Include</option>
+                        <option value="exclude">Exclude</option>
+                      </select>
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <DynamicSelect
+                        value={rule.condition}
+                        onValueChange={(value: string) =>
+                          onRuleConditionChange(index, rule.id, value)
+                        }
+                        options={options}
+                        placeholder={`Select ${rule.polarity} condition`}
+                        className="w-full min-w-0"
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      aria-label={`Remove rule ${ruleIndex + 1}`}
+                      onClick={() => onRemoveRule(index, rule.id)}
+                      className="
+                        inline-flex size-10 items-center justify-center rounded-full transition-all
+                        hover:bg-[rgba(248,113,113,0.12)]
+                        active:scale-90
+                      "
+                      style={{ color: "var(--z-red)" }}
+                    >
+                      <FaTrash className="size-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="text-[11px]" style={{ color: "var(--z-subtle)" }}>
+                Exclude rules always block matches, even when include rules
+                pass.
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                <ActionIconButton
+                  ariaLabel="Clear rules"
+                  tooltip="Clear rules"
+                  onClick={() => onClearRules(index)}
+                  className="
+                    size-8 rounded-full p-0 transition-all duration-150
+                    hover:bg-z-card-up
+                    active:scale-90
+                  "
+                  style={{ color: "var(--z-muted)" }}
+                >
+                  <FaTimesCircle className="size-4" />
+                </ActionIconButton>
+
+                <ActionIconButton
+                  ariaLabel="Rename list"
+                  tooltip="Rename list"
+                  onClick={() => onOpenRename(list)}
+                  className="
+                    size-8 rounded-full p-0 transition-all duration-150
+                    hover:bg-z-amber-dim
+                    active:scale-90
+                  "
+                  style={{ color: "var(--z-amber)" }}
+                >
+                  <FaEdit className="size-4" />
+                </ActionIconButton>
+
+                <ActionIconButton
+                  ariaLabel="Delete list"
+                  tooltip="Delete list"
+                  onClick={() => onDelete(list.name)}
+                  className="
+                    size-8 rounded-full p-0 transition-all duration-150
+                    hover:bg-[rgba(248,113,113,0.12)]
+                    active:scale-90
+                  "
+                  style={{ color: "var(--z-red)" }}
+                >
+                  <FaTrash className="size-4" />
+                </ActionIconButton>
+
+                <ActionIconButton
+                  ariaLabel="Remove from all entries"
+                  tooltip="Remove from all entries"
+                  onClick={() => onRemoveAll(list)}
+                  className="
+                    size-8 rounded-full p-0 transition-all duration-150
+                    hover:bg-[rgba(34,211,238,0.12)]
+                    active:scale-90
+                  "
+                  style={{ color: "var(--z-frost)" }}
+                >
+                  <FaTimesCircle className="size-4" />
+                </ActionIconButton>
+              </div>
+            </div>
           </div>
-
-          <ActionIconButton
-            ariaLabel="Rename list"
-            tooltip="Rename list"
-            onClick={() => onOpenRename(list)}
-            className="
-              size-8 rounded-full p-0 transition-all duration-150
-              hover:bg-z-amber-dim
-              active:scale-90
-            "
-            style={{ color: "var(--z-amber)" }}
-          >
-            <FaEdit className="size-4" />
-          </ActionIconButton>
-
-          <ActionIconButton
-            ariaLabel="Delete list"
-            tooltip="Delete list"
-            onClick={() => onDelete(list.name)}
-            className="
-              size-8 rounded-full p-0 transition-all duration-150
-              hover:bg-[rgba(248,113,113,0.12)]
-              active:scale-90
-            "
-            style={{ color: "var(--z-red)" }}
-          >
-            <FaTrash className="size-4" />
-          </ActionIconButton>
-
-          <ActionIconButton
-            ariaLabel="Remove from all entries"
-            tooltip="Remove from all entries"
-            onClick={() => onRemoveAll(list)}
-            className="
-              size-8 rounded-full p-0 transition-all duration-150
-              hover:bg-[rgba(34,211,238,0.12)]
-              active:scale-90
-            "
-            style={{ color: "var(--z-frost)" }}
-          >
-            <FaTimesCircle className="size-4" />
-          </ActionIconButton>
         </div>
       )}
     </SortableItem>
   );
 });
+
+function renderMatchPreviewContent(
+  matchPreview: MatchPreviewState,
+  listType: MediaType,
+): ReactNode {
+  if (matchPreview.loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-8">
+        <LoadingIndicator size="lg" />
+        <p className="mt-4 text-sm" style={{ color: "var(--z-muted)" }}>
+          Scanning your {listType.toLowerCase()} library with the same matcher
+          used by the updater...
+        </p>
+      </div>
+    );
+  }
+
+  if (matchPreview.error) {
+    return (
+      <div
+        className="rounded-lg p-4 text-sm"
+        style={{
+          backgroundColor: "rgba(248,113,113,0.1)",
+          border: "1px solid rgba(248,113,113,0.2)",
+          color: "var(--z-red)",
+        }}
+      >
+        {matchPreview.error}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div
+        className="rounded-lg p-3"
+        style={{
+          backgroundColor: "var(--z-card-up)",
+          border: "1px solid var(--z-border)",
+        }}
+      >
+        <p className="text-sm font-medium" style={{ color: "var(--z-text)" }}>
+          Scanned {matchPreview.entryCount} {listType.toLowerCase()} entr
+          {matchPreview.entryCount === 1 ? "y" : "ies"}.
+        </p>
+        <p className="mt-1 text-xs" style={{ color: "var(--z-muted)" }}>
+          Counts are read-only estimates based on your current rules. Samples
+          show up to three matching titles per list.
+        </p>
+      </div>
+
+      <div className="space-y-3">
+        {matchPreview.estimates.map((estimate) => (
+          <div
+            key={estimate.name}
+            className="rounded-lg p-3"
+            style={{
+              backgroundColor: "var(--z-card-up)",
+              border: "1px solid var(--z-border)",
+            }}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="font-semibold" style={{ color: "var(--z-text)" }}>
+                  {estimate.name}
+                </p>
+                <p className="mt-1 text-xs" style={{ color: "var(--z-muted)" }}>
+                  {estimate.hasActiveRules
+                    ? estimate.summary
+                    : "Remove-from-all only"}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {estimate.markedForRemoval && (
+                  <span
+                    className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                    style={{
+                      backgroundColor: "var(--z-amber-dim)",
+                      color: "var(--z-amber)",
+                    }}
+                  >
+                    remove from all
+                  </span>
+                )}
+                <span
+                  className="rounded-full px-2.5 py-1 text-xs font-semibold"
+                  style={{
+                    backgroundColor: "var(--z-card)",
+                    border: "1px solid var(--z-border)",
+                    color: "var(--z-text)",
+                  }}
+                >
+                  {estimate.totalMatches} match
+                  {estimate.totalMatches === 1 ? "" : "es"}
+                </span>
+              </div>
+            </div>
+
+            {estimate.sampleTitles.length > 0 ? (
+              <ul
+                className="mt-3 space-y-1 text-sm"
+                style={{ color: "var(--z-subtle)" }}
+              >
+                {estimate.sampleTitles.map((title) => (
+                  <li key={`${estimate.name}-${title}`}>• {title}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-3 text-sm" style={{ color: "var(--z-subtle)" }}>
+                {estimate.hasActiveRules
+                  ? "No current library entries matched this rule set."
+                  : "This list is currently only queued for remove-from-all."}
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function PageData() {
   const buildListOptionsVariables = useCallback(
@@ -548,32 +906,139 @@ function PageData() {
         [],
       ),
     );
+  const [presets, setPresets] = useState<WorkflowPreset[]>(() =>
+    getJsonItemWithExpiry<WorkflowPreset[]>(STORAGE_KEYS.workflowPresets, []),
+  );
+  const [selectedPresetId, setSelectedPresetId] = useState("");
+  const [presetDialogMode, setPresetDialogMode] =
+    useState<PresetDialogMode | null>(null);
+  const [presetNameDraft, setPresetNameDraft] = useState("");
+  const [showDeletePresetModal, setShowDeletePresetModal] = useState(false);
+  const [matchPreview, setMatchPreview] = useState<MatchPreviewState>({
+    open: false,
+    loading: false,
+    entryCount: 0,
+    estimates: [],
+    error: null,
+  });
   const shouldAutoFocusAddListInput = useDesktopAutoFocus(showAddModal);
 
   // Ref Hooks
   const updateSectionOrderRef =
     useRef<(newOrder: string[]) => Promise<void> | null>(null);
+  const presetStorageFallbackWarnedRef = useRef(false);
 
   // Other Hooks
   const router = useRouter();
   const { token, userId } = useAuth();
 
   // Memoize handlers
-  const handleClearCondition = useCallback((index: number) => {
-    setLists((prev) => {
-      const newLists = [...prev];
-      newLists[index].selectedOption = "";
-      return newLists;
-    });
-  }, []);
+  const updateListAtIndex = useCallback(
+    (index: number, updater: (list: CustomList) => CustomList) => {
+      setLists((prev) =>
+        prev.map((list, listIndex) =>
+          listIndex === index ? normalizeListStateItem(updater(list)) : list,
+        ),
+      );
+    },
+    [],
+  );
 
-  const handleValueChange = useCallback((index: number, value: string) => {
-    setLists((prev) => {
-      const newLists = [...prev];
-      newLists[index].selectedOption = value;
-      return newLists;
-    });
-  }, []);
+  const handleClearRules = useCallback(
+    (index: number) => {
+      updateListAtIndex(index, (list) => ({
+        ...list,
+        ruleSet: createEmptyRuleSet(),
+        selectedOption: "",
+      }));
+    },
+    [updateListAtIndex],
+  );
+
+  const handleOperatorChange = useCallback(
+    (index: number, operator: "ALL" | "ANY") => {
+      updateListAtIndex(index, (list) => ({
+        ...list,
+        ruleSet: {
+          ...normalizeRuleSet(list.ruleSet, list.selectedOption),
+          operator,
+        },
+      }));
+    },
+    [updateListAtIndex],
+  );
+
+  const handleAddRule = useCallback(
+    (index: number) => {
+      updateListAtIndex(index, (list) => {
+        const ruleSet = normalizeRuleSet(list.ruleSet, list.selectedOption);
+
+        return {
+          ...list,
+          ruleSet: {
+            ...ruleSet,
+            rules: [...ruleSet.rules, createEmptyRule()],
+          },
+        };
+      });
+    },
+    [updateListAtIndex],
+  );
+
+  const handleRemoveRule = useCallback(
+    (index: number, ruleId: string) => {
+      updateListAtIndex(index, (list) => {
+        const ruleSet = normalizeRuleSet(list.ruleSet, list.selectedOption);
+
+        return {
+          ...list,
+          ruleSet: {
+            ...ruleSet,
+            rules: ruleSet.rules.filter((rule) => rule.id !== ruleId),
+          },
+        };
+      });
+    },
+    [updateListAtIndex],
+  );
+
+  const handleRuleConditionChange = useCallback(
+    (index: number, ruleId: string, value: string) => {
+      updateListAtIndex(index, (list) => {
+        const ruleSet = normalizeRuleSet(list.ruleSet, list.selectedOption);
+
+        return {
+          ...list,
+          ruleSet: {
+            ...ruleSet,
+            rules: ruleSet.rules.map((rule) =>
+              rule.id === ruleId ? { ...rule, condition: value } : rule,
+            ),
+          },
+        };
+      });
+    },
+    [updateListAtIndex],
+  );
+
+  const handleRulePolarityChange = useCallback(
+    (index: number, ruleId: string, polarity: "include" | "exclude") => {
+      updateListAtIndex(index, (list) => {
+        const ruleSet = normalizeRuleSet(list.ruleSet, list.selectedOption);
+
+        return {
+          ...list,
+          ruleSet: {
+            ...ruleSet,
+            rules: ruleSet.rules.map((rule) =>
+              rule.id === ruleId ? { ...rule, polarity } : rule,
+            ),
+          },
+        };
+      });
+    },
+    [updateListAtIndex],
+  );
 
   const handleDelete = async (listName: string): Promise<void> => {
     // Remove the list from lists
@@ -587,6 +1052,9 @@ function PageData() {
 
     setLists(updatedLists);
     setOriginalSectionOrder(filteredSectionOrder);
+    setListsToRemoveFromAllEntries((prev) =>
+      prev.filter((name) => name !== listName),
+    );
 
     const query = `
       mutation ($${listType.toLowerCase()}ListOptions: MediaListOptionsInput) {
@@ -707,20 +1175,57 @@ function PageData() {
   );
 
   useEffect(() => {
-    if (lists.length > 0) {
-      const newConditions: ListCondition[] = lists.map((list) => ({
+    const newConditions: ListCondition[] = lists.map((list) => {
+      const normalized = normalizeCustomListRuleConfig(list);
+
+      return {
         name: list.name,
-        condition: list.selectedOption || "",
-      }));
-      setItemWithExpiry(
-        listType === "ANIME"
-          ? STORAGE_KEYS.workflowConditionsAnime
-          : STORAGE_KEYS.workflowConditionsManga,
-        newConditions,
-        STORAGE_TTLS.workflowCache,
-      );
-    }
+        condition: normalized.selectedOption,
+        selectedOption: normalized.selectedOption,
+        ruleSet: normalized.ruleSet,
+      };
+    });
+
+    setItemWithExpiry(
+      listType === "ANIME"
+        ? STORAGE_KEYS.workflowConditionsAnime
+        : STORAGE_KEYS.workflowConditionsManga,
+      newConditions,
+      STORAGE_TTLS.workflowCache,
+    );
   }, [lists, listType]);
+
+  useEffect(() => {
+    const result = setItemWithExpiry(
+      STORAGE_KEYS.workflowPresets,
+      presets,
+      STORAGE_TTLS.workflowCache,
+    );
+
+    if (
+      isStorageFallbackResult(result) &&
+      !presetStorageFallbackWarnedRef.current
+    ) {
+      presetStorageFallbackWarnedRef.current = true;
+      toast.warning("Using temporary storage fallback", {
+        description:
+          "Workflow presets are stored in-memory for this tab because browser storage is constrained.",
+      });
+    }
+  }, [presets]);
+
+  useEffect(() => {
+    if (presets.length === 0) {
+      if (selectedPresetId) {
+        setSelectedPresetId("");
+      }
+      return;
+    }
+
+    if (!presets.some((preset) => preset.id === selectedPresetId)) {
+      setSelectedPresetId(presets[0].id);
+    }
+  }, [presets, selectedPresetId]);
 
   useEffect(() => {
     setItemWithExpiry(
@@ -896,12 +1401,17 @@ function PageData() {
   }, []);
 
   const fetchLists = useCallback(
-    async (type: MediaType): Promise<void> => {
+    async (
+      type: MediaType,
+    ): Promise<{
+      lists: CustomList[];
+      originalSectionOrder: string[];
+    } | null> => {
       if (!userId) {
         toast.error("Error", {
           description: "User ID is not available.",
         });
-        return;
+        return null;
       }
       setLoading(true);
       setIsListEmpty(true);
@@ -960,17 +1470,26 @@ function PageData() {
 
         const orderedCustomLists = updatedSectionOrder
           .filter((name) => fetchedCustomLists.includes(name))
-          .map((name) => ({
-            name,
-            isCustomList: true,
-            selectedOption: getDefaultOption(name),
-          }));
+          .map((name) => {
+            const defaultCondition = getDefaultOption(name);
+
+            return normalizeListStateItem({
+              name,
+              isCustomList: true,
+              ruleSet: normalizeRuleSet(undefined, defaultCondition),
+              selectedOption: defaultCondition,
+            });
+          });
 
         setListType(type);
         setLists(orderedCustomLists);
         setDataLoaded(true);
         setIsListEmpty(orderedCustomLists.length === 0);
         setLoading(false);
+        return {
+          lists: orderedCustomLists,
+          originalSectionOrder: updatedSectionOrder,
+        };
       } catch (error) {
         const apiError = error as ApiError;
         console.error("Error in fetchLists:", apiError.message);
@@ -981,6 +1500,7 @@ function PageData() {
           ),
         });
         setLoading(false);
+        return null;
       }
     },
     [getDefaultOption, toast, token, userId],
@@ -1013,15 +1533,86 @@ function PageData() {
     setShowPopup(true);
   };
 
+  const buildCurrentPreset = useCallback(
+    (name: string): WorkflowPreset => {
+      const timestamp = Date.now();
+
+      return {
+        id: createPresetId(name),
+        name,
+        mediaType: listType,
+        hideDefaultStatusLists,
+        lists: lists
+          .map((list) => normalizeCustomListRuleConfig(list))
+          .filter((list) =>
+            list.ruleSet.rules.some((rule) => rule.condition.trim().length > 0),
+          )
+          .map((list) => ({
+            name: list.name,
+            ruleSet: list.ruleSet,
+            selectedOption: list.selectedOption,
+          })),
+        listsToRemoveFromAllEntries: [...listsToRemoveFromAllEntries],
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      };
+    },
+    [hideDefaultStatusLists, listType, lists, listsToRemoveFromAllEntries],
+  );
+
+  const applyPresetToBaseLists = useCallback(
+    (baseLists: CustomList[], preset: WorkflowPreset) => {
+      const presetListsByName = new Map(
+        preset.lists.map((list) => [
+          list.name,
+          normalizeCustomListRuleConfig(list),
+        ]),
+      );
+      const availableListNames = new Set(baseLists.map((list) => list.name));
+
+      return {
+        nextLists: baseLists.map((list) => {
+          const presetList = presetListsByName.get(list.name);
+
+          if (!presetList) {
+            return normalizeListStateItem({
+              ...list,
+              ruleSet: createEmptyRuleSet(),
+              selectedOption: "",
+            });
+          }
+
+          return normalizeListStateItem({
+            ...list,
+            ruleSet: presetList.ruleSet,
+            selectedOption: presetList.selectedOption,
+          });
+        }),
+        missingListNames: preset.lists
+          .filter((list) => !availableListNames.has(list.name))
+          .map((list) => list.name),
+        resolvedRemoveNames: preset.listsToRemoveFromAllEntries.filter((name) =>
+          availableListNames.has(name),
+        ),
+      };
+    },
+    [],
+  );
+
   const proceedToNextStep = (): void => {
     setShowPopup(false);
     const writeResults = [
       setItemWithExpiry(
         STORAGE_KEYS.workflowLists,
-        lists.map((list) => ({
-          name: list.name,
-          selectedOption: list.selectedOption,
-        })),
+        lists.map((list) => {
+          const normalized = normalizeCustomListRuleConfig(list);
+
+          return {
+            name: list.name,
+            ruleSet: normalized.ruleSet,
+            selectedOption: normalized.selectedOption,
+          };
+        }),
         STORAGE_TTLS.workflowCache,
       ),
       setItemWithExpiry(
@@ -1050,6 +1641,267 @@ function PageData() {
 
     router.push("/custom-list-manager/update");
   };
+
+  const openSavePresetDialog = useCallback(() => {
+    setPresetDialogMode("save");
+    setPresetNameDraft(
+      `${listType === "ANIME" ? "Anime" : "Manga"} preset ${presets.length + 1}`,
+    );
+  }, [listType, presets.length]);
+
+  const openDuplicatePresetDialog = useCallback(() => {
+    const preset = presets.find((item) => item.id === selectedPresetId);
+    if (!preset) {
+      toast.error("Select a preset first", {
+        description: "Choose a saved preset to duplicate.",
+      });
+      return;
+    }
+
+    setPresetDialogMode("duplicate");
+    setPresetNameDraft(`${preset.name} Copy`);
+  }, [presets, selectedPresetId]);
+
+  const handlePresetDialogConfirm = useCallback(() => {
+    const trimmedName = presetNameDraft.trim();
+    if (!trimmedName) {
+      toast.error("Preset name required", {
+        description: "Give the preset a name before saving it.",
+      });
+      return;
+    }
+
+    const hasDuplicateName = presets.some(
+      (preset) => preset.name.toLowerCase() === trimmedName.toLowerCase(),
+    );
+
+    if (hasDuplicateName) {
+      toast.error("Preset name already exists", {
+        description:
+          "Pick a different name so presets stay easy to tell apart.",
+      });
+      return;
+    }
+
+    const sortByUpdatedAtDesc = (nextPresets: WorkflowPreset[]) =>
+      [...nextPresets].sort((left, right) => right.updatedAt - left.updatedAt);
+
+    if (presetDialogMode === "save") {
+      const nextPreset = buildCurrentPreset(trimmedName);
+      setPresets((prev) => sortByUpdatedAtDesc([nextPreset, ...prev]));
+      setSelectedPresetId(nextPreset.id);
+      toast.success("Preset saved", {
+        description: `Saved "${trimmedName}" for ${listType.toLowerCase()} lists.`,
+      });
+    }
+
+    if (presetDialogMode === "duplicate") {
+      const sourcePreset = presets.find(
+        (preset) => preset.id === selectedPresetId,
+      );
+      if (!sourcePreset) {
+        toast.error("Preset not found", {
+          description:
+            "The preset you tried to duplicate is no longer available.",
+        });
+        return;
+      }
+
+      const timestamp = Date.now();
+      const nextPreset: WorkflowPreset = {
+        ...sourcePreset,
+        id: createPresetId(trimmedName),
+        name: trimmedName,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      };
+
+      setPresets((prev) => sortByUpdatedAtDesc([nextPreset, ...prev]));
+      setSelectedPresetId(nextPreset.id);
+      toast.success("Preset duplicated", {
+        description: `Created "${trimmedName}" from "${sourcePreset.name}".`,
+      });
+    }
+
+    setPresetDialogMode(null);
+    setPresetNameDraft("");
+  }, [
+    buildCurrentPreset,
+    listType,
+    presetDialogMode,
+    presetNameDraft,
+    presets,
+    selectedPresetId,
+  ]);
+
+  const handleLoadPreset = useCallback(async () => {
+    const preset = presets.find((item) => item.id === selectedPresetId);
+    if (!preset) {
+      toast.error("Select a preset first", {
+        description: "Choose a saved preset to load into the manager.",
+      });
+      return;
+    }
+
+    const targetType = preset.mediaType === "MANGA" ? "MANGA" : "ANIME";
+    const cachedState = listCache[targetType];
+    let sourceLists = cachedState.lists;
+    let sourceSectionOrder = cachedState.originalSectionOrder;
+
+    if (!cachedState.dataLoaded) {
+      const fetched = await fetchLists(targetType);
+      if (!fetched) {
+        return;
+      }
+
+      sourceLists = fetched.lists;
+      sourceSectionOrder = fetched.originalSectionOrder;
+    }
+
+    const { nextLists, missingListNames, resolvedRemoveNames } =
+      applyPresetToBaseLists(sourceLists, preset);
+
+    setListCache((prev) => ({
+      ...prev,
+      [targetType]: {
+        lists: nextLists,
+        originalSectionOrder: sourceSectionOrder,
+        dataLoaded: true,
+        isListEmpty: nextLists.length === 0,
+      },
+    }));
+
+    setHideDefaultStatusLists(preset.hideDefaultStatusLists);
+    setListsToRemoveFromAllEntries(resolvedRemoveNames);
+    setActiveTab(targetType);
+    setListType(targetType);
+    setLists(nextLists);
+    setOriginalSectionOrder(sourceSectionOrder);
+    setDataLoaded(true);
+    setIsListEmpty(nextLists.length === 0);
+    setLoading(false);
+
+    toast.success("Preset loaded", {
+      description: `Loaded "${preset.name}" into ${targetType.toLowerCase()} lists.`,
+    });
+
+    if (missingListNames.length > 0) {
+      toast.warning("Some preset lists were unavailable", {
+        description: `${missingListNames.length} preset list${missingListNames.length === 1 ? " was" : "s were"} skipped because it no longer exists on AniList.`,
+      });
+    }
+  }, [
+    applyPresetToBaseLists,
+    fetchLists,
+    listCache,
+    presets,
+    selectedPresetId,
+  ]);
+
+  const handleDeletePreset = useCallback(() => {
+    const preset = presets.find((item) => item.id === selectedPresetId);
+    if (!preset) {
+      setShowDeletePresetModal(false);
+      return;
+    }
+
+    setPresets((prev) => prev.filter((item) => item.id !== preset.id));
+    setShowDeletePresetModal(false);
+    toast.success("Preset deleted", {
+      description: `Deleted "${preset.name}" from local presets.`,
+    });
+  }, [presets, selectedPresetId]);
+
+  const handleEstimateMatches = useCallback(async () => {
+    const relevantLists = lists.filter((list) =>
+      hasActiveIncludeRules(list.ruleSet, list.selectedOption),
+    );
+
+    if (relevantLists.length === 0) {
+      toast.error("Add an include rule first", {
+        description:
+          "At least one list needs an active include rule before match estimates can be calculated.",
+      });
+      return;
+    }
+
+    if (!userId) {
+      toast.error("Error", {
+        description: "User ID is not available.",
+      });
+      return;
+    }
+
+    setMatchPreview({
+      open: true,
+      loading: true,
+      entryCount: 0,
+      estimates: [],
+      error: null,
+    });
+
+    try {
+      const entries = await fetchAllWorkflowMediaEntries({
+        userId,
+        type: listType,
+        fetchPage: async (variables: WorkflowMediaListQueryVariables) =>
+          await fetchAniListData<
+            MediaListResponse["data"],
+            WorkflowMediaListQueryVariables
+          >(WORKFLOW_MEDIA_LIST_QUERY, variables),
+      });
+
+      const estimates = lists
+        .filter(
+          (list) =>
+            hasActiveIncludeRules(list.ruleSet, list.selectedOption) ||
+            listsToRemoveFromAllEntries.includes(list.name),
+        )
+        .map((list) => {
+          const normalized = normalizeCustomListRuleConfig(list);
+          const { totalMatches, sampleTitles } = estimateMatchesForListConfig(
+            entries,
+            normalized,
+          );
+
+          return {
+            name: list.name,
+            totalMatches,
+            sampleTitles,
+            summary: summarizeRuleSet(
+              normalized.ruleSet,
+              normalized.selectedOption,
+            ),
+            markedForRemoval: listsToRemoveFromAllEntries.includes(list.name),
+            hasActiveRules: hasActiveIncludeRules(
+              normalized.ruleSet,
+              normalized.selectedOption,
+            ),
+          } satisfies ListMatchEstimate;
+        });
+
+      setMatchPreview({
+        open: true,
+        loading: false,
+        entryCount: entries.length,
+        estimates,
+        error: null,
+      });
+    } catch (error) {
+      const apiError = error as ApiError;
+
+      setMatchPreview({
+        open: true,
+        loading: false,
+        entryCount: 0,
+        estimates: [],
+        error: getApiErrorMessageWithRequestId(
+          apiError,
+          "Failed to estimate matches.",
+        ),
+      });
+    }
+  }, [fetchAniListData, listType, lists, listsToRemoveFromAllEntries, userId]);
 
   const openRenameModal = useCallback((list: CustomList): void => {
     setCurrentEditList(list);
@@ -1086,6 +1938,9 @@ function PageData() {
         prevLists.map((l) =>
           l.name === list.name ? { ...l, name: trimmedName } : l,
         ),
+      );
+      setListsToRemoveFromAllEntries((prev) =>
+        prev.map((name) => (name === list.name ? trimmedName : name)),
       );
 
       const query = `
@@ -1160,11 +2015,12 @@ function PageData() {
 
     const updatedLists = [
       ...lists,
-      {
+      normalizeListStateItem({
         name: trimmedName,
         isCustomList: true,
+        ruleSet: createEmptyRuleSet(),
         selectedOption: "",
-      },
+      }),
     ];
     setLists(updatedLists);
 
@@ -1233,6 +2089,25 @@ function PageData() {
     setPendingRemoveAllList(null);
   }, []);
 
+  const selectedPreset = useMemo(
+    () => presets.find((preset) => preset.id === selectedPresetId) ?? null,
+    [presets, selectedPresetId],
+  );
+
+  const configuredLists = useMemo(
+    () =>
+      lists.filter((list) =>
+        hasActiveIncludeRules(list.ruleSet, list.selectedOption),
+      ),
+    [lists],
+  );
+
+  const canEstimateMatches = configuredLists.length > 0;
+  const canProceed =
+    dataLoaded &&
+    !isListEmpty &&
+    (configuredLists.length > 0 || listsToRemoveFromAllEntries.length > 0);
+
   const listOptions = useMemo(
     () => getOptions(listType),
     [getOptions, listType],
@@ -1248,19 +2123,27 @@ function PageData() {
           options={listOptions}
           markedForRemoval={listsToRemoveFromAllEntries.includes(list.name)}
           onUndoRemoveAll={handleUndoRemoveAll}
-          onClearCondition={handleClearCondition}
-          onValueChange={handleValueChange}
+          onAddRule={handleAddRule}
+          onClearRules={handleClearRules}
           onOpenRename={openRenameModal}
           onDelete={handleDeleteList}
           onRemoveAll={handleRemoveAllClick}
+          onOperatorChange={handleOperatorChange}
+          onRemoveRule={handleRemoveRule}
+          onRuleConditionChange={handleRuleConditionChange}
+          onRulePolarityChange={handleRulePolarityChange}
         />
       )),
     [
-      handleClearCondition,
+      handleAddRule,
+      handleClearRules,
       handleDeleteList,
+      handleOperatorChange,
       handleRemoveAllClick,
+      handleRemoveRule,
+      handleRuleConditionChange,
+      handleRulePolarityChange,
       handleUndoRemoveAll,
-      handleValueChange,
       listOptions,
       lists,
       listsToRemoveFromAllEntries,
@@ -1415,6 +2298,7 @@ function PageData() {
       href: "/custom-list-manager",
     },
   ];
+  const matchPreviewContent = renderMatchPreviewContent(matchPreview, listType);
 
   return (
     <Layout>
@@ -1550,7 +2434,216 @@ function PageData() {
                   Add New List
                 </button>
               )}
+              {!isListEmpty && (
+                <button
+                  onClick={handleEstimateMatches}
+                  aria-label="Estimate matching entries"
+                  disabled={!canEstimateMatches || loading}
+                  className="
+                    flex cursor-pointer items-center gap-2 rounded-lg px-5 py-2.5 font-semibold
+                    transition-all duration-200
+                    hover:bg-z-card-high
+                    active:scale-95
+                    disabled:cursor-not-allowed disabled:opacity-40
+                  "
+                  style={{
+                    backgroundColor: "var(--z-card)",
+                    border: "1px solid var(--z-border-mid)",
+                    color: "var(--z-text)",
+                  }}
+                >
+                  <FaEye
+                    className="size-4"
+                    style={{ color: "var(--z-frost)" }}
+                  />
+                  Estimate Matches
+                </button>
+              )}
+              {!isListEmpty && (
+                <button
+                  onClick={openSavePresetDialog}
+                  aria-label="Save current preset"
+                  className="
+                    flex cursor-pointer items-center gap-2 rounded-lg px-5 py-2.5 font-semibold
+                    transition-all duration-200
+                    hover:bg-z-card-high
+                    active:scale-95
+                  "
+                  style={{
+                    backgroundColor: "var(--z-card)",
+                    border: "1px solid var(--z-border-mid)",
+                    color: "var(--z-text)",
+                  }}
+                >
+                  <FaSave
+                    className="size-4"
+                    style={{ color: "var(--z-amber)" }}
+                  />
+                  Save Preset
+                </button>
+              )}
             </div>
+          </div>
+          <div
+            className="rounded-lg p-4"
+            style={{
+              backgroundColor: "var(--z-card)",
+              border: "1px solid var(--z-border)",
+            }}
+          >
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2
+                    className="text-sm font-bold"
+                    style={{ color: "var(--z-text)" }}
+                  >
+                    Strategy Presets
+                  </h2>
+                  <span
+                    className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                    style={{
+                      backgroundColor: "var(--z-card-up)",
+                      border: "1px solid var(--z-border)",
+                      color: "var(--z-muted)",
+                    }}
+                  >
+                    local only
+                  </span>
+                </div>
+                <p className="mt-1 text-xs" style={{ color: "var(--z-muted)" }}>
+                  Save reusable rule recipes for this browser without exporting
+                  anything to AniList.
+                </p>
+              </div>
+
+              <span
+                className="text-xs font-semibold"
+                style={{ color: "var(--z-subtle)" }}
+              >
+                {presets.length} preset{presets.length === 1 ? "" : "s"} saved
+              </span>
+            </div>
+
+            <div className="mt-4 flex flex-col gap-3 xl:flex-row xl:items-center">
+              <div className="min-w-0 flex-1">
+                <label className="sr-only" htmlFor="workflowPresetSelect">
+                  Saved workflow presets
+                </label>
+                <select
+                  id="workflowPresetSelect"
+                  value={selectedPresetId}
+                  onChange={(event) => setSelectedPresetId(event.target.value)}
+                  className="w-full rounded-lg px-3 py-2.5 text-sm focus:outline-none"
+                  style={{
+                    backgroundColor: "var(--z-surface)",
+                    border: "1px solid var(--z-border-mid)",
+                    color: "var(--z-text)",
+                  }}
+                >
+                  {presets.length === 0 ? (
+                    <option value="">No presets saved yet</option>
+                  ) : (
+                    presets.map((preset) => (
+                      <option key={preset.id} value={preset.id}>
+                        {preset.name} · {preset.mediaType.toLowerCase()} ·{" "}
+                        {preset.lists.length} configured list
+                        {preset.lists.length === 1 ? "" : "s"}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={handleLoadPreset}
+                  disabled={!selectedPreset}
+                  className="
+                    inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold
+                    transition-all
+                    hover:bg-z-card-high
+                    active:scale-95
+                    disabled:cursor-not-allowed disabled:opacity-40
+                  "
+                  style={{
+                    backgroundColor: "var(--z-card-up)",
+                    border: "1px solid var(--z-border-mid)",
+                    color: "var(--z-text)",
+                  }}
+                >
+                  <FaFolderOpen
+                    className="size-4"
+                    style={{ color: "var(--z-frost)" }}
+                  />
+                  Load
+                </button>
+                <button
+                  type="button"
+                  onClick={openDuplicatePresetDialog}
+                  disabled={!selectedPreset}
+                  className="
+                    inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold
+                    transition-all
+                    hover:bg-z-card-high
+                    active:scale-95
+                    disabled:cursor-not-allowed disabled:opacity-40
+                  "
+                  style={{
+                    backgroundColor: "var(--z-card-up)",
+                    border: "1px solid var(--z-border-mid)",
+                    color: "var(--z-text)",
+                  }}
+                >
+                  <FaCopy
+                    className="size-4"
+                    style={{ color: "var(--z-amber)" }}
+                  />
+                  Duplicate
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowDeletePresetModal(true)}
+                  disabled={!selectedPreset}
+                  className="
+                    inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold
+                    transition-all
+                    hover:bg-[rgba(248,113,113,0.12)]
+                    active:scale-95
+                    disabled:cursor-not-allowed disabled:opacity-40
+                  "
+                  style={{
+                    backgroundColor: "var(--z-card-up)",
+                    border: "1px solid rgba(248,113,113,0.18)",
+                    color: "var(--z-red)",
+                  }}
+                >
+                  <FaTrash className="size-4" />
+                  Delete
+                </button>
+              </div>
+            </div>
+
+            {selectedPreset && (
+              <p className="mt-3 text-xs" style={{ color: "var(--z-subtle)" }}>
+                <span
+                  className="font-semibold"
+                  style={{ color: "var(--z-text)" }}
+                >
+                  {selectedPreset.name}
+                </span>{" "}
+                targets {selectedPreset.mediaType.toLowerCase()} lists, stores{" "}
+                {selectedPreset.lists.length} configured list rule set
+                {selectedPreset.lists.length === 1 ? "" : "s"}, and remembers{" "}
+                {selectedPreset.listsToRemoveFromAllEntries.length}{" "}
+                remove-from-all selection
+                {selectedPreset.listsToRemoveFromAllEntries.length === 1
+                  ? ""
+                  : "s"}
+                .
+              </p>
+            )}
           </div>
           {!isListEmpty && (
             <div
@@ -1624,11 +2717,7 @@ function PageData() {
           <button
             aria-label="Proceed to update step"
             onClick={confirmAndNavigate}
-            disabled={
-              !dataLoaded ||
-              isListEmpty ||
-              lists.filter((list) => list.selectedOption).length === 0
-            }
+            disabled={!canProceed}
             className="
               rounded-lg px-6 py-3 font-bold transition-all duration-200
               hover:brightness-110
@@ -1662,8 +2751,8 @@ function PageData() {
               className="text-sm font-medium"
               style={{ color: "var(--z-amber)" }}
             >
-              You&apos;re about to update{" "}
-              {lists.filter((list) => list.selectedOption).length} custom lists
+              You&apos;re about to update {configuredLists.length} custom list
+              {configuredLists.length === 1 ? "" : "s"}
             </p>
           </div>
           {listsToRemoveFromAllEntries.length > 0 && (
@@ -1683,7 +2772,9 @@ function PageData() {
               <ul className="ml-4 list-disc space-y-1">
                 {listsToRemoveFromAllEntries.map((name) => {
                   const selected = lists.find(
-                    (l) => l.name === name && l.selectedOption,
+                    (l) =>
+                      l.name === name &&
+                      hasActiveIncludeRules(l.ruleSet, l.selectedOption),
                   );
                   return (
                     <li
@@ -1712,9 +2803,13 @@ function PageData() {
               animate={{ opacity: 1 }}
               className="space-y-2"
             >
-              {lists
-                .filter((list) => list.selectedOption)
-                .map((list) => (
+              {configuredLists.map((list) => {
+                const normalized = normalizeCustomListRuleConfig(list);
+                const activeRules = normalized.ruleSet.rules.filter(
+                  (rule) => rule.condition.trim().length > 0,
+                );
+
+                return (
                   <motion.li
                     key={list.name}
                     initial={{ opacity: 0, y: 10 }}
@@ -1747,11 +2842,28 @@ function PageData() {
                         className="text-sm"
                         style={{ color: "var(--z-muted)" }}
                       >
-                        {list.selectedOption}
+                        {summarizeRuleSet(
+                          normalized.ruleSet,
+                          normalized.selectedOption,
+                        )}
                       </span>
+                      <ul
+                        className="mt-2 space-y-1 text-xs"
+                        style={{ color: "var(--z-subtle)" }}
+                      >
+                        {activeRules.map((rule) => (
+                          <li key={rule.id}>
+                            {rule.polarity === "exclude"
+                              ? "Exclude"
+                              : "Include"}
+                            : {rule.condition}
+                          </li>
+                        ))}
+                      </ul>
                     </div>
                   </motion.li>
-                ))}
+                );
+              })}
             </motion.ul>
           </div>
           <div
@@ -1876,6 +2988,96 @@ function PageData() {
             </div>
           )}
         </div>
+      </Modal>
+
+      <Modal
+        isOpen={presetDialogMode !== null}
+        onClose={() => {
+          setPresetDialogMode(null);
+          setPresetNameDraft("");
+        }}
+        onConfirm={handlePresetDialogConfirm}
+        title={
+          presetDialogMode === "duplicate" ? "Duplicate Preset" : "Save Preset"
+        }
+        confirmButtonText={
+          presetDialogMode === "duplicate" ? "Duplicate" : "Save"
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-sm" style={{ color: "var(--z-muted)" }}>
+            {presetDialogMode === "duplicate"
+              ? "Create a new preset from the selected saved strategy."
+              : "Save the current media type, rules, visibility preference, and remove-from-all selections as a reusable local preset."}
+          </p>
+          <input
+            type="text"
+            name="workflowPresetName"
+            className="w-full rounded-lg px-3 py-2 focus:outline-none"
+            style={{
+              backgroundColor: "var(--z-surface)",
+              border: "1px solid var(--z-border)",
+              color: "var(--z-text)",
+            }}
+            placeholder="Enter preset name"
+            value={presetNameDraft}
+            onChange={(event) => setPresetNameDraft(event.target.value)}
+            autoComplete="off"
+            maxLength={60}
+            aria-label="Preset name"
+          />
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={showDeletePresetModal}
+        onClose={() => setShowDeletePresetModal(false)}
+        onConfirm={handleDeletePreset}
+        title="Delete Preset?"
+        confirmButtonText="Delete"
+        variant="danger"
+      >
+        <div className="space-y-4">
+          <div
+            className="rounded-lg p-3"
+            style={{
+              backgroundColor: "rgba(248,113,113,0.1)",
+              border: "1px solid rgba(248,113,113,0.2)",
+            }}
+          >
+            <p
+              className="text-sm font-medium"
+              style={{ color: "var(--z-red)" }}
+            >
+              Delete the local preset{" "}
+              <span className="font-bold">{selectedPreset?.name}</span>?
+            </p>
+          </div>
+          <p className="text-sm" style={{ color: "var(--z-muted)" }}>
+            This only removes the saved preset from this browser. It does not
+            affect AniList or your current in-page rules.
+          </p>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={matchPreview.open}
+        onClose={() =>
+          setMatchPreview((prev) => ({
+            ...prev,
+            open: false,
+          }))
+        }
+        onConfirm={() =>
+          setMatchPreview((prev) => ({
+            ...prev,
+            open: false,
+          }))
+        }
+        title="Estimated Matches"
+        confirmButtonText="Close"
+      >
+        {matchPreviewContent}
       </Modal>
 
       {/* Remove from All Entries Modal */}

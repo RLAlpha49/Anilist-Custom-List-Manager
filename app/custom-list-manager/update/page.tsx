@@ -24,6 +24,13 @@ import Layout from "@/components/layout";
 import LoadingIndicator from "@/components/loading-indicator";
 import { useAuth } from "@/context/auth-context";
 import { AniListRetryContext, fetchAniList } from "@/lib/api";
+import {
+  computeEntryWorkflowUpdate,
+  fetchAllWorkflowMediaEntries,
+  getMediaEntryTitle,
+  WORKFLOW_MEDIA_LIST_QUERY,
+  type WorkflowMediaListQueryVariables,
+} from "@/lib/custom-list-workflow";
 import { classifyFallbackFailure, getFallbackCopy } from "@/lib/fallback-ux";
 import {
   getBooleanItemWithExpiry,
@@ -36,21 +43,16 @@ import {
   STORAGE_TTLS,
 } from "@/lib/local-storage";
 import {
+  type AniListMediaType,
   AniListRequestVariables,
-  hasPagedMediaListCollectionData,
+  type CustomListRuleConfig,
   MediaEntry,
-  MediaListPaginationMetadata,
   MediaListResponse,
   MutationResponse,
   RateLimitInfo,
 } from "@/lib/types";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
-
-interface CustomListConfig {
-  name: string;
-  selectedOption: string;
-}
 
 type Phase =
   | "scanning"
@@ -86,13 +88,6 @@ interface RetryStatus extends AniListRetryContext {
   startedAt: number;
 }
 
-interface MediaListQueryVariables extends AniListRequestVariables {
-  userId: number;
-  type: string;
-  chunk: number;
-  perChunk: number;
-}
-
 interface SaveEntryMutationVariables extends AniListRequestVariables {
   id: number;
   customLists: string[];
@@ -106,14 +101,9 @@ type BatchedSaveEntryMutationData = Record<
   }
 >;
 
-type QueueListGroup = NonNullable<
-  MediaListResponse["data"]["MediaListCollection"]
->["lists"][number];
-
 type PendingAction = "pause" | "stop" | "complete" | null;
 
 const LOW_RATE_LIMIT_THRESHOLD = 5;
-const MEDIA_LIST_PAGE_SIZE = 500;
 const REQUEST_INTERVAL_MS = 3000;
 const REQUEST_DELAY_POLL_INTERVAL_MS = 60;
 const DEFAULT_MUTATION_BATCH_SIZE = 9;
@@ -141,140 +131,6 @@ const resolveConsecutiveFailureThreshold = (): number => {
 };
 
 const CONSECUTIVE_FAILURE_THRESHOLD = resolveConsecutiveFailureThreshold();
-
-const STATUS_REGEX = /^Status set to (.+)$/;
-const SCORE_REGEX = /^Score set to (\d+)$/;
-const GENRE_REGEX = /^Genres contain (.+)$/;
-const TAG_REGEX = /^Tags contain (.+)$/;
-const TAG_CATEGORY_REGEX = /^Tag Categories contain (.+)$/;
-const FORMAT_REGEX = /^Format set to (.+)$/;
-
-// ─── Condition Matching ───────────────────────────────────────────────────────
-
-const STATUS_MAP: Record<string, string> = {
-  Watching: "CURRENT",
-  Reading: "CURRENT",
-  Completed: "COMPLETED",
-  Paused: "PAUSED",
-  Planning: "PLANNING",
-  Dropped: "DROPPED",
-  Repeating: "REPEATING",
-};
-
-const FORMAT_MAP: Record<string, string> = {
-  TV: "TV",
-  TV_Short: "TV_SHORT",
-  Movie: "MOVIE",
-  Special: "SPECIAL",
-  OVA: "OVA",
-  ONA: "ONA",
-  Music: "MUSIC",
-  "Manga (Japan)": "MANGA",
-  "Manga (South Korean)": "MANHWA",
-  "Manga (Chinese)": "MANHUA",
-  "One shot": "ONE_SHOT",
-  Novel: "NOVEL",
-};
-
-const MANGA_REGION_COUNTRY_MAP: Record<string, string> = {
-  "Manga (South Korean)": "KR",
-  "Manga (Chinese)": "CN",
-};
-
-function matchesMangaRegion(label: string, entry: MediaEntry): boolean {
-  if (entry.media.format !== "MANGA" && entry.media.format !== "ONE_SHOT") {
-    return false;
-  }
-
-  const countryOfOrigin = entry.media.countryOfOrigin?.toUpperCase() ?? null;
-  const expectedCountry = MANGA_REGION_COUNTRY_MAP[label];
-
-  if (expectedCountry) {
-    return countryOfOrigin === expectedCountry;
-  }
-
-  if (label === "Manga (Japan)") {
-    return countryOfOrigin !== "KR" && countryOfOrigin !== "CN";
-  }
-
-  return false;
-}
-
-function matchCondition(condition: string, entry: MediaEntry): boolean {
-  const statusMatch = STATUS_REGEX.exec(condition);
-  if (statusMatch) {
-    return (
-      entry.status ===
-      (STATUS_MAP[statusMatch[1]] ?? statusMatch[1].toUpperCase())
-    );
-  }
-  if (condition === "Score set to below 5") {
-    return entry.score > 0 && entry.score < 5;
-  }
-  const scoreMatch = SCORE_REGEX.exec(condition);
-  if (scoreMatch) return entry.score === Number.parseInt(scoreMatch[1], 10);
-  const genreMatch = GENRE_REGEX.exec(condition);
-  if (genreMatch) return (entry.genres ?? []).includes(genreMatch[1]);
-  const tagMatch = TAG_REGEX.exec(condition);
-  if (tagMatch) return (entry.tags ?? []).includes(tagMatch[1]);
-  const tagCatMatch = TAG_CATEGORY_REGEX.exec(condition);
-  if (tagCatMatch) return (entry.tagCategories ?? []).includes(tagCatMatch[1]);
-  const formatMatch = FORMAT_REGEX.exec(condition);
-  if (formatMatch) {
-    if (formatMatch[1].startsWith("Manga (")) {
-      return matchesMangaRegion(formatMatch[1], entry);
-    }
-
-    return (
-      entry.media.format === (FORMAT_MAP[formatMatch[1]] ?? formatMatch[1])
-    );
-  }
-  if (condition === "Rewatched" || condition === "Reread") {
-    return (entry.repeat ?? 0) > 0;
-  }
-  if (condition === "Adult (18+)") {
-    return !!(entry.isAdult ?? entry.media.isAdult);
-  }
-  return false;
-}
-
-function computeNewCustomLists(
-  entry: MediaEntry,
-  listConfigs: CustomListConfig[],
-  listsToRemove: string[],
-  hideFromStatus: boolean,
-): { newLists: string[]; changed: boolean; shouldHide: boolean } {
-  const currentLists = new Set<string>(
-    Object.entries(entry.customLists)
-      .filter(([, v]) => v)
-      .map(([k]) => k),
-  );
-  const newLists = new Set<string>(currentLists);
-
-  for (const cfg of listConfigs) {
-    if (!cfg.selectedOption) continue;
-    if (matchCondition(cfg.selectedOption, entry)) {
-      newLists.add(cfg.name);
-    } else {
-      newLists.delete(cfg.name);
-    }
-  }
-
-  for (const name of listsToRemove) {
-    newLists.delete(name);
-  }
-
-  const shouldHide = hideFromStatus && newLists.size > 0;
-  const hideChanged = shouldHide !== entry.hiddenFromStatusLists;
-
-  const changed =
-    currentLists.size !== newLists.size ||
-    [...newLists].some((n) => !currentLists.has(n)) ||
-    [...currentLists].some((n) => !newLists.has(n)) ||
-    hideChanged;
-
-  return { newLists: [...newLists], changed, shouldHide };
-}
 
 const waitForUiCommit = () =>
   new Promise<void>((resolve) => {
@@ -371,11 +227,7 @@ const hasSuccessfulBatchedSaveResponse = (
   });
 };
 
-const getEntryTitle = (entry: MediaEntry): string =>
-  entry.media.title.userPreferred ||
-  entry.media.title.romaji ||
-  entry.media.title.english ||
-  "Unknown";
+const getEntryTitle = getMediaEntryTitle;
 
 const TITLE_CLAMP_STYLE: CSSProperties = {
   display: "block",
@@ -526,44 +378,17 @@ function MetaPill({
 }
 
 function buildTrackedEntries(
-  lists: QueueListGroup[],
-  listConfigs: CustomListConfig[],
+  entries: MediaEntry[],
+  listConfigs: CustomListRuleConfig[],
   listsToRemove: string[],
   hideDefaultStatusLists: boolean,
 ): TrackedEntry[] {
-  const entryMap = new Map<number, MediaEntry>();
-
-  for (const list of lists) {
-    for (const rawEntry of list.entries) {
-      if (entryMap.has(rawEntry.id)) {
-        continue;
-      }
-
-      const mediaTags = rawEntry.media.tags ?? [];
-
-      entryMap.set(rawEntry.id, {
-        ...rawEntry,
-        genres: rawEntry.media.genres ?? [],
-        tags: mediaTags.map((tag) => tag.name),
-        tagCategories: [
-          ...new Set(
-            mediaTags
-              .map((tag) => tag.category)
-              .filter((category): category is string => Boolean(category)),
-          ),
-        ],
-        isAdult: rawEntry.media.isAdult ?? false,
-      });
-    }
-  }
-
   const updates: TrackedEntry[] = [];
-  const selectedConfigs = listConfigs.filter((config) => config.selectedOption);
 
-  for (const entry of entryMap.values()) {
-    const { newLists, changed, shouldHide } = computeNewCustomLists(
+  for (const entry of entries) {
+    const { newLists, changed, shouldHide } = computeEntryWorkflowUpdate(
       entry,
-      selectedConfigs,
+      listConfigs,
       listsToRemove,
       hideDefaultStatusLists,
     );
@@ -587,47 +412,6 @@ function buildTrackedEntries(
 
   return updates;
 }
-
-// ─── GraphQL ──────────────────────────────────────────────────────────────────
-
-const MEDIA_LIST_QUERY = `
-  query ($userId: Int, $type: MediaType, $chunk: Int, $perChunk: Int) {
-    MediaListCollection(
-      userId: $userId
-      type: $type
-      chunk: $chunk
-      perChunk: $perChunk
-    ) {
-      hasNextChunk
-      lists {
-        name
-        status
-        isCustomList
-        entries {
-          id
-          status
-          score
-          progress
-          repeat
-          hiddenFromStatusLists
-          customLists
-          media {
-            id
-            type
-            title { romaji english native userPreferred }
-            coverImage { extraLarge large medium }
-            format
-            countryOfOrigin
-            isAdult
-            genres
-            tags { name category }
-          }
-        }
-      }
-    }
-  }
-`;
-
 const SAVE_ENTRY_MUTATION = `
   mutation ($id: Int, $customLists: [String], $hiddenFromStatusLists: Boolean) {
     SaveMediaListEntry(
@@ -1794,7 +1578,7 @@ export default function UpdatePage() {
     }
 
     const prepareQueue = async () => {
-      const listConfigs = getJsonItemWithExpiry<CustomListConfig[]>(
+      const listConfigs = getJsonItemWithExpiry<CustomListRuleConfig[]>(
         STORAGE_KEYS.workflowLists,
         [],
       );
@@ -1803,7 +1587,9 @@ export default function UpdatePage() {
         [],
       );
       const listType =
-        getItemWithExpiry<string>(STORAGE_KEYS.workflowListType) ?? "ANIME";
+        getItemWithExpiry<string>(STORAGE_KEYS.workflowListType) === "MANGA"
+          ? "MANGA"
+          : "ANIME";
       const userId =
         authUserId ??
         normalizeUserId(
@@ -1821,67 +1607,33 @@ export default function UpdatePage() {
       }
 
       try {
-        const trackedEntryMap = new Map<number, TrackedEntry>();
-        let pagination: MediaListPaginationMetadata = {
-          chunk: 1,
-          perChunk: MEDIA_LIST_PAGE_SIZE,
-          hasNextChunk: true,
-        };
+        const entries = await fetchAllWorkflowMediaEntries({
+          userId,
+          type: listType as AniListMediaType,
+          fetchPage: async (variables: WorkflowMediaListQueryVariables) =>
+            await fetchAniList<
+              MediaListResponse["data"],
+              WorkflowMediaListQueryVariables
+            >(
+              WORKFLOW_MEDIA_LIST_QUERY,
+              variables,
+              authToken,
+              handleRetryState,
+            ),
+          onRateLimit: updateRateLimitState,
+          shouldCancel: () => cancelled,
+        });
 
-        do {
-          const response = await fetchAniList<
-            MediaListResponse["data"],
-            MediaListQueryVariables
-          >(
-            MEDIA_LIST_QUERY,
-            {
-              userId,
-              type: listType,
-              chunk: pagination.chunk,
-              perChunk: pagination.perChunk,
-            },
-            authToken,
-            handleRetryState,
-          );
+        if (cancelled) {
+          return;
+        }
 
-          updateRateLimitState(response.rateLimit ?? null);
-
-          if (cancelled) {
-            return;
-          }
-
-          if (response.data.MediaListCollection == null) {
-            break;
-          }
-
-          if (!hasPagedMediaListCollectionData(response.data)) {
-            throw new Error(
-              "AniList returned an unexpected media list payload.",
-            );
-          }
-
-          const { lists, hasNextChunk } = response.data.MediaListCollection;
-          const trackedEntriesForChunk = buildTrackedEntries(
-            lists,
-            listConfigs,
-            listsToRemove,
-            hideDefaultStatusLists,
-          );
-
-          for (const trackedEntry of trackedEntriesForChunk) {
-            if (!trackedEntryMap.has(trackedEntry.entry.id)) {
-              trackedEntryMap.set(trackedEntry.entry.id, trackedEntry);
-            }
-          }
-
-          pagination = {
-            ...pagination,
-            chunk: pagination.chunk + 1,
-            hasNextChunk,
-          };
-        } while (pagination.hasNextChunk);
-
-        const trackedEntries = [...trackedEntryMap.values()];
+        const trackedEntries = buildTrackedEntries(
+          entries,
+          listConfigs,
+          listsToRemove,
+          hideDefaultStatusLists,
+        );
 
         if (trackedEntries.length === 0) {
           persistUpdateStats({ totalUpdated: 0, errorCount: 0, timeTaken: 0 });
