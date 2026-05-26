@@ -21,7 +21,6 @@ import { toast } from "sonner";
 
 import Breadcrumbs from "@/components/breadcrumbs";
 import Layout from "@/components/layout";
-import LoadingIndicator from "@/components/loading-indicator";
 import { useAuth } from "@/context/auth-context";
 import { AniListRetryContext, fetchAniList } from "@/lib/api";
 import {
@@ -43,7 +42,6 @@ import {
   STORAGE_TTLS,
 } from "@/lib/local-storage";
 import {
-  type AniListMediaType,
   AniListRequestVariables,
   type CustomListRuleConfig,
   MediaEntry,
@@ -94,14 +92,11 @@ interface SaveEntryMutationVariables extends AniListRequestVariables {
   hiddenFromStatusLists: boolean;
 }
 
-type BatchedSaveEntryMutationData = Record<
-  string,
-  {
-    id: number;
-  }
->;
+type BatchedSaveEntryMutationData = Record<string, { id: number }>;
 
 type PendingAction = "pause" | "stop" | "complete" | null;
+
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const LOW_RATE_LIMIT_THRESHOLD = 5;
 const REQUEST_INTERVAL_MS = 3000;
@@ -110,33 +105,26 @@ const DEFAULT_MUTATION_BATCH_SIZE = 9;
 const MAX_MUTATION_BATCH_SIZE = 15;
 const MIN_MUTATION_BATCH_SIZE = 3;
 const RATE_LIMIT_SAFETY_RESERVE = 2;
-const VIRTUAL_ROW_GAP_PX = 12;
-const CARD_ANIMATION_DURATION_SECONDS = 0.38;
+const VIRTUAL_ROW_GAP_PX = 6;
+const CARD_ANIMATION_DURATION_SECONDS = 0.28;
 const DEFAULT_CONSECUTIVE_FAILURE_THRESHOLD = 5;
 
 const resolveConsecutiveFailureThreshold = (): number => {
   const rawThreshold = process.env.NEXT_PUBLIC_UPDATER_FAIL_FAST_THRESHOLD;
-
-  if (!rawThreshold) {
-    return DEFAULT_CONSECUTIVE_FAILURE_THRESHOLD;
-  }
-
+  if (!rawThreshold) return DEFAULT_CONSECUTIVE_FAILURE_THRESHOLD;
   const parsedThreshold = Number.parseInt(rawThreshold, 10);
-
-  if (!Number.isFinite(parsedThreshold) || parsedThreshold <= 0) {
+  if (!Number.isFinite(parsedThreshold) || parsedThreshold <= 0)
     return DEFAULT_CONSECUTIVE_FAILURE_THRESHOLD;
-  }
-
   return parsedThreshold;
 };
 
 const CONSECUTIVE_FAILURE_THRESHOLD = resolveConsecutiveFailureThreshold();
 
+// ─── Utilities ────────────────────────────────────────────────────────────────
+
 const waitForUiCommit = () =>
   new Promise<void>((resolve) => {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => resolve());
-    });
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
   });
 
 const wait = (milliseconds: number) =>
@@ -151,19 +139,14 @@ const getProcessingBatchSize = (
   rateLimitInfo: RateLimitInfo | null,
   pendingCount: number,
 ): number => {
-  if (pendingCount <= 0) {
-    return 0;
-  }
-
+  if (pendingCount <= 0) return 0;
   if (!rateLimitInfo?.remaining || rateLimitInfo.remaining <= 0) {
     return Math.min(DEFAULT_MUTATION_BATCH_SIZE, pendingCount);
   }
-
   const availableRequestBudget = Math.max(
     MIN_MUTATION_BATCH_SIZE,
     rateLimitInfo.remaining - RATE_LIMIT_SAFETY_RESERVE,
   );
-
   return Math.min(
     Math.max(MIN_MUTATION_BATCH_SIZE, availableRequestBudget),
     MAX_MUTATION_BATCH_SIZE,
@@ -184,25 +167,22 @@ const buildBatchedSaveEntryMutation = (
   const aliases: string[] = [];
 
   for (const [index, entry] of entries.entries()) {
-    const idVariable = `id${index}`;
-    const customListsVariable = `customLists${index}`;
-    const hiddenVariable = `hiddenFromStatusLists${index}`;
+    const idVar = `id${index}`;
+    const clVar = `customLists${index}`;
+    const hiddenVar = `hiddenFromStatusLists${index}`;
     const alias = `entry${index}`;
-
     aliases.push(alias);
     variableDefinitions.push(
-      `$${idVariable}: Int`,
-      `$${customListsVariable}: [String]`,
-      `$${hiddenVariable}: Boolean`,
+      `$${idVar}: Int`,
+      `$${clVar}: [String]`,
+      `$${hiddenVar}: Boolean`,
     );
-
     mutationFields.push(
-      `${alias}: SaveMediaListEntry(id: $${idVariable}, customLists: $${customListsVariable}, hiddenFromStatusLists: $${hiddenVariable}) { id }`,
+      `${alias}: SaveMediaListEntry(id: $${idVar}, customLists: $${clVar}, hiddenFromStatusLists: $${hiddenVar}) { id }`,
     );
-
-    variables[idVariable] = entry.entry.id;
-    variables[customListsVariable] = entry.newCustomLists;
-    variables[hiddenVariable] = entry.shouldHide;
+    variables[idVar] = entry.entry.id;
+    variables[clVar] = entry.newCustomLists;
+    variables[hiddenVar] = entry.shouldHide;
   }
 
   return {
@@ -216,14 +196,10 @@ const hasSuccessfulBatchedSaveResponse = (
   data: unknown,
   aliases: string[],
 ): data is BatchedSaveEntryMutationData => {
-  if (!isRecord(data)) {
-    return false;
-  }
-
+  if (!isRecord(data)) return false;
   return aliases.every((alias) => {
-    const entryResult = data[alias];
-
-    return isRecord(entryResult) && typeof entryResult.id === "number";
+    const r = data[alias];
+    return isRecord(r) && typeof r.id === "number";
   });
 };
 
@@ -238,40 +214,26 @@ const TITLE_CLAMP_STYLE: CSSProperties = {
 
 const getEntryChangeSummary = (entry: TrackedEntry): EntryChangeSummary => {
   const added = entry.newCustomLists.filter(
-    (listName) => !entry.prevCustomLists.includes(listName),
+    (n) => !entry.prevCustomLists.includes(n),
   );
   const removed = entry.prevCustomLists.filter(
-    (listName) => !entry.newCustomLists.includes(listName),
+    (n) => !entry.newCustomLists.includes(n),
   );
-
   return {
     added,
     removed,
-    kept: entry.newCustomLists.filter((listName) =>
-      entry.prevCustomLists.includes(listName),
-    ),
+    kept: entry.newCustomLists.filter((n) => entry.prevCustomLists.includes(n)),
     hideChanged: entry.shouldHide !== entry.entry.hiddenFromStatusLists,
     willHideFromStatusLists: entry.shouldHide,
   };
 };
 
-const formatLabel = (value: string | null | undefined): string => {
-  if (!value) {
-    return "Unknown format";
-  }
-
-  return value.replaceAll("_", " ");
-};
-
 const formatStatusLabel = (value: string | null | undefined): string => {
-  if (!value) {
-    return "Unknown status";
-  }
-
+  if (!value) return "Unknown";
   return value
     .replaceAll("_", " ")
     .toLowerCase()
-    .replace(/\b\w/g, (character) => character.toUpperCase());
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 };
 
 type MetaTone = "neutral" | "pink" | "amber" | "frost" | "green" | "red";
@@ -295,25 +257,16 @@ const getStatusTone = (status: string | null | undefined): MetaTone => {
 };
 
 const formatDurationLabel = (seconds: number): string => {
-  if (seconds < 60) {
-    return `${seconds}s`;
-  }
-
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
-
-  return remainingSeconds > 0
-    ? `${minutes}m ${remainingSeconds}s`
-    : `${minutes}m`;
+  if (seconds < 60) return `${seconds}s`;
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return s > 0 ? `${m}m ${s}s` : `${m}m`;
 };
 
 const formatResetLabel = (
   resetAt: number | null | undefined,
 ): string | null => {
-  if (!resetAt) {
-    return null;
-  }
-
+  if (!resetAt) return null;
   return new Date(resetAt * 1000).toLocaleTimeString([], {
     hour: "numeric",
     minute: "2-digit",
@@ -323,18 +276,60 @@ const formatResetLabel = (
 const getAniListEntryUrl = (entry: MediaEntry): string => {
   const mediaType =
     entry.media.type?.toLowerCase() === "manga" ? "manga" : "anime";
-
   return `https://anilist.co/${mediaType}/${entry.media.id}`;
 };
+
+function buildTrackedEntries(
+  entries: MediaEntry[],
+  listConfigs: CustomListRuleConfig[],
+  listsToRemove: string[],
+  hideDefaultStatusLists: boolean,
+): TrackedEntry[] {
+  const updates: TrackedEntry[] = [];
+  for (const entry of entries) {
+    const { newLists, changed, shouldHide } = computeEntryWorkflowUpdate(
+      entry,
+      listConfigs,
+      listsToRemove,
+      hideDefaultStatusLists,
+    );
+    if (!changed) continue;
+    const prevCustomLists = Object.entries(entry.customLists)
+      .filter(([, v]) => v)
+      .map(([k]) => k);
+    updates.push({
+      entry,
+      newCustomLists: newLists,
+      prevCustomLists,
+      shouldHide,
+      state: "pending",
+    });
+  }
+  return updates;
+}
+
+const SAVE_ENTRY_MUTATION = `
+  mutation ($id: Int, $customLists: [String], $hiddenFromStatusLists: Boolean) {
+    SaveMediaListEntry(
+      id: $id
+      customLists: $customLists
+      hiddenFromStatusLists: $hiddenFromStatusLists
+    ) {
+      id
+      mediaId
+      customLists
+      hiddenFromStatusLists
+    }
+  }
+`;
+
+// ─── Design Primitives ────────────────────────────────────────────────────────
 
 function MetaPill({
   label,
   tone = "neutral",
-}: Readonly<{
-  label: string;
-  tone?: MetaTone;
-}>) {
-  const styles = {
+}: Readonly<{ label: string; tone?: MetaTone }>) {
+  const styles: Record<MetaTone, React.CSSProperties> = {
     neutral: {
       backgroundColor: "rgba(255,255,255,0.04)",
       border: "1px solid var(--z-border)",
@@ -366,7 +361,6 @@ function MetaPill({
       color: "var(--z-red)",
     },
   };
-
   return (
     <span
       className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold"
@@ -377,80 +371,207 @@ function MetaPill({
   );
 }
 
-function buildTrackedEntries(
-  entries: MediaEntry[],
-  listConfigs: CustomListRuleConfig[],
-  listsToRemove: string[],
-  hideDefaultStatusLists: boolean,
-): TrackedEntry[] {
-  const updates: TrackedEntry[] = [];
+// ─── Orbital Progress Ring ────────────────────────────────────────────────────
 
-  for (const entry of entries) {
-    const { newLists, changed, shouldHide } = computeEntryWorkflowUpdate(
-      entry,
-      listConfigs,
-      listsToRemove,
-      hideDefaultStatusLists,
-    );
-
-    if (!changed) {
-      continue;
-    }
-
-    const prevCustomLists = Object.entries(entry.customLists)
-      .filter(([, value]) => value)
-      .map(([key]) => key);
-
-    updates.push({
-      entry,
-      newCustomLists: newLists,
-      prevCustomLists,
-      shouldHide,
-      state: "pending",
-    });
-  }
-
-  return updates;
-}
-const SAVE_ENTRY_MUTATION = `
-  mutation ($id: Int, $customLists: [String], $hiddenFromStatusLists: Boolean) {
-    SaveMediaListEntry(
-      id: $id
-      customLists: $customLists
-      hiddenFromStatusLists: $hiddenFromStatusLists
-    ) {
-      id
-      mediaId
-      customLists
-      hiddenFromStatusLists
-    }
-  }
-`;
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-function CoverImage({
-  src,
-  alt,
-  width,
-  height,
+function OrbitalProgress({
+  progress,
+  processedCount,
+  totalCount,
+  phase,
 }: Readonly<{
-  src: string | null | undefined;
-  alt: string;
-  width: number;
-  height: number;
+  progress: number;
+  processedCount: number;
+  totalCount: number;
+  phase: Phase;
 }>) {
+  const size = 148;
+  const cx = size / 2;
+  const cy = size / 2;
+  const outerR = 58;
+  const innerR = 44;
+  const circ = 2 * Math.PI * outerR;
+  const clamped = Math.min(100, Math.max(0, progress));
+  const dashOffset = circ - (clamped / 100) * circ;
+  const isScanning = phase === "scanning";
+
   return (
     <div
-      className="shrink-0 overflow-hidden rounded-md"
-      style={{ width, height }}
+      className="relative mx-auto flex items-center justify-center"
+      style={{ width: size, height: size }}
+    >
+      <svg
+        width={size}
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
+        aria-hidden="true"
+      >
+        <defs>
+          <linearGradient id="orb-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="var(--z-amber)" />
+            <stop offset="100%" stopColor="var(--z-pink)" />
+          </linearGradient>
+        </defs>
+        {/* Tick marks */}
+        {Array.from({ length: 24 }, (_, i) => i * 15).map((deg) => {
+          const rad = ((deg - 90) * Math.PI) / 180;
+          const x1 = cx + (outerR + 5) * Math.cos(rad);
+          const y1 = cy + (outerR + 5) * Math.sin(rad);
+          const x2 = cx + (outerR + 8) * Math.cos(rad);
+          const y2 = cy + (outerR + 8) * Math.sin(rad);
+          return (
+            <line
+              key={deg}
+              x1={x1}
+              y1={y1}
+              x2={x2}
+              y2={y2}
+              stroke="var(--z-border)"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
+          );
+        })}
+        {/* Inner decorative ring */}
+        <circle
+          cx={cx}
+          cy={cy}
+          r={innerR}
+          fill="none"
+          stroke="var(--z-border)"
+          strokeWidth="1"
+          strokeDasharray="2 6"
+        />
+        {/* Track */}
+        <circle
+          cx={cx}
+          cy={cy}
+          r={outerR}
+          fill="none"
+          stroke="var(--z-card-high)"
+          strokeWidth="7"
+        />
+        {/* Progress arc */}
+        <motion.circle
+          cx={cx}
+          cy={cy}
+          r={outerR}
+          fill="none"
+          stroke="url(#orb-grad)"
+          strokeWidth="7"
+          strokeLinecap="round"
+          strokeDasharray={circ}
+          initial={{ strokeDashoffset: circ }}
+          animate={{ strokeDashoffset: isScanning ? circ * 0.88 : dashOffset }}
+          transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+          style={{
+            transform: `rotate(-90deg)`,
+            transformOrigin: `${cx}px ${cy}px`,
+          }}
+        />
+      </svg>
+      <div className="absolute flex flex-col items-center gap-0.5">
+        {isScanning ? (
+          <FaSpinner
+            className="animate-spin"
+            size={24}
+            style={{ color: "var(--z-amber)" }}
+          />
+        ) : (
+          <>
+            <span
+              className="text-[26px] leading-none font-black tabular-nums"
+              style={{ fontFamily: "var(--font-syne)", color: "var(--z-text)" }}
+            >
+              {Math.round(clamped)}%
+            </span>
+            <span
+              className="text-[10px] font-bold tabular-nums"
+              style={{ color: "var(--z-muted)" }}
+            >
+              {processedCount}&thinsp;/&thinsp;{totalCount}
+            </span>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Control Button ───────────────────────────────────────────────────────────
+
+function ControlButton({
+  onClick,
+  disabled,
+  variant,
+  children,
+}: Readonly<{
+  onClick?: () => void;
+  disabled?: boolean;
+  variant: "primary" | "green" | "pink" | "red" | "ghost";
+  children: React.ReactNode;
+}>) {
+  const styles: Record<string, React.CSSProperties> = {
+    primary: {
+      background: "linear-gradient(135deg, var(--z-amber) 0%, #ef8d2f 100%)",
+      color: "#07060f",
+    },
+    green: {
+      backgroundColor: "rgba(34,197,94,0.08)",
+      border: "1px solid rgba(34,197,94,0.28)",
+      color: "var(--z-green)",
+    },
+    pink: {
+      backgroundColor: "rgba(232,121,249,0.08)",
+      border: "1px solid rgba(232,121,249,0.28)",
+      color: "var(--z-pink)",
+    },
+    red: {
+      backgroundColor: "rgba(248,113,113,0.08)",
+      border: "1px solid rgba(248,113,113,0.28)",
+      color: "var(--z-red)",
+    },
+    ghost: {
+      backgroundColor: "transparent",
+      border: "1px solid var(--z-border-mid)",
+      color: "var(--z-muted)",
+    },
+  };
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="
+        flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold
+        transition-all
+        hover:brightness-110
+        active:scale-[0.97]
+        disabled:cursor-not-allowed disabled:opacity-40
+      "
+      style={styles[variant]}
+    >
+      {children}
+    </button>
+  );
+}
+
+// ─── Mini Cover ───────────────────────────────────────────────────────────────
+
+function MiniCover({
+  src,
+  alt,
+}: Readonly<{ src: string | null | undefined; alt: string }>) {
+  return (
+    <div
+      className="shrink-0 overflow-hidden rounded-sm"
+      style={{ width: 68, height: 96 }}
     >
       {src ? (
         <img
           src={src}
           alt={alt}
-          width={width}
-          height={height}
+          width={68}
+          height={96}
           className="size-full object-cover"
         />
       ) : (
@@ -463,965 +584,454 @@ function CoverImage({
   );
 }
 
-function ListPill({
-  name,
+// ─── Change Chips ─────────────────────────────────────────────────────────────
+
+function ChangeChips({
+  changeSummary,
   variant,
 }: Readonly<{
-  name: string;
-  variant: "added" | "removed" | "kept";
+  changeSummary: EntryChangeSummary;
+  variant: "pending" | "updating" | "done";
 }>) {
-  const styles = {
-    added: {
-      backgroundColor: "var(--z-amber-dim)",
-      color: "var(--z-amber)",
-      border: "1px solid rgba(245,166,35,0.3)",
-    },
-    removed: {
-      backgroundColor: "rgba(248,113,113,0.1)",
-      color: "var(--z-red)",
-      border: "1px solid rgba(248,113,113,0.25)",
-      textDecoration: "line-through",
-    },
-    kept: {
-      backgroundColor: "var(--z-card-up)",
-      color: "var(--z-muted)",
-      border: "1px solid var(--z-border)",
-    },
-  };
+  const addColor =
+    variant === "done" ? "rgba(34,197,94,0.85)" : "var(--z-green)";
+  const removeColor =
+    variant === "done" ? "rgba(248,113,113,0.85)" : "var(--z-red)";
+  const hideColor =
+    variant === "done" ? "rgba(103,232,249,0.85)" : "var(--z-frost)";
 
   return (
-    <span
-      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
-      style={styles[variant]}
-    >
-      {variant === "added" && (
+    <div className="mt-1 flex flex-wrap gap-1">
+      {changeSummary.added.map((list) => (
         <span
-          className="size-1.5 rounded-full"
-          style={{ backgroundColor: "var(--z-amber)" }}
-        />
-      )}
-      {name}
-    </span>
-  );
-}
-
-function AniListEntryLink({
-  entry,
-  compact = false,
-}: Readonly<{
-  entry: MediaEntry;
-  compact?: boolean;
-}>) {
-  return (
-    <a
-      href={getAniListEntryUrl(entry)}
-      target="_blank"
-      rel="noreferrer"
-      className={
-        compact
-          ? `
-            inline-flex items-center justify-center rounded-full p-2 transition-all
-            hover:bg-white/8
-          `
-          : `
-            inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold
-            transition-all
-            hover:bg-white/8
-          `
-      }
-      style={{
-        border: "1px solid rgba(255,255,255,0.1)",
-        color: "var(--z-frost)",
-      }}
-    >
-      <FaExternalLinkAlt size={compact ? 11 : 10} />
-      {compact ? (
-        <span className="sr-only">Open on AniList</span>
-      ) : (
-        <span>Open on AniList</span>
-      )}
-    </a>
-  );
-}
-
-function PendingCard({
-  entry,
-  animated = true,
-}: Readonly<{ entry: TrackedEntry; animated?: boolean }>) {
-  const title = getEntryTitle(entry.entry);
-  const changeSummary = getEntryChangeSummary(entry);
-  const cover =
-    entry.entry.media.coverImage.extraLarge ??
-    entry.entry.media.coverImage.large ??
-    entry.entry.media.coverImage.medium;
-  const changeCount =
-    changeSummary.added.length +
-    changeSummary.removed.length +
-    (changeSummary.hideChanged ? 1 : 0);
-  let visibilitySummary = "";
-
-  if (changeSummary.hideChanged) {
-    visibilitySummary = changeSummary.willHideFromStatusLists
-      ? " • will hide from status lists"
-      : " • will be visible in status lists";
-  }
-
-  return (
-    <motion.div
-      layout="position"
-      initial={animated ? { opacity: 0, scale: 0.995, y: 8 } : false}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      exit={animated ? { opacity: 0, y: -8, scale: 0.995 } : undefined}
-      transition={{
-        duration: CARD_ANIMATION_DURATION_SECONDS,
-        ease: [0.22, 1, 0.36, 1],
-      }}
-      className="relative overflow-hidden rounded-xl"
-      style={{
-        backgroundColor: "var(--z-card)",
-        border: "1px solid rgba(245,166,35,0.18)",
-        boxShadow: "0 10px 28px rgba(0,0,0,0.25)",
-      }}
-    >
-      <motion.div
-        className="pointer-events-none absolute inset-0 rounded-xl"
-        animate={{ opacity: [0.08, 0.18, 0.08] }}
-        transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
-        style={{ boxShadow: "0 0 0 1px rgba(245,166,35,0.18) inset" }}
-      />
-      <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-start">
-        <CoverImage src={cover} alt={title} width={118} height={168} />
-        <div className="min-w-0 flex-1">
-          <div className="mb-1 flex items-center gap-2">
-            <FaList
-              className="shrink-0"
-              size={12}
-              style={{ color: "var(--z-amber)" }}
-            />
-            <span
-              className="text-[10px] font-bold tracking-widest uppercase"
-              style={{ color: "var(--z-amber)" }}
-            >
-              Queued Next
-            </span>
-            <span className="ml-auto">
-              <AniListEntryLink entry={entry.entry} compact />
-            </span>
-          </div>
-
-          <p
-            className="mb-3 text-xl/snug font-bold"
+          key={`add-${list}`}
+          className="
+            inline-flex max-w-36 items-center gap-1 overflow-hidden rounded-sm px-2 py-0.5 text-xs
+            font-bold
+          "
+          style={{
+            backgroundColor: "rgba(34,197,94,0.1)",
+            border: "1px solid rgba(34,197,94,0.2)",
+            color: addColor,
+          }}
+          title={`Add to: ${list}`}
+        >
+          <span className="shrink-0">+</span>
+          <span
             style={{
-              color: "var(--z-text)",
-              fontFamily: "var(--font-syne)",
-              ...TITLE_CLAMP_STYLE,
+              overflow: "hidden",
+              whiteSpace: "nowrap",
+              textOverflow: "ellipsis",
             }}
           >
-            {title}
-          </p>
-
-          <div className="mb-3 flex flex-wrap gap-2">
-            <MetaPill
-              label={formatStatusLabel(entry.entry.status)}
-              tone={getStatusTone(entry.entry.status)}
-            />
-            <MetaPill
-              label={formatLabel(entry.entry.media.format)}
-              tone="frost"
-            />
-            {changeSummary.hideChanged ? (
-              <MetaPill
-                label={
-                  changeSummary.willHideFromStatusLists
-                    ? "Will hide from status lists"
-                    : "Will be visible in status lists"
-                }
-                tone={changeSummary.willHideFromStatusLists ? "pink" : "green"}
-              />
-            ) : (
-              <MetaPill label={`${changeCount} queued changes`} tone="amber" />
-            )}
-          </div>
-
-          <p className="mb-3 text-sm" style={{ color: "var(--z-muted)" }}>
-            {changeSummary.added.length} to add • {changeSummary.removed.length}{" "}
-            to remove
-            {visibilitySummary}
-          </p>
-
-          {changeSummary.added.length > 0 && (
-            <div className="mb-2.5">
-              <p
-                className="mb-1 text-[9px] font-black tracking-widest uppercase"
-                style={{ color: "var(--z-amber)" }}
-              >
-                Will add to
-              </p>
-              <div className="flex flex-wrap gap-1">
-                {changeSummary.added.map((l) => (
-                  <ListPill key={l} name={l} variant="added" />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {changeSummary.removed.length > 0 && (
-            <div className="mb-2.5">
-              <p
-                className="mb-1 text-[9px] font-black tracking-widest uppercase"
-                style={{ color: "var(--z-red)" }}
-              >
-                Will remove from
-              </p>
-              <div className="flex flex-wrap gap-1">
-                {changeSummary.removed.map((l) => (
-                  <ListPill key={l} name={l} variant="removed" />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {changeSummary.kept.length > 0 && (
-            <div>
-              <p
-                className="mb-1 text-[9px] font-black tracking-widest uppercase"
-                style={{ color: "var(--z-subtle)" }}
-              >
-                Staying in
-              </p>
-              <div className="flex flex-wrap gap-1">
-                {changeSummary.kept.map((l) => (
-                  <ListPill key={l} name={l} variant="kept" />
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </motion.div>
-  );
-}
-
-function UpdatingCard({
-  entry,
-  compact = false,
-}: Readonly<{ entry: TrackedEntry; compact?: boolean }>) {
-  const title = getEntryTitle(entry.entry);
-  const changeSummary = getEntryChangeSummary(entry);
-  const cover =
-    entry.entry.media.coverImage.extraLarge ??
-    entry.entry.media.coverImage.large ??
-    entry.entry.media.coverImage.medium;
-  let visibilitySummary = "";
-  if (changeSummary.hideChanged) {
-    visibilitySummary = changeSummary.willHideFromStatusLists
-      ? " • hiding from status lists"
-      : " • showing in status lists";
-  }
-
-  if (compact) {
-    const addedPreview = changeSummary.added.slice(0, 2);
-    const removedPreview = changeSummary.removed.slice(0, 2);
-    const keptPreview = changeSummary.kept.slice(0, 2);
-
-    return (
-      <motion.div
-        layout="position"
-        initial={false}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{
-          duration: 0.22,
-          ease: "easeOut",
-        }}
-        className="relative overflow-hidden rounded-xl p-3"
-        style={{
-          backgroundColor: "var(--z-card)",
-          border: "1px solid rgba(232,121,249,0.35)",
-          boxShadow: "0 0 0 1px rgba(232,121,249,0.18) inset",
-        }}
-      >
-        <div className="flex items-start gap-3">
-          <CoverImage src={cover} alt={title} width={56} height={80} />
-          <div className="min-w-0 flex-1">
-            <div className="mb-1.5 flex items-center gap-2">
-              <FaSpinner
-                className="shrink-0 animate-spin"
-                size={11}
-                style={{ color: "var(--z-pink)" }}
-              />
-              <span
-                className="text-[9px] font-black tracking-widest uppercase"
-                style={{ color: "var(--z-pink)" }}
-              >
-                Updating
-              </span>
-              <span className="ml-auto">
-                <AniListEntryLink entry={entry.entry} compact />
-              </span>
-            </div>
-
-            <p
-              className="mb-2 text-sm/5 font-bold"
-              style={{
-                color: "var(--z-text)",
-                fontFamily: "var(--font-syne)",
-                ...TITLE_CLAMP_STYLE,
-              }}
-            >
-              {title}
-            </p>
-
-            <div className="mb-2 flex flex-wrap gap-1.5">
-              <MetaPill
-                label={formatStatusLabel(entry.entry.status)}
-                tone={getStatusTone(entry.entry.status)}
-              />
-              <MetaPill
-                label={formatLabel(entry.entry.media.format)}
-                tone="frost"
-              />
-              <MetaPill
-                label={`${changeSummary.added.length + changeSummary.removed.length} changes`}
-                tone="pink"
-              />
-            </div>
-
-            <p className="mb-2 text-xs" style={{ color: "var(--z-muted)" }}>
-              {changeSummary.added.length} add • {changeSummary.removed.length}{" "}
-              remove
-              {visibilitySummary}
-            </p>
-
-            <div className="space-y-1.5">
-              {addedPreview.length > 0 && (
-                <div className="flex flex-wrap gap-1">
-                  {addedPreview.map((listName) => (
-                    <ListPill key={listName} name={listName} variant="added" />
-                  ))}
-                  {changeSummary.added.length > addedPreview.length && (
-                    <span
-                      className="
-                        inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold
-                      "
-                      style={{
-                        backgroundColor: "var(--z-card-up)",
-                        color: "var(--z-muted)",
-                        border: "1px solid var(--z-border)",
-                      }}
-                    >
-                      +{changeSummary.added.length - addedPreview.length}
-                    </span>
-                  )}
-                </div>
-              )}
-
-              {removedPreview.length > 0 && (
-                <div className="flex flex-wrap gap-1">
-                  {removedPreview.map((listName) => (
-                    <ListPill
-                      key={listName}
-                      name={listName}
-                      variant="removed"
-                    />
-                  ))}
-                  {changeSummary.removed.length > removedPreview.length && (
-                    <span
-                      className="
-                        inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold
-                      "
-                      style={{
-                        backgroundColor: "var(--z-card-up)",
-                        color: "var(--z-muted)",
-                        border: "1px solid var(--z-border)",
-                      }}
-                    >
-                      +{changeSummary.removed.length - removedPreview.length}
-                    </span>
-                  )}
-                </div>
-              )}
-
-              {keptPreview.length > 0 && (
-                <div className="flex flex-wrap gap-1">
-                  {keptPreview.map((listName) => (
-                    <ListPill key={listName} name={listName} variant="kept" />
-                  ))}
-                  {changeSummary.kept.length > keptPreview.length && (
-                    <span
-                      className="
-                        inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold
-                      "
-                      style={{
-                        backgroundColor: "var(--z-card-up)",
-                        color: "var(--z-muted)",
-                        border: "1px solid var(--z-border)",
-                      }}
-                    >
-                      +{changeSummary.kept.length - keptPreview.length}
-                    </span>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </motion.div>
-    );
-  }
-
-  return (
-    <motion.div
-      layout="position"
-      initial={{ opacity: 0, scale: 0.995, y: 8 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.995, y: -8 }}
-      transition={{
-        duration: CARD_ANIMATION_DURATION_SECONDS,
-        ease: [0.22, 1, 0.36, 1],
-      }}
-      className="relative overflow-hidden rounded-xl"
-      style={{
-        backgroundColor: "var(--z-card)",
-        border: "1px solid var(--z-pink)",
-        boxShadow:
-          "0 0 28px rgba(232,121,249,0.18), 0 8px 32px rgba(0,0,0,0.4)",
-      }}
-    >
-      {/* Animated glow ring */}
-      <motion.div
-        className="pointer-events-none absolute inset-0 rounded-xl"
-        animate={{ opacity: [0.15, 0.5, 0.15] }}
-        transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
-        style={{ boxShadow: "0 0 0 2px rgba(232,121,249,0.55) inset" }}
-      />
-
-      <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-start">
-        <CoverImage src={cover} alt={title} width={118} height={168} />
-        <div className="min-w-0 flex-1">
-          <div className="mb-1 flex items-center gap-2">
-            <FaSpinner
-              className="shrink-0 animate-spin"
-              size={13}
-              style={{ color: "var(--z-pink)" }}
-            />
-            <span
-              className="text-[10px] font-bold tracking-widest uppercase"
-              style={{ color: "var(--z-pink)" }}
-            >
-              Updating
-            </span>
-          </div>
-
-          <p
-            className="mb-3 text-xl/snug font-bold"
+            {list}
+          </span>
+        </span>
+      ))}
+      {changeSummary.removed.map((list) => (
+        <span
+          key={`rem-${list}`}
+          className="
+            inline-flex max-w-36 items-center gap-1 overflow-hidden rounded-sm px-2 py-0.5 text-xs
+            font-bold
+          "
+          style={{
+            backgroundColor: "rgba(248,113,113,0.1)",
+            border: "1px solid rgba(248,113,113,0.2)",
+            color: removeColor,
+          }}
+          title={`Remove from: ${list}`}
+        >
+          <span className="shrink-0">−</span>
+          <span
             style={{
-              color: "var(--z-text)",
-              fontFamily: "var(--font-syne)",
-              ...TITLE_CLAMP_STYLE,
+              overflow: "hidden",
+              whiteSpace: "nowrap",
+              textOverflow: "ellipsis",
             }}
           >
-            {title}
-          </p>
-
-          <div className="mb-3 flex flex-wrap gap-2">
-            <MetaPill
-              label={formatStatusLabel(entry.entry.status)}
-              tone={getStatusTone(entry.entry.status)}
-            />
-            <MetaPill
-              label={formatLabel(entry.entry.media.format)}
-              tone="frost"
-            />
-            {changeSummary.hideChanged ? (
-              <MetaPill
-                label={
-                  changeSummary.willHideFromStatusLists
-                    ? "Will hide from status lists"
-                    : "Will be visible in status lists"
-                }
-                tone={changeSummary.willHideFromStatusLists ? "pink" : "green"}
-              />
-            ) : (
-              <MetaPill
-                label={`${
-                  changeSummary.added.length + changeSummary.removed.length
-                } changes applying`}
-                tone="pink"
-              />
-            )}
-          </div>
-
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <AniListEntryLink entry={entry.entry} />
-          </div>
-
-          <p className="mb-3 text-sm" style={{ color: "var(--z-muted)" }}>
-            {changeSummary.added.length} to add • {changeSummary.removed.length}{" "}
-            to remove
-            {visibilitySummary}
-          </p>
-
-          {changeSummary.added.length > 0 && (
-            <div className="mb-2.5">
-              <p
-                className="mb-1 text-[9px] font-black tracking-widest uppercase"
-                style={{ color: "var(--z-amber)" }}
-              >
-                Adding to
-              </p>
-              <div className="flex flex-wrap gap-1">
-                {changeSummary.added.map((l) => (
-                  <ListPill key={l} name={l} variant="added" />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {changeSummary.removed.length > 0 && (
-            <div className="mb-2.5">
-              <p
-                className="mb-1 text-[9px] font-black tracking-widest uppercase"
-                style={{ color: "var(--z-red)" }}
-              >
-                Removing from
-              </p>
-              <div className="flex flex-wrap gap-1">
-                {changeSummary.removed.map((l) => (
-                  <ListPill key={l} name={l} variant="removed" />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {changeSummary.kept.length > 0 && (
-            <div>
-              <p
-                className="mb-1 text-[9px] font-black tracking-widest uppercase"
-                style={{ color: "var(--z-subtle)" }}
-              >
-                Staying in
-              </p>
-              <div className="flex flex-wrap gap-1">
-                {changeSummary.kept.map((l) => (
-                  <ListPill key={l} name={l} variant="kept" />
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </motion.div>
+            {list}
+          </span>
+        </span>
+      ))}
+      {changeSummary.hideChanged && (
+        <span
+          className="inline-flex items-center gap-1 rounded-sm px-2 py-0.5 text-xs font-bold"
+          style={{
+            backgroundColor: "rgba(103,232,249,0.1)",
+            border: "1px solid rgba(103,232,249,0.18)",
+            color: hideColor,
+          }}
+          title={
+            changeSummary.willHideFromStatusLists
+              ? "Hide from status lists"
+              : "Show in status lists"
+          }
+        >
+          {changeSummary.willHideFromStatusLists ? "hide" : "unhide"}
+        </span>
+      )}
+    </div>
   );
 }
 
-function DoneCard({
-  entry,
-  animated = true,
-}: Readonly<{ entry: TrackedEntry; animated?: boolean }>) {
+// ─── Pending Row ─────────────────────────────────────────────────────────────
+
+function PendingRow({ entry }: Readonly<{ entry: TrackedEntry }>) {
   const title = getEntryTitle(entry.entry);
   const changeSummary = getEntryChangeSummary(entry);
   const cover =
-    entry.entry.media.coverImage.extraLarge ??
+    entry.entry.media.coverImage.medium ??
     entry.entry.media.coverImage.large ??
-    entry.entry.media.coverImage.medium;
-  let visibilitySummary = "";
-
-  if (changeSummary.hideChanged) {
-    visibilitySummary = changeSummary.willHideFromStatusLists
-      ? " • hidden from status lists"
-      : " • visible in status lists";
-  }
+    entry.entry.media.coverImage.extraLarge;
 
   return (
     <motion.div
       layout="position"
-      initial={animated ? { opacity: 0, y: -8, scale: 0.995 } : false}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={animated ? { opacity: 0, y: 8, scale: 0.995 } : undefined}
+      initial={{ opacity: 0, x: -6 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: 8 }}
       transition={{
         duration: CARD_ANIMATION_DURATION_SECONDS,
         ease: [0.22, 1, 0.36, 1],
       }}
-      className="relative overflow-hidden rounded-xl"
+      className="flex items-stretch overflow-hidden rounded-lg"
       style={{
         backgroundColor: "var(--z-card)",
-        border: "1px solid rgba(34,197,94,0.24)",
-        boxShadow: "0 10px 28px rgba(0,0,0,0.24)",
+        border: "1px solid var(--z-border)",
       }}
     >
       <div
-        className="pointer-events-none absolute inset-0 rounded-xl"
-        style={{ boxShadow: "0 0 0 1px rgba(34,197,94,0.18) inset" }}
+        className="w-1 shrink-0"
+        style={{ backgroundColor: "rgba(245,166,35,0.5)" }}
       />
-      <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-start">
-        <CoverImage src={cover} alt={title} width={118} height={168} />
+      <div className="flex min-w-0 flex-1 items-center gap-4 p-4">
+        <MiniCover src={cover} alt={title} />
         <div className="min-w-0 flex-1">
-          <div className="mb-1 flex items-center gap-2">
-            <FaCheckCircle
-              className="shrink-0"
-              size={12}
-              style={{ color: "var(--z-green)" }}
-            />
-            <span
-              className="text-[10px] font-bold tracking-widest uppercase"
-              style={{ color: "var(--z-green)" }}
-            >
-              Done
-            </span>
-            <span className="ml-auto">
-              <AniListEntryLink entry={entry.entry} compact />
-            </span>
-          </div>
-
           <p
-            className="mb-3 text-xl/snug font-bold"
-            style={{
-              color: "var(--z-text)",
-              fontFamily: "var(--font-syne)",
-              ...TITLE_CLAMP_STYLE,
-            }}
+            className="text-base font-semibold"
+            style={{ color: "var(--z-text)", ...TITLE_CLAMP_STYLE }}
           >
             {title}
           </p>
-
-          <div className="mb-3 flex flex-wrap gap-2">
+          <div className="mt-2 mb-1.5 flex flex-wrap items-center gap-1.5">
             <MetaPill
               label={formatStatusLabel(entry.entry.status)}
               tone={getStatusTone(entry.entry.status)}
             />
-            <MetaPill
-              label={formatLabel(entry.entry.media.format)}
-              tone="frost"
-            />
-            {changeSummary.hideChanged ? (
-              <MetaPill
-                label={
-                  changeSummary.willHideFromStatusLists
-                    ? "Hidden from status lists"
-                    : "Visible in status lists"
-                }
-                tone={changeSummary.willHideFromStatusLists ? "pink" : "green"}
-              />
-            ) : (
-              <MetaPill
-                label={`${
-                  changeSummary.added.length +
-                  changeSummary.removed.length +
-                  (changeSummary.hideChanged ? 1 : 0)
-                } changes applied`}
-                tone="green"
-              />
-            )}
           </div>
-
-          <p className="mb-3 text-sm" style={{ color: "var(--z-muted)" }}>
-            {changeSummary.added.length} added • {changeSummary.removed.length}{" "}
-            removed
-            {visibilitySummary}
-          </p>
-
-          {changeSummary.added.length > 0 && (
-            <div className="mb-2.5">
-              <p
-                className="mb-1 text-[9px] font-black tracking-widest uppercase"
-                style={{ color: "var(--z-amber)" }}
-              >
-                Added to
-              </p>
-              <div className="flex flex-wrap gap-1">
-                {changeSummary.added.map((listName) => (
-                  <ListPill key={listName} name={listName} variant="added" />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {changeSummary.removed.length > 0 && (
-            <div className="mb-2.5">
-              <p
-                className="mb-1 text-[9px] font-black tracking-widest uppercase"
-                style={{ color: "var(--z-red)" }}
-              >
-                Removed from
-              </p>
-              <div className="flex flex-wrap gap-1">
-                {changeSummary.removed.map((listName) => (
-                  <ListPill key={listName} name={listName} variant="removed" />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {changeSummary.kept.length > 0 && (
-            <div>
-              <p
-                className="mb-1 text-[9px] font-black tracking-widest uppercase"
-                style={{ color: "var(--z-subtle)" }}
-              >
-                Staying in
-              </p>
-              <div className="flex flex-wrap gap-1">
-                {changeSummary.kept.map((listName) => (
-                  <ListPill key={listName} name={listName} variant="kept" />
-                ))}
-              </div>
-            </div>
-          )}
+          <ChangeChips changeSummary={changeSummary} variant="pending" />
         </div>
+        <a
+          href={getAniListEntryUrl(entry.entry)}
+          target="_blank"
+          rel="noreferrer"
+          className="shrink-0 rounded-full p-2 transition-opacity"
+          style={{ color: "var(--z-frost)" }}
+          aria-label={`Open ${title} on AniList`}
+        >
+          <FaExternalLinkAlt size={16} />
+        </a>
       </div>
     </motion.div>
   );
 }
 
-function UpdateControlToolbar({
-  phase,
-  queuedAction,
-  pendingEntryCount,
-  onStart,
-  onPause,
-  onStop,
-  onComplete,
+// ─── Updating Row ─────────────────────────────────────────────────────────────
+
+function UpdatingRow({ entry }: Readonly<{ entry: TrackedEntry }>) {
+  const title = getEntryTitle(entry.entry);
+  const changeSummary = getEntryChangeSummary(entry);
+  const cover =
+    entry.entry.media.coverImage.medium ??
+    entry.entry.media.coverImage.large ??
+    entry.entry.media.coverImage.extraLarge;
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0.6, scale: 0.98 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.97 }}
+      transition={{ duration: 0.22, ease: "easeOut" }}
+      className="flex items-stretch overflow-hidden rounded-lg"
+      style={{
+        backgroundColor: "var(--z-card)",
+        border: "1px solid rgba(232,121,249,0.35)",
+        boxShadow: "0 0 18px rgba(232,121,249,0.1)",
+      }}
+    >
+      <div
+        className="w-1 shrink-0"
+        style={{ backgroundColor: "var(--z-pink)" }}
+      />
+      <div className="flex min-w-0 flex-1 items-center gap-4 p-4">
+        <MiniCover src={cover} alt={title} />
+        <div className="min-w-0 flex-1">
+          <p
+            className="text-base font-semibold"
+            style={{ color: "var(--z-text)", ...TITLE_CLAMP_STYLE }}
+          >
+            {title}
+          </p>
+          <div className="mt-2 mb-1.5 flex items-center gap-1.5">
+            <FaSpinner
+              className="shrink-0 animate-spin"
+              size={11}
+              style={{ color: "var(--z-pink)" }}
+            />
+            <span
+              className="text-xs font-bold"
+              style={{ color: "var(--z-pink)" }}
+            >
+              Applying
+            </span>
+          </div>
+          <ChangeChips changeSummary={changeSummary} variant="updating" />
+        </div>
+        <a
+          href={getAniListEntryUrl(entry.entry)}
+          target="_blank"
+          rel="noreferrer"
+          className="shrink-0 rounded-full p-2"
+          style={{ color: "var(--z-frost)" }}
+          aria-label={`Open ${title} on AniList`}
+        >
+          <FaExternalLinkAlt size={16} />
+        </a>
+      </div>
+    </motion.div>
+  );
+}
+
+// ─── Done Row ─────────────────────────────────────────────────────────────────
+
+function DoneRow({ entry }: Readonly<{ entry: TrackedEntry }>) {
+  const title = getEntryTitle(entry.entry);
+  const changeSummary = getEntryChangeSummary(entry);
+  const cover =
+    entry.entry.media.coverImage.medium ??
+    entry.entry.media.coverImage.large ??
+    entry.entry.media.coverImage.extraLarge;
+
+  return (
+    <motion.div
+      layout="position"
+      initial={{ opacity: 0, y: -5 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 5 }}
+      transition={{
+        duration: CARD_ANIMATION_DURATION_SECONDS,
+        ease: [0.22, 1, 0.36, 1],
+      }}
+      className="flex items-stretch overflow-hidden rounded-lg"
+      style={{
+        backgroundColor: "var(--z-card)",
+        border: "1px solid var(--z-border)",
+      }}
+    >
+      <div
+        className="w-1 shrink-0"
+        style={{ backgroundColor: "rgba(34,197,94,0.55)" }}
+      />
+      <div className="flex min-w-0 flex-1 items-center gap-4 p-4">
+        <MiniCover src={cover} alt={title} />
+        <div className="min-w-0 flex-1">
+          <p
+            className="text-base font-semibold"
+            style={{ color: "var(--z-text)", ...TITLE_CLAMP_STYLE }}
+          >
+            {title}
+          </p>
+          <div className="mt-2 mb-1.5 flex items-center gap-1.5">
+            <FaCheckCircle
+              className="shrink-0"
+              size={11}
+              style={{ color: "var(--z-green)" }}
+            />
+            <span
+              className="text-xs font-bold"
+              style={{ color: "var(--z-green)" }}
+            >
+              Applied
+            </span>
+          </div>
+          <ChangeChips changeSummary={changeSummary} variant="done" />
+        </div>
+        <a
+          href={getAniListEntryUrl(entry.entry)}
+          target="_blank"
+          rel="noreferrer"
+          className="shrink-0 rounded-full p-2"
+          style={{ color: "var(--z-frost)" }}
+          aria-label={`Open ${title} on AniList`}
+        >
+          <FaExternalLinkAlt size={16} />
+        </a>
+      </div>
+    </motion.div>
+  );
+}
+
+// ─── Phase: Scanning ──────────────────────────────────────────────────────────
+
+function ScanningState() {
+  return (
+    <div className="flex flex-col items-center justify-center py-36">
+      <div className="relative mb-12 flex items-center justify-center">
+        {([52, 88, 124] as const).map((size, i) => (
+          <motion.div
+            key={size}
+            className="absolute rounded-full"
+            style={{
+              width: size,
+              height: size,
+              border: `1px solid rgba(245,166,35,${0.55 - i * 0.16})`,
+            }}
+            animate={{ opacity: [0.9, 0.2, 0.9], scale: [1, 1.05, 1] }}
+            transition={{
+              duration: 2.4,
+              repeat: Infinity,
+              delay: i * 0.38,
+              ease: "easeInOut",
+            }}
+          />
+        ))}
+        <div
+          className="relative z-10 flex items-center justify-center rounded-full"
+          style={{
+            width: 52,
+            height: 52,
+            backgroundColor: "rgba(245,166,35,0.1)",
+          }}
+        >
+          <FaSpinner
+            className="animate-spin"
+            size={22}
+            style={{ color: "var(--z-amber)" }}
+          />
+        </div>
+      </div>
+      <p
+        className="mb-2 text-[10px] font-black tracking-widest uppercase"
+        style={{ color: "var(--z-amber)" }}
+      >
+        Scanning Library
+      </p>
+      <h2
+        className="mb-3 text-center text-2xl font-black"
+        style={{ fontFamily: "var(--font-syne)", color: "var(--z-text)" }}
+      >
+        Calculating changes…
+      </h2>
+      <p
+        className="max-w-sm text-center text-sm"
+        style={{ color: "var(--z-muted)" }}
+      >
+        Reviewing your entries against the configured rules. Large libraries may
+        take a moment.
+      </p>
+    </div>
+  );
+}
+
+// ─── Phase: Error ─────────────────────────────────────────────────────────────
+
+function ErrorState({
+  fetchError,
+  updateFallbackCopy,
+  onRetry,
   onBack,
 }: Readonly<{
-  phase: Phase;
-  queuedAction: PendingAction;
-  pendingEntryCount: number;
-  onStart: () => void;
-  onPause: () => void;
-  onStop: () => void;
-  onComplete: () => void;
+  fetchError: string | null;
+  updateFallbackCopy: { title: string; description: string };
+  onRetry: () => void;
   onBack: () => void;
 }>) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.05 }}
-      className="flex flex-wrap items-center gap-3"
-    >
-      {phase === "ready" && (
-        <>
-          <button
-            onClick={onStart}
-            className="
-              flex cursor-pointer items-center gap-2 rounded-lg px-5 py-3 text-sm font-bold
-              transition-all
-              hover:brightness-110
-              active:scale-[0.97]
-            "
+    <div className="flex min-h-[60vh] flex-col items-center justify-center p-6">
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="w-full max-w-md"
+      >
+        <div
+          className="rounded-2xl p-8 text-center"
+          style={{
+            backgroundColor: "var(--z-card)",
+            border: "1px solid rgba(248,113,113,0.35)",
+            boxShadow: "0 0 48px rgba(248,113,113,0.08)",
+          }}
+        >
+          <div
+            className="mx-auto mb-5 flex size-16 items-center justify-center rounded-full"
             style={{
-              background:
-                "linear-gradient(135deg, var(--z-amber) 0%, #ef8d2f 100%)",
-              color: "#07060f",
+              backgroundColor: "rgba(248,113,113,0.1)",
+              border: "2px solid rgba(248,113,113,0.35)",
             }}
           >
-            <FaPlay size={10} />
-            Start Update
-          </button>
-          <button
-            onClick={onComplete}
-            className="
-              flex cursor-pointer items-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold
-              transition-all
-              hover:bg-z-card-up
-              active:scale-[0.97]
-            "
-            style={{
-              border: "1px solid rgba(34,197,94,0.28)",
-              color: "var(--z-green)",
-            }}
+            <FaExclamationTriangle
+              size={24}
+              style={{ color: "var(--z-red)" }}
+            />
+          </div>
+          <h2
+            className="mb-2 text-xl font-black"
+            style={{ fontFamily: "var(--font-syne)", color: "var(--z-text)" }}
           >
-            <FaCheckCircle size={10} />
-            Complete
-          </button>
-          <button
-            onClick={onBack}
-            className="
-              flex cursor-pointer items-center gap-2 rounded-lg px-5 py-3 text-sm font-medium
-              transition-all
-              hover:bg-z-card-up
-              active:scale-[0.97]
-            "
-            style={{
-              border: "1px solid var(--z-border-mid)",
-              color: "var(--z-muted)",
-            }}
-          >
-            <FaChevronLeft size={10} />
-            Back
-          </button>
-        </>
-      )}
-
-      {phase === "processing" && (
-        <>
-          <button
-            onClick={onPause}
-            disabled={queuedAction !== null}
-            className="
-              flex cursor-pointer items-center gap-2 rounded-lg px-5 py-3 text-sm font-bold
-              transition-all
-              hover:bg-z-card-up
-              active:scale-[0.97]
-              disabled:cursor-not-allowed disabled:opacity-45
-            "
-            style={{
-              border: "1px solid rgba(232,121,249,0.28)",
-              color: "var(--z-pink)",
-            }}
-          >
-            <FaPause size={10} />
-            Pause
-          </button>
-          <button
-            onClick={onComplete}
-            disabled={queuedAction !== null}
-            className="
-              flex cursor-pointer items-center gap-2 rounded-lg px-5 py-3 text-sm font-bold
-              transition-all
-              hover:bg-z-card-up
-              active:scale-[0.97]
-              disabled:cursor-not-allowed disabled:opacity-45
-            "
-            style={{
-              border: "1px solid rgba(34,197,94,0.28)",
-              color: "var(--z-green)",
-            }}
-          >
-            <FaCheckCircle size={10} />
-            Complete
-          </button>
-          <button
-            onClick={onStop}
-            disabled={queuedAction !== null}
-            className="
-              flex cursor-pointer items-center gap-2 rounded-lg px-5 py-3 text-sm font-bold
-              transition-all
-              hover:bg-z-card-up
-              active:scale-[0.97]
-              disabled:cursor-not-allowed disabled:opacity-45
-            "
-            style={{
-              border: "1px solid rgba(248,113,113,0.28)",
-              color: "var(--z-red)",
-            }}
-          >
-            <FaStop size={10} />
-            Stop
-          </button>
-        </>
-      )}
-
-      {phase === "paused" && (
-        <>
-          <button
-            onClick={onStart}
-            className="
-              flex cursor-pointer items-center gap-2 rounded-lg px-5 py-3 text-sm font-bold
-              transition-all
-              hover:brightness-110
-              active:scale-[0.97]
-            "
-            style={{
-              background:
-                "linear-gradient(135deg, var(--z-amber) 0%, #ef8d2f 100%)",
-              color: "#07060f",
-            }}
-          >
-            <FaPlay size={10} />
-            Resume
-          </button>
-          <button
-            onClick={onComplete}
-            className="
-              flex cursor-pointer items-center gap-2 rounded-lg px-5 py-3 text-sm font-bold
-              transition-all
-              hover:bg-z-card-up
-              active:scale-[0.97]
-            "
-            style={{
-              border: "1px solid rgba(34,197,94,0.28)",
-              color: "var(--z-green)",
-            }}
-          >
-            <FaCheckCircle size={10} />
-            Complete
-          </button>
-          <button
-            onClick={onStop}
-            className="
-              flex cursor-pointer items-center gap-2 rounded-lg px-5 py-3 text-sm font-bold
-              transition-all
-              hover:bg-z-card-up
-              active:scale-[0.97]
-            "
-            style={{
-              border: "1px solid rgba(248,113,113,0.28)",
-              color: "var(--z-red)",
-            }}
-          >
-            <FaStop size={10} />
-            Stop
-          </button>
-        </>
-      )}
-
-      {phase === "stopped" && (
-        <>
-          {pendingEntryCount > 0 && (
-            <button
-              onClick={onStart}
-              className="
-                flex cursor-pointer items-center gap-2 rounded-lg px-5 py-3 text-sm font-bold
-                transition-all
-                hover:brightness-110
-                active:scale-[0.97]
-              "
+            {updateFallbackCopy.title}
+          </h2>
+          <p className="mb-5 text-sm" style={{ color: "var(--z-muted)" }}>
+            {updateFallbackCopy.description}
+          </p>
+          {fetchError && (
+            <p
+              className="mb-6 rounded-lg px-4 py-2.5 text-left text-sm"
               style={{
-                background:
-                  "linear-gradient(135deg, var(--z-amber) 0%, #ef8d2f 100%)",
-                color: "#07060f",
+                color: "var(--z-text)",
+                backgroundColor: "rgba(248,113,113,0.07)",
+                border: "1px solid rgba(248,113,113,0.18)",
               }}
             >
-              <FaPlay size={10} />
-              Start Remaining
-            </button>
+              {fetchError}
+            </p>
           )}
-          <button
-            onClick={onComplete}
-            className="
-              flex cursor-pointer items-center gap-2 rounded-lg px-5 py-3 text-sm font-bold
-              transition-all
-              hover:bg-z-card-up
-              active:scale-[0.97]
-            "
-            style={{
-              border: "1px solid rgba(34,197,94,0.28)",
-              color: "var(--z-green)",
-            }}
-          >
-            <FaCheckCircle size={10} />
-            Complete
-          </button>
-          <button
-            onClick={onBack}
-            className="
-              flex cursor-pointer items-center gap-2 rounded-lg px-5 py-3 text-sm font-medium
-              transition-all
-              hover:bg-z-card-up
-              active:scale-[0.97]
-            "
-            style={{
-              border: "1px solid var(--z-border-mid)",
-              color: "var(--z-muted)",
-            }}
-          >
-            <FaChevronLeft size={10} />
-            Back
-          </button>
-        </>
-      )}
-    </motion.div>
+          <div className="flex justify-center gap-3">
+            <button
+              onClick={onBack}
+              className="
+                cursor-pointer rounded-xl px-4 py-2.5 text-sm font-medium transition-all
+                hover:bg-z-card-up
+                active:scale-95
+              "
+              style={{
+                border: "1px solid var(--z-border-mid)",
+                color: "var(--z-muted)",
+              }}
+            >
+              <span className="flex items-center gap-2">
+                <FaChevronLeft size={9} />
+                Back to Manager
+              </span>
+            </button>
+            <button
+              onClick={onRetry}
+              className="
+                cursor-pointer rounded-xl px-5 py-2.5 text-sm font-bold transition-all
+                hover:brightness-110
+                active:scale-95
+              "
+              style={{ backgroundColor: "var(--z-amber)", color: "#07060f" }}
+            >
+              <span className="flex items-center gap-2">
+                <FaRedo size={9} />
+                Retry
+              </span>
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    </div>
   );
 }
 
@@ -1450,6 +1060,7 @@ export default function UpdatePage() {
   const [circuitBreakerMessage, setCircuitBreakerMessage] = useState<
     string | null
   >(null);
+
   const startTimeRef = useRef(0);
   const pendingQueueRef = useRef<TrackedEntry[]>([]);
   const updatedCountRef = useRef(0);
@@ -1468,15 +1079,15 @@ export default function UpdatePage() {
   const queueVirtualizer = useVirtualizer({
     count: pendingEntries.length,
     getScrollElement: () => queueScrollContainerRef.current,
-    estimateSize: () => 300,
-    overscan: 6,
+    estimateSize: () => 100,
+    overscan: 8,
   });
 
   const doneVirtualizer = useVirtualizer({
     count: doneEntries.length,
     getScrollElement: () => doneScrollContainerRef.current,
-    estimateSize: () => 300,
-    overscan: 6,
+    estimateSize: () => 100,
+    overscan: 8,
   });
 
   const getAuthToken = (): string | null =>
@@ -1484,10 +1095,7 @@ export default function UpdatePage() {
 
   const setUpdatingEntries = (entries: TrackedEntry[]) => {
     setCurrentUpdating(entries);
-
-    if (entries.length > 0) {
-      setUpdatingBatchVersion((previous) => previous + 1);
-    }
+    if (entries.length > 0) setUpdatingBatchVersion((prev) => prev + 1);
   };
 
   const persistUpdateStats = (stats: {
@@ -1500,7 +1108,6 @@ export default function UpdatePage() {
       stats,
       STORAGE_TTLS.updateSummary,
     );
-
     if (isStorageFallbackResult(result) && !storageFallbackWarnedRef.current) {
       storageFallbackWarnedRef.current = true;
       toast.warning("Using temporary storage fallback", {
@@ -1530,23 +1137,16 @@ export default function UpdatePage() {
   }, []);
 
   useEffect(() => {
-    if (!retryStatus) {
-      return undefined;
-    }
-
+    if (!retryStatus) return undefined;
     setRetryClock(Date.now());
-    const intervalId = globalThis.setInterval(() => {
-      setRetryClock(Date.now());
-    }, 1000);
-
-    return () => globalThis.clearInterval(intervalId);
+    const id = globalThis.setInterval(() => setRetryClock(Date.now()), 1000);
+    return () => globalThis.clearInterval(id);
   }, [retryStatus]);
 
   useEffect(() => {
     const authToken = getAuthToken();
     let cancelled = false;
     navigationStopRequestedRef.current = false;
-
     pauseRequestedRef.current = false;
     stopRequestedRef.current = false;
     isProcessingRef.current = false;
@@ -1609,7 +1209,7 @@ export default function UpdatePage() {
       try {
         const entries = await fetchAllWorkflowMediaEntries({
           userId,
-          type: listType as AniListMediaType,
+          type: listType,
           fetchPage: async (variables: WorkflowMediaListQueryVariables) =>
             await fetchAniList<
               MediaListResponse["data"],
@@ -1624,9 +1224,7 @@ export default function UpdatePage() {
           shouldCancel: () => cancelled,
         });
 
-        if (cancelled) {
-          return;
-        }
+        if (cancelled) return;
 
         const trackedEntries = buildTrackedEntries(
           entries,
@@ -1646,10 +1244,7 @@ export default function UpdatePage() {
         setTotalCount(trackedEntries.length);
         setPhase("ready");
       } catch (err) {
-        if (cancelled) {
-          return;
-        }
-
+        if (cancelled) return;
         console.error("Fatal fetch error:", err);
         setFetchError(
           err instanceof Error ? err.message : "Failed to fetch entries.",
@@ -1659,7 +1254,6 @@ export default function UpdatePage() {
     };
 
     void prepareQueue();
-
     return () => {
       cancelled = true;
     };
@@ -1670,7 +1264,6 @@ export default function UpdatePage() {
       startTimeRef.current > 0
         ? Math.round((Date.now() - startTimeRef.current) / 1000)
         : 0;
-
     persistUpdateStats({
       totalUpdated: updatedCountRef.current,
       errorCount: errorCountRef.current,
@@ -1678,34 +1271,22 @@ export default function UpdatePage() {
     });
     setQueuedAction(null);
     setPhase("complete");
-
-    if (navigateToCompleted) {
-      router.push("/completed");
-    }
+    if (navigateToCompleted) router.push("/completed");
   };
 
   const startProcessing = async () => {
-    if (isProcessingRef.current) {
-      return;
-    }
-
+    if (isProcessingRef.current) return;
     const authToken = getAuthToken();
-
     if (!authToken) {
       setFetchError("Missing AniList token. Please log in again.");
       setPhase("error");
       return;
     }
-
     if (pendingQueueRef.current.length === 0) {
       completeRun();
       return;
     }
-
-    if (startTimeRef.current === 0) {
-      startTimeRef.current = Date.now();
-    }
-
+    if (startTimeRef.current === 0) startTimeRef.current = Date.now();
     pauseRequestedRef.current = false;
     stopRequestedRef.current = false;
     completeRequestedRef.current = false;
@@ -1732,7 +1313,6 @@ export default function UpdatePage() {
         authToken,
         handleRetryState,
       );
-
       updateRateLimitState(response.rateLimit ?? null);
       return { ...entry, state: "done" };
     };
@@ -1753,44 +1333,35 @@ export default function UpdatePage() {
           BatchedSaveEntryMutationData,
           AniListRequestVariables
         >(mutation, variables, authToken, handleRetryState);
-
         updateRateLimitState(response.rateLimit ?? null);
-
         if (!hasSuccessfulBatchedSaveResponse(response.data, aliases)) {
           throw new Error(
             "AniList batch mutation response was missing one or more updated entries.",
           );
         }
-
         doneEntriesBatch.push(
-          ...entries.map((entry) => ({ ...entry, state: "done" as const })),
+          ...entries.map((e) => ({ ...e, state: "done" as const })),
         );
       } catch (batchError) {
         console.warn(
           "Batch update failed, falling back to single-entry updates.",
           batchError,
         );
-
         for (const [index, entry] of entries.entries()) {
           if (index > 0) {
             setUpdatingEntries([{ ...entry, state: "updating" }]);
             await waitForUiCommit();
           }
-
-          if (navigationStopRequestedRef.current || stopRequestedRef.current) {
+          if (navigationStopRequestedRef.current || stopRequestedRef.current)
             break;
-          }
-
           try {
             const doneEntry = await runSingleEntryMutation(entry);
             doneEntriesBatch.push(doneEntry);
           } catch (err) {
             console.error("Failed to update entry", entry.entry.id, err);
-
             toast.error("Update Failed", {
               description: `Skipping "${getEntryTitle(entry.entry)}".`,
             });
-
             erroredEntriesBatch.push({
               ...entry,
               state: "error",
@@ -1808,24 +1379,13 @@ export default function UpdatePage() {
       "ready" | "paused" | "stopped" | "navigated"
     > => {
       const cooldownEndAt = Date.now() + REQUEST_INTERVAL_MS;
-
       while (Date.now() < cooldownEndAt) {
-        if (navigationStopRequestedRef.current) {
-          return "navigated";
-        }
-
-        if (stopRequestedRef.current) {
-          return "stopped";
-        }
-
-        if (pauseRequestedRef.current) {
-          return "paused";
-        }
-
+        if (navigationStopRequestedRef.current) return "navigated";
+        if (stopRequestedRef.current) return "stopped";
+        if (pauseRequestedRef.current) return "paused";
         const remainingMs = cooldownEndAt - Date.now();
         await wait(Math.min(REQUEST_DELAY_POLL_INTERVAL_MS, remainingMs));
       }
-
       return "ready";
     };
 
@@ -1838,26 +1398,22 @@ export default function UpdatePage() {
         const entriesToProcess = pendingQueueRef.current.slice(0, batchSize);
         const rest = pendingQueueRef.current.slice(entriesToProcess.length);
 
-        if (entriesToProcess.length === 0) {
-          break;
-        }
+        if (entriesToProcess.length === 0) break;
 
         pendingQueueRef.current = rest;
         setPendingEntries(rest);
         setUpdatingEntries(
-          entriesToProcess.map((entry) => ({ ...entry, state: "updating" })),
+          entriesToProcess.map((e) => ({ ...e, state: "updating" })),
         );
 
         await waitForUiCommit();
 
         if (navigationStopRequestedRef.current || stopRequestedRef.current) {
           setUpdatingEntries([]);
-
           if (!navigationStopRequestedRef.current) {
             setQueuedAction(null);
             setPhase("stopped");
           }
-
           return;
         }
 
@@ -1865,12 +1421,10 @@ export default function UpdatePage() {
 
         if (cooldownState === "navigated" || cooldownState === "stopped") {
           setUpdatingEntries([]);
-
           if (cooldownState !== "navigated") {
             setQueuedAction(null);
             setPhase("stopped");
           }
-
           return;
         }
 
@@ -1884,13 +1438,9 @@ export default function UpdatePage() {
         const { doneEntriesBatch, erroredEntriesBatch } =
           await runMutationBatch(entriesToProcess);
 
-        if (doneEntriesBatch.length > 0) {
-          consecutiveFailureCountRef.current = 0;
-        }
-
-        if (erroredEntriesBatch.length > 0) {
+        if (doneEntriesBatch.length > 0) consecutiveFailureCountRef.current = 0;
+        if (erroredEntriesBatch.length > 0)
           consecutiveFailureCountRef.current += erroredEntriesBatch.length;
-        }
 
         updatedCountRef.current += doneEntriesBatch.length;
         errorCountRef.current += erroredEntriesBatch.length;
@@ -1898,40 +1448,32 @@ export default function UpdatePage() {
         if (doneEntriesBatch.length > 0) {
           setDoneEntries((prev) => [...doneEntriesBatch.toReversed(), ...prev]);
         }
-
         if (erroredEntriesBatch.length > 0) {
           setErroredEntries((prev) => [...prev, ...erroredEntriesBatch]);
         }
-
         setProcessedCount(updatedCountRef.current + errorCountRef.current);
 
         if (
           consecutiveFailureCountRef.current >= CONSECUTIVE_FAILURE_THRESHOLD &&
           pendingQueueRef.current.length > 0
         ) {
-          const circuitBreakerNotice =
+          const notice =
             `${consecutiveFailureCountRef.current} consecutive updates failed. ` +
             "The updater is paused to avoid repeated failed requests. " +
             "Resume when AniList stabilizes; your queue and progress are preserved.";
-
           pauseRequestedRef.current = true;
           setUpdatingEntries([]);
           setQueuedAction(null);
-          setCircuitBreakerMessage(circuitBreakerNotice);
+          setCircuitBreakerMessage(notice);
           setPhase("paused");
-
           toast.warning("Updater paused after repeated failures", {
-            description: circuitBreakerNotice,
+            description: notice,
           });
-
           return;
         }
 
         if (stopRequestedRef.current) {
-          if (navigationStopRequestedRef.current) {
-            return;
-          }
-
+          if (navigationStopRequestedRef.current) return;
           setUpdatingEntries([]);
           setQueuedAction(null);
           setPhase("stopped");
@@ -1971,10 +1513,7 @@ export default function UpdatePage() {
     pauseRequestedRef.current = false;
     completeRequestedRef.current = false;
     setQueuedAction("stop");
-
-    if (!isProcessingRef.current) {
-      setPhase("stopped");
-    }
+    if (!isProcessingRef.current) setPhase("stopped");
   };
 
   const handleComplete = () => {
@@ -1982,16 +1521,15 @@ export default function UpdatePage() {
       completeRun(true);
       return;
     }
-
     completeRequestedRef.current = true;
     pauseRequestedRef.current = false;
     stopRequestedRef.current = false;
     setQueuedAction("complete");
   };
 
-  const handleRetryPreparation = () => {
-    setPrepareRunId((prev) => prev + 1);
-  };
+  const handleRetryPreparation = () => setPrepareRunId((prev) => prev + 1);
+
+  // ── Derived state ──────────────────────────────────────────────────────────
 
   const remainingRetrySeconds = retryStatus
     ? Math.max(
@@ -2008,6 +1546,7 @@ export default function UpdatePage() {
     retryStatus?.reason === "rateLimit" ||
     (rateLimitRemaining ?? Number.POSITIVE_INFINITY) <=
       LOW_RATE_LIMIT_THRESHOLD;
+
   const updateFailureKind = classifyFallbackFailure({
     message: fetchError,
     retryReason: retryStatus?.reason,
@@ -2015,343 +1554,341 @@ export default function UpdatePage() {
   const updateFallbackCopy = getFallbackCopy(updateFailureKind);
 
   const progress = totalCount > 0 ? (processedCount / totalCount) * 100 : 0;
-  const queuedCount = pendingEntries.length;
   let progressWidth = progress;
-  if (phase === "complete") {
-    progressWidth = 100;
-  } else if (phase === "scanning") {
-    progressWidth = 6;
-  }
+  if (phase === "complete") progressWidth = 100;
+  else if (phase === "scanning") progressWidth = 6;
+
+  const queuedCount = pendingEntries.length;
+
   const queueVisible =
     phase === "ready" ||
     phase === "processing" ||
     phase === "paused" ||
     phase === "stopped";
+
   const phaseLabel =
     phase === "ready"
-      ? "Queue ready"
+      ? "Queue Ready"
       : phase === "processing"
         ? queuedAction === "pause"
-          ? "Pause queued"
+          ? "Pausing…"
           : queuedAction === "complete"
-            ? "Complete queued"
+            ? "Completing…"
             : queuedAction === "stop"
-              ? "Stop queued"
-              : "Updating now"
+              ? "Stopping…"
+              : "Processing"
         : phase === "paused"
           ? "Paused"
           : phase === "stopped"
             ? "Stopped"
-            : "Scanning library";
+            : "Scanning";
+
   const phaseDescription =
     phase === "ready"
       ? "Review the queue, then start when you are ready."
       : phase === "processing"
         ? queuedAction === "pause"
-          ? "The current entry will finish, then the run will pause."
+          ? "Finishing current batch, then pausing."
           : queuedAction === "complete"
-            ? "The current entry will finish, then you will be taken to the completion summary."
+            ? "Finishing current batch, then completing."
             : queuedAction === "stop"
-              ? "The current entry will finish, then the run will stop."
-              : "Entries are currently being updated."
+              ? "Finishing current batch, then stopping."
+              : "Entries are being updated in batches."
         : phase === "paused"
-          ? (circuitBreakerMessage ??
-            "Your place is saved. Resume when you want to continue.")
+          ? (circuitBreakerMessage ?? "Your place is saved. Resume when ready.")
           : phase === "stopped"
-            ? "The run was stopped. You can go back or continue the remaining queue."
-            : "We are calculating the queue before anything changes on AniList.";
-  let donePlaceholderMessage =
-    "Completed entries will appear here once the run begins.";
-  if (phase === "processing") {
-    donePlaceholderMessage =
-      "The next completed entry will slide in here as soon as this request finishes.";
-  } else if (phase === "paused") {
-    donePlaceholderMessage =
-      "No new entries will appear here until you resume the run.";
-  } else if (phase === "stopped") {
-    donePlaceholderMessage =
-      "The run is stopped, so no new completed entries will be added here.";
-  }
+            ? "Stopped. Resume the remaining queue or go back."
+            : "Calculating what needs to change.";
+
+  const phaseColor: string =
+    phase === "processing"
+      ? "var(--z-pink)"
+      : phase === "stopped"
+        ? "var(--z-red)"
+        : phase === "ready" || phase === "paused"
+          ? "var(--z-amber)"
+          : "var(--z-muted)";
+
   const queueVirtualItems = queueVirtualizer.getVirtualItems();
+
   const breadcrumbs = [
     { name: "Home", href: "/" },
     { name: "Custom List Manager", href: "/custom-list-manager" },
     { name: "Update" },
   ];
 
+  // ── Render ─────────────────────────────────────────────────────────────────
+
   return (
     <Layout>
       <Breadcrumbs breadcrumbs={breadcrumbs} />
-      <div className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6">
+      <div className="mx-auto w-full px-4 py-8 sm:px-6 md:max-w-7xl xl:max-w-[90%]">
+        {/* Page Header */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           className="mb-8"
         >
-          <p
-            className="mb-2 text-xs font-semibold tracking-widest uppercase"
-            style={{ color: "var(--z-amber)" }}
-          >
-            Step 3 of 3 — Update
-          </p>
+          <div className="mb-3 flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              {[1, 2, 3].map((step) => (
+                <div
+                  key={step}
+                  className="rounded-full transition-all"
+                  style={{
+                    width: step === 3 ? 22 : 8,
+                    height: 8,
+                    backgroundColor:
+                      step === 3 ? "var(--z-amber)" : "var(--z-card-high)",
+                  }}
+                />
+              ))}
+            </div>
+            <span
+              className="text-[10px] font-black tracking-widest uppercase"
+              style={{ color: "var(--z-amber)" }}
+            >
+              Step 3 of 3
+            </span>
+          </div>
           <h1
-            className="text-3xl font-black"
-            style={{
-              fontFamily: "var(--font-syne-var)",
-              color: "var(--z-text)",
-            }}
+            className="text-[2rem] leading-tight font-black"
+            style={{ fontFamily: "var(--font-syne)", color: "var(--z-text)" }}
           >
             Updating Your Lists
           </h1>
           <p
-            className="mt-2 max-w-2xl text-sm"
+            className="mt-1.5 max-w-lg text-sm"
             style={{ color: "var(--z-muted)" }}
           >
-            Review the queue, track progress, and let the updater handle your
-            AniList changes.
+            Review the queue, track live progress, and let the updater handle
+            your AniList changes.
           </p>
         </motion.div>
 
+        {/* Phase States */}
+        {phase === "scanning" && <ScanningState />}
+
         {phase === "error" && (
-          <div className="flex min-h-[60vh] flex-col items-center justify-center p-6">
+          <ErrorState
+            fetchError={fetchError}
+            updateFallbackCopy={updateFallbackCopy}
+            onRetry={handleRetryPreparation}
+            onBack={() => router.push("/custom-list-manager")}
+          />
+        )}
+
+        {/* Main Operation Layout */}
+        {queueVisible && (
+          <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[270px_1fr]">
+            {/* LEFT: Sidebar */}
             <motion.div
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="w-full max-w-md"
+              initial={{ opacity: 0, x: -16 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+              className="lg:sticky lg:top-6 lg:self-start"
             >
               <div
-                className="rounded-2xl p-8 text-center"
+                className="space-y-5 rounded-2xl p-5"
                 style={{
                   backgroundColor: "var(--z-card)",
-                  border: "1px solid rgba(248,113,113,0.35)",
-                  boxShadow: "0 0 40px rgba(248,113,113,0.1)",
+                  border: "1px solid var(--z-border)",
                 }}
               >
-                <div
-                  className="mx-auto mb-5 flex size-14 items-center justify-center rounded-full"
-                  style={{
-                    backgroundColor: "rgba(248,113,113,0.12)",
-                    border: "2px solid rgba(248,113,113,0.35)",
-                  }}
-                >
-                  <FaExclamationTriangle
-                    size={22}
-                    style={{ color: "var(--z-red)" }}
-                  />
-                </div>
-                <h2
-                  className="mb-2 text-xl font-black"
-                  style={{
-                    fontFamily: "var(--font-syne)",
-                    color: "var(--z-text)",
-                  }}
-                >
-                  {updateFallbackCopy.title}
-                </h2>
-                <p className="mb-7 text-sm" style={{ color: "var(--z-muted)" }}>
-                  {updateFallbackCopy.description}
-                </p>
-                {fetchError && (
-                  <p
-                    className="mb-7 text-sm"
-                    style={{ color: "var(--z-text)" }}
-                  >
-                    {fetchError}
-                  </p>
-                )}
-                <div className="flex justify-center gap-3">
-                  <button
-                    onClick={() => router.push("/custom-list-manager")}
-                    className="
-                      cursor-pointer rounded-lg px-4 py-2.5 text-sm font-medium transition-all
-                      hover:bg-z-card-up
-                      active:scale-95
-                    "
-                    style={{
-                      border: "1px solid var(--z-border-mid)",
-                      color: "var(--z-muted)",
-                    }}
-                  >
-                    <span className="flex items-center gap-2">
-                      <FaChevronLeft size={9} />
-                      Back to Manager
-                    </span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      handleRetryPreparation();
-                    }}
-                    className="
-                      cursor-pointer rounded-lg px-5 py-2.5 text-sm font-bold transition-all
-                      hover:brightness-110
-                      active:scale-95
-                    "
-                    style={{
-                      backgroundColor: "var(--z-amber)",
-                      color: "#07060f",
-                    }}
-                  >
-                    <span className="flex items-center gap-2">
-                      <FaRedo size={9} />
-                      Retry
-                    </span>
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-
-        {phase === "scanning" && (
-          <div className="flex flex-col items-center justify-center py-28">
-            <LoadingIndicator size="lg" />
-            <p className="mt-4 text-sm" style={{ color: "var(--z-muted)" }}>
-              This may take a moment for large libraries.
-            </p>
-          </div>
-        )}
-
-        {phase === "complete" && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="flex flex-col items-center justify-center py-28"
-          >
-            <motion.div
-              initial={{ scale: 0, rotate: -20 }}
-              animate={{ scale: 1, rotate: 0 }}
-              transition={{ type: "spring", stiffness: 280, damping: 20 }}
-              className="mb-5 flex size-20 items-center justify-center rounded-full"
-              style={{
-                backgroundColor: "rgba(34,197,94,0.1)",
-                border: "2px solid rgba(34,197,94,0.4)",
-                boxShadow: "0 0 40px rgba(34,197,94,0.2)",
-              }}
-            >
-              <FaCheckCircle size={34} style={{ color: "var(--z-green)" }} />
-            </motion.div>
-            <h2
-              className="text-2xl font-black"
-              style={{
-                fontFamily: "var(--font-syne)",
-                color: "var(--z-text)",
-              }}
-            >
-              All done!
-            </h2>
-            <p className="mt-2 text-sm" style={{ color: "var(--z-muted)" }}>
-              Review the final tally, then continue to your completion summary
-              when you are ready.
-            </p>
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-              <button
-                type="button"
-                onClick={() => router.push("/completed")}
-                className="
-                  rounded-lg px-6 py-3 text-sm font-bold transition-all
-                  hover:brightness-110
-                  active:scale-95
-                "
-                style={{
-                  background:
-                    "linear-gradient(135deg, var(--z-amber) 0%, #ef8d2f 100%)",
-                  color: "#07060f",
-                }}
-              >
-                Complete & View Summary
-              </button>
-              <button
-                type="button"
-                onClick={() => router.push("/custom-list-manager")}
-                className="
-                  rounded-lg px-6 py-3 text-sm font-medium transition-all
-                  hover:bg-z-card-up
-                  active:scale-95
-                "
-                style={{
-                  border: "1px solid var(--z-border-mid)",
-                  color: "var(--z-muted)",
-                }}
-              >
-                Back to Manager
-              </button>
-            </div>
-          </motion.div>
-        )}
-
-        {queueVisible && (
-          <div className="space-y-6">
-            {/* Phase Status */}
-            <motion.div
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-            >
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                {/* Phase indicator */}
                 <div>
                   <p
-                    className="mb-2 text-[10px] font-bold tracking-widest uppercase"
-                    style={{ color: "var(--z-amber)" }}
+                    className="mb-1 text-[9px] font-black tracking-widest uppercase"
+                    style={{ color: "var(--z-subtle)" }}
                   >
-                    {phaseLabel}
+                    Controls
                   </p>
-                  <h2
-                    className="text-2xl font-black"
-                    style={{
-                      color: "var(--z-text)",
-                      fontFamily: "var(--font-syne)",
-                    }}
-                  >
-                    {queuedCount} queued change{queuedCount === 1 ? "" : "s"}
-                  </h2>
+                  <div className="flex items-center gap-2">
+                    <motion.span
+                      className="size-2 shrink-0 rounded-full"
+                      style={{ backgroundColor: phaseColor }}
+                      animate={
+                        phase === "processing"
+                          ? { opacity: [1, 0.2, 1] }
+                          : { opacity: 1 }
+                      }
+                      transition={{ duration: 1.2, repeat: Infinity }}
+                    />
+                    <span
+                      className="text-sm font-black"
+                      style={{
+                        fontFamily: "var(--font-syne)",
+                        color: "var(--z-text)",
+                      }}
+                    >
+                      {phaseLabel}
+                    </span>
+                  </div>
                   <p
-                    className="mt-1 text-sm"
+                    className="mt-1.5 text-xs/relaxed"
                     style={{ color: "var(--z-muted)" }}
                   >
                     {phaseDescription}
                   </p>
-
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <MetaPill label={`${queuedCount} queued`} tone="amber" />
-                    <MetaPill
-                      label={`${doneEntries.length} done`}
-                      tone="green"
-                    />
-                    {erroredEntries.length > 0 && (
-                      <MetaPill
-                        label={`${erroredEntries.length} skipped`}
-                        tone="red"
-                      />
-                    )}
-                  </div>
                 </div>
 
+                {/* Orbital progress ring */}
+                <OrbitalProgress
+                  progress={progressWidth}
+                  processedCount={processedCount}
+                  totalCount={totalCount}
+                  phase={phase}
+                />
+
+                {/* Stats pills */}
+                <div className="flex flex-wrap gap-1.5">
+                  <MetaPill label={`${queuedCount} queued`} tone="amber" />
+                  <MetaPill label={`${doneEntries.length} done`} tone="green" />
+                  {erroredEntries.length > 0 && (
+                    <MetaPill
+                      label={`${erroredEntries.length} skipped`}
+                      tone="red"
+                    />
+                  )}
+                </div>
+
+                {/* Divider */}
+                <div style={{ borderTop: "1px solid var(--z-border)" }} />
+
+                {/* Control buttons */}
+                <div className="space-y-2">
+                  {phase === "ready" && (
+                    <>
+                      <ControlButton
+                        variant="primary"
+                        onClick={() => {
+                          void startProcessing();
+                        }}
+                      >
+                        <FaPlay size={9} />
+                        Start Update
+                      </ControlButton>
+                      <ControlButton variant="green" onClick={handleComplete}>
+                        <FaCheckCircle size={9} />
+                        Mark Complete
+                      </ControlButton>
+                      <ControlButton
+                        variant="ghost"
+                        onClick={() => router.push("/custom-list-manager")}
+                      >
+                        <FaChevronLeft size={9} />
+                        Back
+                      </ControlButton>
+                    </>
+                  )}
+
+                  {phase === "processing" && (
+                    <>
+                      <ControlButton
+                        variant="pink"
+                        onClick={handlePause}
+                        disabled={queuedAction !== null}
+                      >
+                        <FaPause size={9} />
+                        Pause
+                      </ControlButton>
+                      <ControlButton
+                        variant="green"
+                        onClick={handleComplete}
+                        disabled={queuedAction !== null}
+                      >
+                        <FaCheckCircle size={9} />
+                        Complete
+                      </ControlButton>
+                      <ControlButton
+                        variant="red"
+                        onClick={handleStop}
+                        disabled={queuedAction !== null}
+                      >
+                        <FaStop size={9} />
+                        Stop
+                      </ControlButton>
+                    </>
+                  )}
+
+                  {phase === "paused" && (
+                    <>
+                      <ControlButton
+                        variant="primary"
+                        onClick={() => {
+                          void startProcessing();
+                        }}
+                      >
+                        <FaPlay size={9} />
+                        Resume
+                      </ControlButton>
+                      <ControlButton variant="green" onClick={handleComplete}>
+                        <FaCheckCircle size={9} />
+                        Complete
+                      </ControlButton>
+                      <ControlButton variant="red" onClick={handleStop}>
+                        <FaStop size={9} />
+                        Stop
+                      </ControlButton>
+                    </>
+                  )}
+
+                  {phase === "stopped" && (
+                    <>
+                      {pendingEntries.length > 0 && (
+                        <ControlButton
+                          variant="primary"
+                          onClick={() => {
+                            void startProcessing();
+                          }}
+                        >
+                          <FaPlay size={9} />
+                          Resume Remaining
+                        </ControlButton>
+                      )}
+                      <ControlButton variant="green" onClick={handleComplete}>
+                        <FaCheckCircle size={9} />
+                        Complete
+                      </ControlButton>
+                      <ControlButton
+                        variant="ghost"
+                        onClick={() => router.push("/custom-list-manager")}
+                      >
+                        <FaChevronLeft size={9} />
+                        Back
+                      </ControlButton>
+                    </>
+                  )}
+                </div>
+
+                {/* Rate limit panel */}
                 {hasRateLimitCard && (
-                  <div
-                    className="w-full shrink-0 rounded-xl p-3 sm:max-w-sm"
-                    style={{
-                      backgroundColor: retryStatus
-                        ? "rgba(245,166,35,0.1)"
-                        : isRateLimitWarning
-                          ? "rgba(245,166,35,0.08)"
-                          : "rgba(103,232,249,0.08)",
-                      border:
-                        retryStatus || isRateLimitWarning
-                          ? "1px solid rgba(245,166,35,0.2)"
-                          : "1px solid rgba(103,232,249,0.16)",
-                    }}
-                  >
-                    <div className="flex flex-col gap-3">
-                      <div className="flex items-start gap-3">
+                  <>
+                    <div style={{ borderTop: "1px solid var(--z-border)" }} />
+                    <div
+                      className="rounded-xl p-3"
+                      style={{
+                        backgroundColor:
+                          retryStatus || isRateLimitWarning
+                            ? "rgba(245,166,35,0.07)"
+                            : "rgba(103,232,249,0.07)",
+                        border:
+                          retryStatus || isRateLimitWarning
+                            ? "1px solid rgba(245,166,35,0.2)"
+                            : "1px solid rgba(103,232,249,0.18)",
+                      }}
+                    >
+                      <div className="flex items-start gap-2.5">
                         {retryStatus ? (
                           <FaSpinner
                             className="mt-0.5 shrink-0 animate-spin"
-                            size={13}
+                            size={11}
                             style={{ color: "var(--z-amber)" }}
                           />
                         ) : (
                           <FaExclamationTriangle
                             className="mt-0.5 shrink-0"
-                            size={13}
+                            size={11}
                             style={{
                               color: isRateLimitWarning
                                 ? "var(--z-amber)"
@@ -2359,9 +1896,9 @@ export default function UpdatePage() {
                             }}
                           />
                         )}
-                        <div>
+                        <div className="min-w-0">
                           <p
-                            className="text-[10px] font-black tracking-widest uppercase"
+                            className="mb-1 text-[10px] font-black tracking-widest uppercase"
                             style={{
                               color:
                                 retryStatus || isRateLimitWarning
@@ -2369,312 +1906,223 @@ export default function UpdatePage() {
                                   : "var(--z-frost)",
                             }}
                           >
-                            {retryStatus
-                              ? "AniList retry in progress"
-                              : "AniList request budget"}
+                            {retryStatus ? "Retrying" : "Rate Limit"}
                           </p>
                           <p
-                            className="mt-1 text-sm"
-                            style={{ color: "var(--z-text)" }}
+                            className="text-xs/relaxed"
+                            style={{ color: "var(--z-muted)" }}
                           >
                             {retryStatus
-                              ? `${getFallbackCopy(classifyFallbackFailure({ retryReason: retryStatus.reason })).description} Next retry in ${formatDurationLabel(remainingRetrySeconds ?? retryStatus.retryAfterSeconds)} (attempt ${retryStatus.retryAttempt}).`
+                              ? `Retry in ${formatDurationLabel(remainingRetrySeconds ?? retryStatus.retryAfterSeconds)} (attempt ${retryStatus.retryAttempt})`
                               : rateLimitRemaining !== null &&
                                   rateLimitLimit !== null
-                                ? `Requests remaining: ${rateLimitRemaining} of ${rateLimitLimit}.`
-                                : "Watching AniList rate-limit headers for the next update window."}
+                                ? `${rateLimitRemaining} / ${rateLimitLimit} requests remaining`
+                                : "Watching rate-limit headers."}
                           </p>
+                          {rateLimitResetLabel && (
+                            <p
+                              className="mt-1 text-[11px]"
+                              style={{ color: "var(--z-subtle)" }}
+                            >
+                              Resets around {rateLimitResetLabel}
+                            </p>
+                          )}
                         </div>
                       </div>
-
-                      <div className="flex flex-wrap gap-2">
-                        {rateLimitRemaining !== null &&
-                          rateLimitLimit !== null && (
-                            <MetaPill
-                              label={`${rateLimitRemaining} / ${rateLimitLimit} remaining`}
-                              tone={isRateLimitWarning ? "amber" : "frost"}
-                            />
-                          )}
-                        {rateLimitResetLabel && (
-                          <MetaPill
-                            label={`Reset around ${rateLimitResetLabel}`}
-                            tone="neutral"
-                          />
-                        )}
-                      </div>
                     </div>
-                  </div>
+                  </>
                 )}
               </div>
             </motion.div>
 
-            {/* Separator */}
-            <div style={{ borderTop: "1px solid var(--z-border)" }} />
-
-            {/* Control Toolbar */}
-            <UpdateControlToolbar
-              phase={phase}
-              queuedAction={queuedAction}
-              pendingEntryCount={pendingEntries.length}
-              onStart={() => {
-                void startProcessing();
-              }}
-              onPause={handlePause}
-              onStop={handleStop}
-              onComplete={handleComplete}
-              onBack={() => {
-                router.push("/custom-list-manager");
-              }}
-            />
-
-            {/* Progress */}
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="rounded-xl p-4"
-              style={{
-                backgroundColor: "var(--z-card)",
-                border: "1px solid var(--z-border)",
-              }}
-            >
-              <div className="
-                mb-3 flex flex-col gap-3
-                sm:flex-row sm:items-start sm:justify-between
-              ">
-                <div>
-                  <p
-                    className="text-[10px] font-black tracking-widest uppercase"
+            {/* RIGHT: Content Area */}
+            <div className="min-w-0 space-y-5">
+              {/* Live — Updating Now */}
+              <motion.section
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.06 }}
+              >
+                <div className="mb-2.5 flex items-center gap-2">
+                  <motion.span
+                    className="size-2 shrink-0 rounded-full"
+                    style={{ backgroundColor: "var(--z-pink)" }}
+                    animate={{ opacity: [1, 0.2, 1] }}
+                    transition={{ duration: 1.3, repeat: Infinity }}
+                  />
+                  <h2
+                    className="text-[11px] font-black tracking-widest uppercase"
                     style={{ color: "var(--z-pink)" }}
                   >
-                    Update progress
-                  </p>
-                  <p
-                    className="mt-1 text-sm"
-                    style={{ color: "var(--z-muted)" }}
-                  >
-                    {processedCount} completed • {queuedCount} still queued
-                  </p>
-                </div>
-                <p
-                  className="text-lg font-black tabular-nums"
-                  style={{ color: "var(--z-text)" }}
-                >
-                  {processedCount}
-                  <span
-                    className="text-sm font-medium"
-                    style={{ color: "var(--z-muted)" }}
-                  >
-                    {" "}
-                    / {totalCount}
-                  </span>
-                </p>
-              </div>
-
-              <div
-                className="h-2.5 w-full overflow-hidden rounded-full"
-                style={{ backgroundColor: "var(--z-card-up)" }}
-              >
-                <motion.div
-                  className="h-full rounded-full"
-                  style={{
-                    background:
-                      "linear-gradient(90deg, var(--z-amber) 0%, var(--z-pink) 100%)",
-                  }}
-                  initial={{ width: "0%" }}
-                  animate={{ width: `${progressWidth}%` }}
-                  transition={{ duration: 0.45, ease: "easeOut" }}
-                />
-              </div>
-
-              {erroredEntries.length > 0 && (
-                <p className="mt-3 text-xs" style={{ color: "var(--z-red)" }}>
-                  {erroredEntries.length} entr
-                  {erroredEntries.length === 1 ? "y" : "ies"} skipped so far.
-                </p>
-              )}
-            </motion.div>
-
-            {/* Updating Now */}
-            <div>
-              <div className="mb-3 flex items-center gap-2">
-                <motion.span
-                  animate={{ opacity: [1, 0.25, 1] }}
-                  transition={{ duration: 1.3, repeat: Infinity }}
-                  className="size-2 rounded-full"
-                  style={{ backgroundColor: "var(--z-pink)" }}
-                />
-                <h2
-                  className="text-xs font-black tracking-widest uppercase"
-                  style={{ color: "var(--z-pink)" }}
-                >
-                  Updating Now
-                </h2>
-                {currentUpdating.length > 0 && (
-                  <span
-                    className="ml-auto rounded-full px-2 py-0.5 text-xs font-bold tabular-nums"
-                    style={{
-                      backgroundColor: "rgba(232,121,249,0.14)",
-                      color: "var(--z-pink)",
-                    }}
-                  >
-                    {currentUpdating.length}
-                  </span>
-                )}
-              </div>
-
-              <div className="min-h-56">
-                <AnimatePresence mode="wait" initial={false}>
-                  {currentUpdating.length > 0 ? (
-                    <motion.div
-                      key={`updating-batch-${updatingBatchVersion}`}
-                      layout
-                      initial={{ opacity: 0.9, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0.65, y: -6 }}
-                      transition={{ duration: 0.24, ease: "easeOut" }}
-                      className="grid grid-cols-1 items-start gap-3 md:grid-cols-2 xl:grid-cols-3"
-                    >
-                      {currentUpdating.map((entry) => (
-                        <UpdatingCard
-                          key={entry.entry.id}
-                          entry={entry}
-                          compact
-                        />
-                      ))}
-                    </motion.div>
-                  ) : (
-                    <motion.div
-                      key="idle"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{
-                        duration: CARD_ANIMATION_DURATION_SECONDS,
-                        ease: "easeOut",
-                      }}
-                      className="
-                        flex min-h-56 items-center justify-center rounded-xl p-6 text-center text-sm
-                      "
-                      style={{
-                        color: "var(--z-muted)",
-                        border: "1px dashed var(--z-border)",
-                      }}
-                    >
-                      {phase === "ready"
-                        ? "Everything is queued. Press Start when you want to begin."
-                        : phase === "paused"
-                          ? "Paused right here. Resume when you are ready for the next entry."
-                          : phase === "stopped"
-                            ? "The run was stopped before the next request."
-                            : "Waiting for next entry…"}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            </div>
-
-            {/* Queue + Done */}
-            <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-              {/* Queue */}
-              <div>
-                <div className="mb-3 flex items-center gap-2">
-                  <FaList size={11} style={{ color: "var(--z-amber)" }} />
-                  <h2
-                    className="text-xs font-black tracking-widest uppercase"
-                    style={{ color: "var(--z-amber)" }}
-                  >
-                    In Queue
+                    Live — Updating Now
                   </h2>
-                  <span
-                    className="ml-auto rounded-full px-2 py-0.5 text-xs font-bold tabular-nums"
-                    style={{
-                      backgroundColor: "var(--z-amber-dim)",
-                      color: "var(--z-amber)",
-                    }}
-                  >
-                    {pendingEntries.length}
-                  </span>
+                  {currentUpdating.length > 0 && (
+                    <span
+                      className="ml-auto rounded-full px-2 py-0.5 text-xs font-bold tabular-nums"
+                      style={{
+                        backgroundColor: "rgba(232,121,249,0.12)",
+                        color: "var(--z-pink)",
+                      }}
+                    >
+                      {currentUpdating.length}
+                    </span>
+                  )}
                 </div>
 
                 <div
-                  className="rounded-xl p-3"
+                  className="relative overflow-hidden rounded-xl"
                   style={{
                     backgroundColor: "var(--z-surface)",
-                    border: "1px solid var(--z-border)",
+                    border: "1px solid rgba(232,121,249,0.15)",
+                    minHeight: 108,
                   }}
                 >
-                  <div
-                    ref={queueScrollContainerRef}
-                    className="max-h-168 overflow-y-auto pr-1 sm:pr-2"
-                  >
-                    {pendingEntries.length > 0 ? (
-                      <div
-                        style={{
-                          height: `${queueVirtualizer.getTotalSize()}px`,
-                          position: "relative",
-                          width: "100%",
-                        }}
+                  <AnimatePresence mode="wait" initial={false}>
+                    {currentUpdating.length > 0 ? (
+                      <motion.div
+                        key={`batch-${updatingBatchVersion}`}
+                        initial={{ opacity: 0.8 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0.65 }}
+                        transition={{ duration: 0.2 }}
+                        className="grid grid-cols-1 gap-2 p-2 sm:grid-cols-2 xl:grid-cols-3"
                       >
-                        {queueVirtualItems.map((virtualItem) => {
-                          const entry = pendingEntries[virtualItem.index];
-
-                          if (!entry) {
-                            return null;
-                          }
-
-                          return (
-                            <div
-                              key={`queue-${entry.entry.id}`}
-                              ref={queueVirtualizer.measureElement}
-                              data-index={virtualItem.index}
-                              style={{
-                                position: "absolute",
-                                top: 0,
-                                left: 0,
-                                width: "100%",
-                                transform: `translateY(${virtualItem.start}px)`,
-                                willChange: "transform, opacity",
-                                transition:
-                                  "transform 260ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease-out",
-                                paddingBottom:
-                                  virtualItem.index < pendingEntries.length - 1
-                                    ? `${VIRTUAL_ROW_GAP_PX}px`
-                                    : undefined,
-                              }}
-                            >
-                              <PendingCard entry={entry} animated />
-                            </div>
-                          );
-                        })}
-                      </div>
+                        {currentUpdating.map((entry) => (
+                          <UpdatingRow key={entry.entry.id} entry={entry} />
+                        ))}
+                      </motion.div>
                     ) : (
-                      <div
+                      <motion.div
+                        key="idle"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.2 }}
                         className="
-                          flex min-h-40 items-center justify-center rounded-xl py-12 text-sm
+                          flex min-h-27 items-center justify-center rounded-xl p-6 text-center
+                          text-sm
                         "
                         style={{
                           color: "var(--z-muted)",
                           border: "1px dashed var(--z-border)",
+                          margin: "0.25rem",
                         }}
                       >
-                        Queue empty
-                      </div>
+                        {phase === "ready"
+                          ? "Press Start to begin processing entries."
+                          : phase === "paused"
+                            ? "Paused. Resume when you are ready."
+                            : phase === "stopped"
+                              ? "Stopped before the next batch."
+                              : "Waiting for next batch…"}
+                      </motion.div>
                     )}
-                  </div>
+                  </AnimatePresence>
                 </div>
-              </div>
+              </motion.section>
 
-              {/* Done + Skipped */}
-              <div className="space-y-5">
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                  <div className="mb-3 flex items-center gap-2">
+              {/* Queue + Done */}
+              <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+                {/* In Queue */}
+                <motion.section
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 }}
+                >
+                  <div className="mb-2.5 flex items-center gap-2">
+                    <FaList size={10} style={{ color: "var(--z-amber)" }} />
+                    <h2
+                      className="text-[11px] font-black tracking-widest uppercase"
+                      style={{ color: "var(--z-amber)" }}
+                    >
+                      In Queue
+                    </h2>
+                    <span
+                      className="ml-auto rounded-full px-2 py-0.5 text-xs font-bold tabular-nums"
+                      style={{
+                        backgroundColor: "var(--z-amber-dim)",
+                        color: "var(--z-amber)",
+                      }}
+                    >
+                      {pendingEntries.length}
+                    </span>
+                  </div>
+
+                  <div
+                    className="rounded-xl p-2"
+                    style={{
+                      backgroundColor: "var(--z-surface)",
+                      border: "1px solid var(--z-border)",
+                    }}
+                  >
+                    <div
+                      ref={queueScrollContainerRef}
+                      className="scroll-stable max-h-110 overflow-y-scroll pr-3.5"
+                    >
+                      {pendingEntries.length > 0 ? (
+                        <div
+                          style={{
+                            height: `${queueVirtualizer.getTotalSize()}px`,
+                            position: "relative",
+                            width: "100%",
+                          }}
+                        >
+                          {queueVirtualItems.map((virtualItem) => {
+                            const entry = pendingEntries[virtualItem.index];
+                            if (!entry) return null;
+                            return (
+                              <div
+                                key={`queue-${entry.entry.id}`}
+                                ref={queueVirtualizer.measureElement}
+                                data-index={virtualItem.index}
+                                style={{
+                                  position: "absolute",
+                                  top: 0,
+                                  left: 0,
+                                  width: "100%",
+                                  transform: `translateY(${virtualItem.start}px)`,
+                                  paddingBottom:
+                                    virtualItem.index <
+                                    pendingEntries.length - 1
+                                      ? `${VIRTUAL_ROW_GAP_PX}px`
+                                      : undefined,
+                                }}
+                              >
+                                <PendingRow entry={entry} />
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div
+                          className="
+                            flex min-h-40 items-center justify-center rounded-xl py-10 text-sm
+                          "
+                          style={{
+                            color: "var(--z-muted)",
+                            border: "1px dashed var(--z-border)",
+                          }}
+                        >
+                          Queue empty
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </motion.section>
+
+                {/* Done */}
+                <motion.section
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.14 }}
+                >
+                  <div className="mb-2.5 flex items-center gap-2">
                     <FaCheckCircle
-                      size={11}
+                      size={10}
                       style={{ color: "var(--z-green)" }}
                     />
                     <h2
-                      className="text-xs font-black tracking-widest uppercase"
+                      className="text-[11px] font-black tracking-widest uppercase"
                       style={{ color: "var(--z-green)" }}
                     >
                       Done
@@ -2682,7 +2130,7 @@ export default function UpdatePage() {
                     <span
                       className="ml-auto rounded-full px-2 py-0.5 text-xs font-bold tabular-nums"
                       style={{
-                        backgroundColor: "rgba(34,197,94,0.12)",
+                        backgroundColor: "rgba(34,197,94,0.1)",
                         color: "var(--z-green)",
                       }}
                     >
@@ -2691,7 +2139,7 @@ export default function UpdatePage() {
                   </div>
 
                   <div
-                    className="rounded-xl p-3"
+                    className="rounded-xl p-2"
                     style={{
                       backgroundColor: "var(--z-surface)",
                       border: "1px solid var(--z-border)",
@@ -2699,7 +2147,7 @@ export default function UpdatePage() {
                   >
                     <div
                       ref={doneScrollContainerRef}
-                      className="max-h-168 overflow-y-auto pr-1 sm:pr-2"
+                      className="scroll-stable max-h-110 overflow-y-scroll pr-3.5"
                     >
                       {doneEntries.length > 0 ? (
                         <div
@@ -2713,11 +2161,7 @@ export default function UpdatePage() {
                             .getVirtualItems()
                             .map((virtualItem) => {
                               const entry = doneEntries[virtualItem.index];
-
-                              if (!entry) {
-                                return null;
-                              }
-
+                              if (!entry) return null;
                               return (
                                 <div
                                   key={`done-${entry.entry.id}`}
@@ -2729,16 +2173,13 @@ export default function UpdatePage() {
                                     left: 0,
                                     width: "100%",
                                     transform: `translateY(${virtualItem.start}px)`,
-                                    willChange: "transform, opacity",
-                                    transition:
-                                      "transform 260ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease-out",
                                     paddingBottom:
                                       virtualItem.index < doneEntries.length - 1
                                         ? `${VIRTUAL_ROW_GAP_PX}px`
                                         : undefined,
                                   }}
                                 >
-                                  <DoneCard entry={entry} animated />
+                                  <DoneRow entry={entry} />
                                 </div>
                               );
                             })}
@@ -2751,63 +2192,100 @@ export default function UpdatePage() {
                             borderColor: "var(--z-border)",
                           }}
                         >
-                          {donePlaceholderMessage}
+                          {phase === "processing"
+                            ? "Completed entries will appear here as each batch finishes."
+                            : phase === "paused"
+                              ? "No new entries will appear until you resume."
+                              : phase === "stopped"
+                                ? "No new entries — run is stopped."
+                                : "Completed entries will appear here once the run begins."}
                         </div>
                       )}
                     </div>
                   </div>
-                </motion.div>
+                </motion.section>
+              </div>
 
-                {erroredEntries.length > 0 && (
-                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                    <div className="mb-3 flex items-center gap-2">
-                      <FaTimes size={11} style={{ color: "var(--z-red)" }} />
-                      <h2
-                        className="text-xs font-black tracking-widest uppercase"
-                        style={{ color: "var(--z-red)" }}
+              {/* Skipped */}
+              {erroredEntries.length > 0 && (
+                <motion.section
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                >
+                  <div className="mb-2.5 flex items-center gap-2">
+                    <FaTimes size={10} style={{ color: "var(--z-red)" }} />
+                    <h2
+                      className="text-[11px] font-black tracking-widest uppercase"
+                      style={{ color: "var(--z-red)" }}
+                    >
+                      Skipped
+                    </h2>
+                    <span
+                      className="ml-auto rounded-full px-2 py-0.5 text-xs font-bold tabular-nums"
+                      style={{
+                        backgroundColor: "rgba(248,113,113,0.1)",
+                        color: "var(--z-red)",
+                      }}
+                    >
+                      {erroredEntries.length}
+                    </span>
+                  </div>
+
+                  <div className="space-y-2">
+                    {erroredEntries.map((entry) => (
+                      <motion.div
+                        key={`err-${entry.entry.id}`}
+                        initial={{ opacity: 0, x: -6 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="flex items-stretch overflow-hidden rounded-lg"
+                        style={{
+                          backgroundColor: "rgba(248,113,113,0.06)",
+                          border: "1px solid rgba(248,113,113,0.22)",
+                        }}
                       >
-                        Skipped
-                      </h2>
-                    </div>
-                    <div className="space-y-2">
-                      {erroredEntries.map((entry) => (
-                        <motion.div
-                          key={`err-${entry.entry.id}`}
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          className="flex items-start gap-3 rounded-xl p-4"
-                          style={{
-                            backgroundColor: "rgba(248,113,113,0.07)",
-                            border: "1px solid rgba(248,113,113,0.22)",
-                          }}
-                        >
+                        <div
+                          className="w-0.75 shrink-0"
+                          style={{ backgroundColor: "rgba(248,113,113,0.6)" }}
+                        />
+                        <div className="flex min-w-0 flex-1 items-start gap-3 px-3 py-2.5">
                           <FaTimes
-                            size={12}
-                            style={{ color: "var(--z-red)", flexShrink: 0 }}
+                            size={11}
+                            className="mt-0.5 shrink-0"
+                            style={{ color: "var(--z-red)" }}
                           />
                           <div className="min-w-0 flex-1">
                             <p
-                              className="truncate text-sm font-medium"
-                              style={{ color: "var(--z-text)" }}
+                              className="text-sm font-semibold"
+                              style={{
+                                color: "var(--z-text)",
+                                ...TITLE_CLAMP_STYLE,
+                              }}
                             >
                               {getEntryTitle(entry.entry)}
                             </p>
                             <p
-                              className="mt-1 text-xs"
+                              className="mt-0.5 text-xs"
                               style={{ color: "var(--z-red)" }}
                             >
                               {entry.errorMessage ?? "Update failed — skipped"}
                             </p>
-                            <div className="mt-2">
-                              <AniListEntryLink entry={entry.entry} />
-                            </div>
                           </div>
-                        </motion.div>
-                      ))}
-                    </div>
-                  </motion.div>
-                )}
-              </div>
+                          <a
+                            href={getAniListEntryUrl(entry.entry)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="shrink-0 rounded-full p-1.5"
+                            style={{ color: "var(--z-frost)" }}
+                            aria-label="Open on AniList"
+                          >
+                            <FaExternalLinkAlt size={9} />
+                          </a>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                </motion.section>
+              )}
             </div>
           </div>
         )}

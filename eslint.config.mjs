@@ -37,6 +37,12 @@ const eslintConfig = defineConfig([
       },
     },
     rules: {
+      "better-tailwindcss/no-unknown-classes": [
+        "error",
+        {
+          ignore: ["^scroll-stable$"],
+        },
+      ],
       "better-tailwindcss/enforce-consistent-line-wrapping": [
         "warn",
         {
