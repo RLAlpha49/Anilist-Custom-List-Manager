@@ -32,7 +32,7 @@ jobs:
       should_apply: ${{ steps.automation-mode.outputs.should_apply }}
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -364,7 +364,7 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           token: ${{ secrets.PULL_REQUEST_TOKEN }}
